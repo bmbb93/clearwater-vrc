@@ -60,6 +60,8 @@ public class ClearwaterController : UdonSharpBehaviour
     public Vector3[] shorePoints = { new Vector3(-100, 0.2f, -35.9f), new Vector3(100, 0.2f, -35.9f) };
     [Tooltip("The points form a loop (set by the coast bake)")]
     public bool shoreClosed;
+    [Tooltip("Waves break at the shore, with the surf sound (set by the coast bake); off: still water, no surf")]
+    public bool shoreWaves = true;
     public float shoreLevel = 0.9f;
     public float bedLevel = 0.3f;
     public float underwaterLevel = 0.8f;
@@ -88,6 +90,7 @@ public class ClearwaterController : UdonSharpBehaviour
     void Start()
     {
         RefreshPlayers();
+        if (!shoreWaves && shoreAudio != null) shoreAudio.Stop(); // still water: no surf
         if (underwaterMaterial != null && waterMaterial != null)
         {
             // the fog finds the waterline with the water's own breakers
@@ -212,7 +215,7 @@ public class ClearwaterController : UdonSharpBehaviour
 
     void UpdateAudio(Vector3 headPos, bool under)
     {
-        if (shoreAudio != null && shorePoints != null && shorePoints.Length >= 2)
+        if (shoreWaves && shoreAudio != null && shorePoints != null && shorePoints.Length >= 2)
             shoreAudio.transform.position = NearestOnShore(headPos);
         // shoreline waves follow the shore loop's playback, so each surge lands with its sound
         float clock = (shoreAudio != null && shoreAudio.isPlaying) ? shoreAudio.time : Time.time % swashLoop;
@@ -222,7 +225,7 @@ public class ClearwaterController : UdonSharpBehaviour
 
         // quick crossfade into / out of the muffled underwater loop
         _submerged = Mathf.MoveTowards(_submerged, under ? 1f : 0f, Time.deltaTime * 5f);
-        if (shoreAudio != null) shoreAudio.volume = shoreLevel * (1f - _submerged);
+        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? shoreLevel * (1f - _submerged) : 0f;
         if (bedAudio != null) bedAudio.volume = bedLevel * (1f - _submerged);
         if (underwaterAudio != null) underwaterAudio.volume = underwaterLevel * _submerged;
     }

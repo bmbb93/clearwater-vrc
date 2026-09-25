@@ -49,6 +49,7 @@ public class ClearwaterCoastEditor : Editor
 
         EditorGUILayout.PropertyField(serializedObject.FindProperty("points"), true);
         EditorGUILayout.PropertyField(serializedObject.FindProperty("closed"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("shoreWaves"), new GUIContent("Shore waves"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("shape"), new GUIContent("Line"));
 
         EditorGUILayout.Space();

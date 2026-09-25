@@ -79,6 +79,7 @@ public static class ClearwaterCoastBake
             m.SetVector("_CoastArea", new Vector4(centre.x, centre.y, size, 0));
             m.SetTexture("_CoastFarTex", farField);
             m.SetVector("_CoastFarArea", new Vector4(0, 0, seaSize, 0));
+            m.SetFloat("_ShoreWaves", coast.shoreWaves ? 1 : 0);
             m.SetTexture("_CoastProfile", profile);
             m.SetVector("_CoastProfileU", range);
             EditorUtility.SetDirty(m);
@@ -106,6 +107,7 @@ public static class ClearwaterCoastBake
         ctl.shorePoints = SoundPath(world, coast.closed, origin.y, coast.transform.position,
                                     coast.groundHalfSize + SoundReach, out soundClosed);
         ctl.shoreClosed = soundClosed;
+        ctl.shoreWaves = coast.shoreWaves;
         EditorUtility.SetDirty(ctl);
 
         coast.bakedHash = Hash(coast);

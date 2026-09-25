@@ -35,6 +35,7 @@ Shader "Clearwater/Underwater"
         _SwashLoop ("Track length (s)", Float) = 90
         _SwashHeight ("Breaker height (m, copied from the water by the controller)", Float) = 0.14
         _SwashRunup ("Run-up (x breaker height, copied from the water)", Float) = 2.2
+        [ToggleUI] _ShoreWaves ("Shore waves (set by the coast bake)", Float) = 1
     }
     SubShader
     {

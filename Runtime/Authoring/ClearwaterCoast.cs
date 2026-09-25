@@ -17,6 +17,9 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     public Vector3[] points = { new Vector3(-100, 0, 0), new Vector3(0, 0, 0), new Vector3(100, 0, 0) };
     [Tooltip("A loop (an island, or a lake with the sea outside... or inside, by the direction) instead of an open line")]
     public bool closed;
+    [Tooltip("Waves roll in over the shallows, break and run up the beach, with the surf sound along the waterline. " +
+             "Off: still water at the shore (a lake or a pond); the open water keeps its small waves.")]
+    public bool shoreWaves = true;
     public enum LineShape { Straight, Smooth, Handles }
     [Tooltip("Straight: the points joined by straight lines. Smooth: a smooth curve through the points (handles set " +
              "automatically). Handles: like a path in Illustrator: each point has two handles that set the curve's " +

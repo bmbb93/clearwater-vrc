@@ -16,6 +16,7 @@
 
 sampler2D _SwashTrack;
 float _SwashClock, _SwashLoop, _SwashHeight, _SwashRunup;
+float _ShoreWaves; // 1 = waves roll in, break and run up the beach; 0 = still water at the shore (a lake, a pond)
 
 #define CW_G 9.81
 
@@ -79,7 +80,7 @@ CwShore cwShore(float2 xz, float floorDepth)
     float u = sv.x, v = sv.y;
     float2 prof = cwCoastProfile(u); // relief-free depth, travel time
     float db = prof.x;
-    [branch] if (db <= 2.7) // past the shallows: open water, the demo's waves only
+    [branch] if (db <= 2.7 && _ShoreWaves > 0.5) // past the shallows (or no shore waves): open water, the demo's waves only
     {
         float uw = cwWaterlineU();
         float t = _SwashClock + prof.y + cwSwashJitter(v);
@@ -106,7 +107,7 @@ CwShore cwShore(float2 xz, float floorDepth)
 float cwWetFilm(float2 xz, float yAbove)
 {
     float film = 0.0;
-    [branch] if (yAbove <= _SwashHeight * _SwashRunup * 1.1 + 0.05)
+    [branch] if (_ShoreWaves > 0.5 && yAbove <= _SwashHeight * _SwashRunup * 1.1 + 0.05)
     {
         float v = cwShoreV(xz);
         [loop] for (int k = 0; k < 14; k++)
