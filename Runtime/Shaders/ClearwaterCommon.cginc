@@ -48,7 +48,10 @@ float3 cwSkyFw(float3 d, float3 sun, float fwE)
     float tex = cwFbm2(q);
     float3 pine = float3(0.045, 0.070, 0.042) * (0.6 + 0.8 * tex);
     float3 rock = float3(0.30, 0.28, 0.23) * (0.55 + 0.7 * cwFbm2(q * 1.7 + 5.0));
-    float cliff = smoothstep(0.42, 0.18, u + 0.25 * (tex - 0.5)) * smoothstep(0.35, 0.75, cwNoise(float2(a * 18.0, 1.0)));
+    // pale rock along the whole foot, its top rising and falling with the direction (never switched on and off by
+    // direction alone, which cut the band off with vertical edges), ragged where the pines come down
+    float cliffTop = 0.08 + 0.30 * smoothstep(0.2, 0.8, cwFbm2(float2(a * 7.0, 1.0)));
+    float cliff = smoothstep(cliffTop + 0.05, cliffTop - 0.05, u + 0.25 * (tex - 0.5) + 0.12 * (cwFbm2(float2(a * 60.0, e * 60.0 + 4.0)) - 0.5));
     float3 land = lerp(pine, rock, cliff);
     land *= lerp(1.0, 0.45, back);                         // backlit toward the sun
     land = lerp(land, hor * 0.92, 0.38 + 0.25 * back);      // aerial perspective
