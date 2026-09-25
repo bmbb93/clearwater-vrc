@@ -32,6 +32,7 @@ public class ClearwaterCoastEditor : Editor
     int _selected = -1;
     int _preset;
     int _applyPreset = -1; // chosen this frame, applied after the serialized properties
+    bool _resetLine;       // (likewise)
 
     // Cross-section presets: the floor's height (m, the water surface is 0) against the distance from the waterline
     // (m, + out to sea). null = the Gentle Beach numbers at their defaults.
@@ -116,6 +117,10 @@ public class ClearwaterCoastEditor : Editor
         EditorGUILayout.PropertyField(serializedObject.FindProperty("closed"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("shoreWaves"), new GUIContent("Shore waves"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("shape"), new GUIContent("Line"));
+        if (GUILayout.Button("Reset line") && EditorUtility.DisplayDialog("Clearwater",
+                "Put the waterline back to the default straight line (3 points, 200 m)? The cross-section and the " +
+                "other settings stay. (Undo brings the line back.)", "Reset line", "Cancel"))
+            _resetLine = true;
 
         EditorGUILayout.Space();
         var section = serializedObject.FindProperty("section");
@@ -140,6 +145,7 @@ public class ClearwaterCoastEditor : Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty(p));
         serializedObject.ApplyModifiedProperties();
         if (_applyPreset >= 0) { ApplyPreset(coast, _applyPreset); _applyPreset = -1; GUIUtility.ExitGUI(); }
+        if (_resetLine) { _resetLine = false; ResetLine(coast); _selected = -1; GUIUtility.ExitGUI(); }
         FarClipCheck(coast);
 
         if (coast.shape == ClearwaterCoast.LineShape.Handles)
@@ -186,14 +192,6 @@ public class ClearwaterCoastEditor : Editor
         EditorGUILayout.Space();
         using (new EditorGUILayout.HorizontalScope())
         {
-            if (GUILayout.Button("Reset line") && EditorUtility.DisplayDialog("Clearwater",
-                    "Put the waterline back to the default straight line (3 points, 200 m)? The cross-section and the " +
-                    "other settings stay. (Undo brings the line back.)", "Reset line", "Cancel"))
-            {
-                ResetLine(coast);
-                _selected = -1;
-                GUIUtility.ExitGUI();
-            }
             if (GUILayout.Button("Reverse direction (flip the sea side)"))
             {
                 Undo.RecordObject(coast, "Reverse coast");
