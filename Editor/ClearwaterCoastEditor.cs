@@ -34,6 +34,7 @@ public class ClearwaterCoastEditor : Editor
     static readonly Color SeaColor = new Color(0.25f, 0.55f, 1f);
     static readonly Color AreaColor = new Color(1f, 0.85f, 0.3f, 0.7f);
     static readonly Color GroundColor = new Color(0.5f, 1f, 0.5f, 0.6f);
+    static readonly Color HandleColor = new Color(1f, 0.55f, 0.2f);
 
     public override void OnInspectorGUI()
     {
@@ -42,11 +43,12 @@ public class ClearwaterCoastEditor : Editor
         EditorGUILayout.HelpBox(
             "Draw the waterline in the Scene view: drag the points, click + on a segment to add a point, select one and " +
             "press Delete to remove it. The sea is on the side of the arrows (left of the line's direction). " +
-            "Press Bake after changes.", MessageType.None);
+            "Line = Handles: the selected point and its neighbours show handles (squares) that set the curve; " +
+            "Alt-drag a handle to make a corner. Press Bake after changes.", MessageType.None);
 
         EditorGUILayout.PropertyField(serializedObject.FindProperty("points"), true);
         EditorGUILayout.PropertyField(serializedObject.FindProperty("closed"));
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("smooth"), new GUIContent("Smooth curve"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("shape"), new GUIContent("Line"));
 
         EditorGUILayout.Space();
         var section = serializedObject.FindProperty("section");
@@ -63,6 +65,45 @@ public class ClearwaterCoastEditor : Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty(p));
         serializedObject.ApplyModifiedProperties();
 
+        if (coast.shape == ClearwaterCoast.LineShape.Handles)
+        {
+            coast.EnsureHandles();
+            bool has = _selected >= 0 && _selected < coast.points.Length;
+            EditorGUILayout.LabelField(has ? $"Point {_selected}: " + (coast.corner[_selected] ? "corner" : "smooth") : "Select a point in the Scene view", EditorStyles.miniBoldLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(!has))
+                {
+                    if (GUILayout.Button("Smooth point"))
+                    {
+                        Undo.RecordObject(coast, "Smooth point");
+                        coast.corner[_selected] = false;
+                        // line the handles up along their average direction, keeping their lengths
+                        Vector3 hi = coast.handleIn[_selected], ho = coast.handleOut[_selected];
+                        Vector3 dir = (ho.normalized - hi.normalized).normalized;
+                        if (dir.sqrMagnitude < 1e-6f) dir = coast.AutoOut(_selected).normalized;
+                        coast.handleOut[_selected] = dir * ho.magnitude;
+                        coast.handleIn[_selected] = -dir * hi.magnitude;
+                    }
+                    if (GUILayout.Button("Corner point"))
+                    {
+                        Undo.RecordObject(coast, "Corner point");
+                        coast.corner[_selected] = true;
+                    }
+                    if (GUILayout.Button("Auto handles"))
+                    {
+                        Undo.RecordObject(coast, "Auto handles");
+                        coast.ResetHandles(_selected);
+                    }
+                }
+                if (GUILayout.Button("All auto"))
+                {
+                    Undo.RecordObject(coast, "Auto handles");
+                    coast.ResetHandles();
+                }
+            }
+        }
+
         DrawSection(coast);
 
         EditorGUILayout.Space();
@@ -72,6 +113,14 @@ public class ClearwaterCoastEditor : Editor
             {
                 Undo.RecordObject(coast, "Reverse coast");
                 System.Array.Reverse(coast.points);
+                if (coast.handleIn != null && coast.handleOut != null && coast.corner != null &&
+                    coast.handleIn.Length == coast.points.Length && coast.handleOut.Length == coast.points.Length)
+                {
+                    // walking the other way, each point's in and out handles swap
+                    var hi = (Vector3[])coast.handleOut.Clone(); var ho = (Vector3[])coast.handleIn.Clone();
+                    System.Array.Reverse(hi); System.Array.Reverse(ho); System.Array.Reverse(coast.corner);
+                    coast.handleIn = hi; coast.handleOut = ho;
+                }
             }
             if (coast.section == ClearwaterCoast.Section.Curve && GUILayout.Button("Curve from gentle beach"))
             {
@@ -142,7 +191,7 @@ public class ClearwaterCoastEditor : Editor
 
         // the line as drawn (a smooth curve through the points, or straight segments), with arrows towards the sea;
         // a smooth line also shows its points joined straight, faintly
-        if (coast.smooth && n > 1)
+        if (coast.shape != ClearwaterCoast.LineShape.Straight && n > 1)
         {
             Handles.color = new Color(LineColor.r, LineColor.g, LineColor.b, 0.25f);
             for (int k = 0; k < segs; k++) Handles.DrawDottedLine(w[k], w[(k + 1) % n], 4f);
@@ -166,9 +215,7 @@ public class ClearwaterCoastEditor : Editor
             if (Handles.Button(mid + d.normalized * s * 0.25f, Quaternion.identity, s * 0.06f, s * 0.09f, Handles.DotHandleCap))
             {
                 Undo.RecordObject(coast, "Add coast point");
-                var list = new System.Collections.Generic.List<Vector3>(pts);
-                list.Insert(k + 1, tf.InverseTransformPoint(mid));
-                coast.points = list.ToArray();
+                coast.InsertPoint(k, 0.5f); // on the curve, without changing its shape
                 _selected = k + 1;
                 return;
             }
@@ -192,6 +239,42 @@ public class ClearwaterCoastEditor : Editor
                 HandleUtility.DistanceToCircle(w[i], s) < 1f) _selected = i;
         }
 
+        // Handles mode: the handles of the selected point and its neighbours (an open line's outer ends have none)
+        if (coast.shape == ClearwaterCoast.LineShape.Handles && _selected >= 0 && _selected < n)
+        {
+            coast.EnsureHandles();
+            for (int di = -1; di <= 1; di++)
+            {
+                int i = _selected + di;
+                if (coast.closed) i = (i % n + n) % n; else if (i < 0 || i >= n) continue;
+                for (int side = 0; side < 2; side++) // 0 = in, 1 = out
+                {
+                    if (!coast.closed && ((side == 0 && i == 0) || (side == 1 && i == n - 1))) continue;
+                    Vector3 off = side == 0 ? coast.handleIn[i] : coast.handleOut[i];
+                    Vector3 hw = tf.TransformPoint(ClearwaterCoast.Flat(pts[i] + off));
+                    Handles.color = HandleColor;
+                    Handles.DrawLine(w[i], hw);
+                    float hs = HandleUtility.GetHandleSize(hw) * 0.07f;
+                    EditorGUI.BeginChangeCheck();
+                    Vector3 moved = Handles.FreeMoveHandle(hw, hs, Vector3.zero, Handles.RectangleHandleCap);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Undo.RecordObject(coast, "Move coast handle");
+                        moved.y = w[i].y;
+                        Vector3 nOff = ClearwaterCoast.Flat(tf.InverseTransformPoint(moved)) - ClearwaterCoast.Flat(pts[i]);
+                        if (Event.current.alt) coast.corner[i] = true; // Alt: break the pair, as in Illustrator
+                        if (side == 0) coast.handleIn[i] = nOff; else coast.handleOut[i] = nOff;
+                        if (!coast.corner[i] && nOff.sqrMagnitude > 1e-8f)
+                        {
+                            // a smooth point keeps its two handles in line (each keeps its own length)
+                            if (side == 0) coast.handleOut[i] = -nOff.normalized * coast.handleOut[i].magnitude;
+                            else coast.handleIn[i] = -nOff.normalized * coast.handleIn[i].magnitude;
+                        }
+                    }
+                }
+            }
+        }
+
         // Delete removes the selected point instead of the object (a line keeps at least two points). The editor
         // sends Delete as a command: claim it in validation, act on execution.
         var e = Event.current;
@@ -201,9 +284,7 @@ public class ClearwaterCoastEditor : Editor
             if (e.type == EventType.ExecuteCommand)
             {
                 Undo.RecordObject(coast, "Remove coast point");
-                var list = new System.Collections.Generic.List<Vector3>(pts);
-                list.RemoveAt(_selected);
-                coast.points = list.ToArray();
+                coast.RemovePoint(_selected);
                 _selected = -1;
             }
             e.Use();

@@ -17,8 +17,15 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     public Vector3[] points = { new Vector3(-100, 0, 0), new Vector3(0, 0, 0), new Vector3(100, 0, 0) };
     [Tooltip("A loop (an island, or a lake with the sea outside... or inside, by the direction) instead of an open line")]
     public bool closed;
-    [Tooltip("A smooth curve through the points (centripetal Catmull-Rom) instead of straight segments between them")]
-    public bool smooth = true;
+    public enum LineShape { Straight, Smooth, Handles }
+    [Tooltip("Straight: the points joined by straight lines. Smooth: a smooth curve through the points (handles set " +
+             "automatically). Handles: like a path in Illustrator: each point has two handles that set the curve's " +
+             "direction and curvature (Alt-drag a handle to make a corner).")]
+    public LineShape shape = LineShape.Smooth;
+    // Handles mode: each point's handles as offsets from it (in = towards the previous point, out = towards the next);
+    // corner = the two handles move independently instead of staying in line
+    [HideInInspector] public Vector3[] handleIn, handleOut;
+    [HideInInspector] public bool[] corner;
 
     [Header("Cross-section")]
     public Section section = Section.GentleBeach;
@@ -70,13 +77,13 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
 
     public static Vector3 Flat(Vector3 p) => new Vector3(p.x, 0, p.z);
 
-    // ---- the line as drawn: the points joined straight, or by a smooth curve through them
+    // ---- the line as drawn: a cubic Bezier between each pair of points (straight, auto-smooth, or your handles)
 
-    const float SampleStep = 1f;   // m between samples of a smooth segment
+    const float SampleStep = 1f;   // m between samples of a curved segment
     const int MaxSamples = 511;    // the bake takes at most 512 points (a loop repeats its first)
 
-    /// <summary>The waterline as a polyline in this object's space (height 0): the points themselves, or a smooth
-    /// curve through them sampled about every metre. A loop ends with its first point again.</summary>
+    /// <summary>The waterline as a polyline in this object's space (height 0), curves sampled about every metre.
+    /// A loop ends with its first point again.</summary>
     public System.Collections.Generic.List<Vector3> Sampled()
     {
         var outp = new System.Collections.Generic.List<Vector3>();
@@ -86,8 +93,9 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
         var per = new int[segs];
         for (int k = 0; k < segs; k++)
         {
-            float len = Vector3.Distance(Flat(points[k]), Flat(points[(k + 1) % n]));
-            per[k] = smooth ? Mathf.Clamp(Mathf.CeilToInt(len / SampleStep), 4, 64) : 1;
+            var (a, b, c, d) = Segment(k);
+            float len = Vector3.Distance(a, b) + Vector3.Distance(b, c) + Vector3.Distance(c, d); // (>= the curve's length)
+            per[k] = shape == LineShape.Straight ? 1 : Mathf.Clamp(Mathf.CeilToInt(len / SampleStep), 4, 64);
             total += per[k];
         }
         float scale = total > MaxSamples ? (float)MaxSamples / total : 1f; // very long lines: fewer samples each
@@ -103,28 +111,104 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     /// <summary>The point at t (0..1) along segment k (from point k to point k+1).</summary>
     public Vector3 PointOn(int k, float t)
     {
-        int n = points.Length;
-        Vector3 p1 = Flat(points[k % n]), p2 = Flat(points[(k + 1) % n]);
-        if (!smooth || n < 2) return Vector3.Lerp(p1, p2, t);
-        // neighbours; an open line's ends continue straight (mirrored), so the curve leaves along the end segments
-        Vector3 p0 = closed || k > 0 ? Flat(points[(k - 1 + n) % n]) : 2 * p1 - p2;
-        Vector3 p3 = closed || k + 2 < n ? Flat(points[(k + 2) % n]) : 2 * p2 - p1;
-        return CatmullRom(p0, p1, p2, p3, t);
+        var (a, b, c, d) = Segment(k);
+        float s = 1f - t;
+        return s * s * s * a + 3f * s * s * t * b + 3f * s * t * t * c + t * t * t * d;
     }
 
-    // centripetal Catmull-Rom (alpha 0.5): no cusps or loops between points, even when they are unevenly spaced
-    static Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+    /// <summary>Segment k as a cubic Bezier: point k, its out-handle, point k+1's in-handle, point k+1.</summary>
+    public (Vector3, Vector3, Vector3, Vector3) Segment(int k)
     {
-        float t0 = 0f;
-        float t1 = t0 + Mathf.Max(Mathf.Sqrt(Vector3.Distance(p0, p1)), 1e-4f);
-        float t2 = t1 + Mathf.Max(Mathf.Sqrt(Vector3.Distance(p1, p2)), 1e-4f);
-        float t3 = t2 + Mathf.Max(Mathf.Sqrt(Vector3.Distance(p2, p3)), 1e-4f);
-        float u = Mathf.Lerp(t1, t2, t);
-        Vector3 a1 = (t1 - u) / (t1 - t0) * p0 + (u - t0) / (t1 - t0) * p1;
-        Vector3 a2 = (t2 - u) / (t2 - t1) * p1 + (u - t1) / (t2 - t1) * p2;
-        Vector3 a3 = (t3 - u) / (t3 - t2) * p2 + (u - t2) / (t3 - t2) * p3;
-        Vector3 b1 = (t2 - u) / (t2 - t0) * a1 + (u - t0) / (t2 - t0) * a2;
-        Vector3 b2 = (t3 - u) / (t3 - t1) * a2 + (u - t1) / (t3 - t1) * a3;
-        return (t2 - u) / (t2 - t1) * b1 + (u - t1) / (t2 - t1) * b2;
+        int n = points.Length, k2 = (k + 1) % n;
+        Vector3 p1 = Flat(points[k % n]), p2 = Flat(points[k2]);
+        switch (shape)
+        {
+            case LineShape.Straight: return (p1, Vector3.Lerp(p1, p2, 1f / 3f), Vector3.Lerp(p1, p2, 2f / 3f), p2);
+            case LineShape.Handles:
+                EnsureHandles();
+                return (p1, p1 + Flat(handleOut[k % n]), p2 + Flat(handleIn[k2]), p2);
+            default: return (p1, p1 + AutoOut(k % n), p2 + AutoIn(k2), p2);
+        }
+    }
+
+    // Automatic handles (Smooth, and the starting point for Handles): along the line from the previous point to the
+    // next, a third of the way to each neighbour. An open line's end points aim straight at their neighbour, so the
+    // line leaves along its end segments (and carries on straight beyond them).
+    Vector3 Neighbour(int i, int step)
+    {
+        int n = points.Length, j = i + step;
+        if (closed) return Flat(points[(j % n + n) % n]);
+        if (j >= 0 && j < n) return Flat(points[j]);
+        return 2f * Flat(points[i]) - Flat(points[i - step]); // mirrored beyond an end
+    }
+    Vector3 AutoDir(int i) => (Neighbour(i, 1) - Neighbour(i, -1)).normalized;
+    public Vector3 AutoOut(int i) => AutoDir(i) * Vector3.Distance(Flat(points[i]), Neighbour(i, 1)) / 3f;
+    public Vector3 AutoIn(int i) => -AutoDir(i) * Vector3.Distance(Flat(points[i]), Neighbour(i, -1)) / 3f;
+
+    /// <summary>Keeps the handle arrays as long as the points; new points get automatic handles.</summary>
+    public void EnsureHandles()
+    {
+        int n = points.Length;
+        if (handleIn != null && handleOut != null && corner != null &&
+            handleIn.Length == n && handleOut.Length == n && corner.Length == n) return;
+        var hi = new Vector3[n]; var ho = new Vector3[n]; var co = new bool[n];
+        for (int i = 0; i < n; i++)
+        {
+            bool had = handleIn != null && handleOut != null && i < handleIn.Length && i < handleOut.Length;
+            hi[i] = had ? handleIn[i] : AutoIn(i);
+            ho[i] = had ? handleOut[i] : AutoOut(i);
+            co[i] = corner != null && i < corner.Length && corner[i];
+        }
+        handleIn = hi; handleOut = ho; corner = co;
+    }
+
+    /// <summary>Sets the handles of point i (or of every point, i &lt; 0) to the automatic smooth ones.</summary>
+    public void ResetHandles(int i = -1)
+    {
+        EnsureHandles();
+        for (int k = 0; k < points.Length; k++)
+            if (i < 0 || k == i) { handleIn[k] = AutoIn(k); handleOut[k] = AutoOut(k); corner[k] = false; }
+    }
+
+    /// <summary>Adds a point on segment k at t without changing the curve's shape (de Casteljau split).</summary>
+    public void InsertPoint(int k, float t)
+    {
+        int n = points.Length;
+        var (a, b, c, d) = Segment(k);
+        Vector3 ab = Vector3.Lerp(a, b, t), bc = Vector3.Lerp(b, c, t), cd = Vector3.Lerp(c, d, t);
+        Vector3 abc = Vector3.Lerp(ab, bc, t), bcd = Vector3.Lerp(bc, cd, t), p = Vector3.Lerp(abc, bcd, t);
+        bool keepHandles = shape == LineShape.Handles;
+        if (keepHandles) EnsureHandles();
+        var pts = new System.Collections.Generic.List<Vector3>(points);
+        pts.Insert(k + 1, p);
+        if (keepHandles)
+        {
+            var hi = new System.Collections.Generic.List<Vector3>(handleIn);
+            var ho = new System.Collections.Generic.List<Vector3>(handleOut);
+            var co = new System.Collections.Generic.List<bool>(corner);
+            int k2 = (k + 1) % n;
+            ho[k] = ab - a;          // the two halves keep exactly the old curve
+            hi[k2] = cd - d;
+            hi.Insert(k + 1, abc - p);
+            ho.Insert(k + 1, bcd - p);
+            co.Insert(k + 1, false);
+            handleIn = hi.ToArray(); handleOut = ho.ToArray(); corner = co.ToArray();
+        }
+        points = pts.ToArray();
+    }
+
+    /// <summary>Removes point i (with its handles).</summary>
+    public void RemovePoint(int i)
+    {
+        if (shape == LineShape.Handles) EnsureHandles();
+        var pts = new System.Collections.Generic.List<Vector3>(points);
+        pts.RemoveAt(i);
+        if (handleIn != null && handleOut != null && corner != null && handleIn.Length == points.Length)
+        {
+            var hi = new System.Collections.Generic.List<Vector3>(handleIn); hi.RemoveAt(i); handleIn = hi.ToArray();
+            var ho = new System.Collections.Generic.List<Vector3>(handleOut); ho.RemoveAt(i); handleOut = ho.ToArray();
+            var co = new System.Collections.Generic.List<bool>(corner); co.RemoveAt(i); corner = co.ToArray();
+        }
+        points = pts.ToArray();
     }
 }
