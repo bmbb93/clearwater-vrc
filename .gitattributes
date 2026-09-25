@@ -1,2 +1,9 @@
-*.ogg !text !filter !merge !diff
-*.jpg !text !filter !merge !diff
+# Text files: LF in the repository and in checkouts (as Unity writes them)
+* text=auto eol=lf
+
+# Binary assets (small enough to keep in git itself: no LFS needed to install the package)
+*.ogg binary
+*.wav binary
+*.jpg binary
+*.png binary
+*.flac binary

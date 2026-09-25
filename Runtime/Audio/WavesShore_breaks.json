@@ -1,6 +1,6 @@
 {
  "loopSeconds": 90,
- "note": "wave breaks in WavesShore.ogg (Tools/detect_wave_breaks.js); amp 0..1, loudest = 1",
+ "note": "wave breaks in WavesShore.ogg (Tools~/detect_wave_breaks.js); amp 0..1, loudest = 1",
  "times": [
   1.9,
   4.15,

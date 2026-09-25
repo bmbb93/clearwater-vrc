@@ -6,8 +6,13 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 
 ## 入れ方
 
-- このフォルダ（`com.vbamboo.clearwater`）をワールドのプロジェクトの `Packages/` に置く（埋め込みパッケージ）
-- または ALCOM / VCC の「User Packages」にこのフォルダを追加し、プロジェクトに追加する
+- ALCOM / VCC の「User Packages」にこのフォルダを追加し、プロジェクトに追加する（プロジェクトにコピーされます）
+- またはこのフォルダをワールドのプロジェクトの `Packages/` に置く（埋め込みパッケージ）
+- パッケージ自体を編集しながら使うときは、プロジェクトの `Packages/manifest.json` の `dependencies` にこのフォルダへの参照を書きます（コピーせず、このフォルダを直接読みます）。パスは `Packages/` からの相対でも書けます
+
+  ```json
+  "com.vbamboo.clearwater": "file:../../../Packages/com.vbamboo.clearwater"
+  ```
 
 ## 使い方
 
@@ -60,6 +65,13 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 ## 負荷の目安
 
 RTX 4070 Ti SUPER、VR（片目 2048²）で、水が画面いっぱいのとき片目 約 3ms。水中のカメラでは水面の描き方が変わり +0.7ms ほど。スタンプがあると +0.1ms 程度。
+
+## 波音を作り直す
+
+`Tools~/`（Unity には読み込まれないフォルダ）に、波音の加工手順があります。ffmpeg が必要です。
+
+- `Tools~/make_wave_audio.sh <元の録音.flac>`：元録音から 3 種類のループ（`Runtime/Audio/*.ogg`）を作る
+- `node Tools~/detect_wave_breaks.js`：波打ち際の音から波が砕ける瞬間を探し、波の時刻表（`Runtime/Audio/WavesShore_breaks.json`）を作る。波音を差し替えたら必ず実行する
 
 ## クレジット
 
