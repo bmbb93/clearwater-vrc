@@ -30,6 +30,71 @@ public class ClearwaterStampEditor : Editor
 public class ClearwaterCoastEditor : Editor
 {
     int _selected = -1;
+    int _preset;
+    int _applyPreset = -1; // chosen this frame, applied after the serialized properties
+
+    // Cross-section presets: the floor's height (m, the water surface is 0) against the distance from the waterline
+    // (m, + out to sea). null = the Gentle Beach numbers at their defaults.
+    static readonly (string name, Vector2[] keys)[] Presets =
+    {
+        ("Gentle beach (numbers)", null),
+        ("Steep beach", new[] { new Vector2(-15, 1.4f), new Vector2(-5, 1.1f), new Vector2(-1.5f, 0.4f), new Vector2(0, 0),
+            new Vector2(2, -0.8f), new Vector2(8, -2.4f), new Vector2(20, -4.2f), new Vector2(40, -5f), new Vector2(80, -5f) }),
+        ("Beach with a sandbar", new[] { new Vector2(-10, 0.6f), new Vector2(-2.4f, 0.6f), new Vector2(0, 0), new Vector2(1.4f, -0.35f),
+            new Vector2(10, -0.9f), new Vector2(20, -1.5f), new Vector2(28, -0.9f), new Vector2(33, -0.45f), new Vector2(38, -0.9f),
+            new Vector2(50, -2.4f), new Vector2(70, -3.5f), new Vector2(100, -3.5f) }),
+        ("Lagoon (wide shallow flat)", new[] { new Vector2(-10, 0.5f), new Vector2(-2, 0.5f), new Vector2(0, 0), new Vector2(3, -0.45f),
+            new Vector2(20, -0.6f), new Vector2(55, -0.75f), new Vector2(62, -1.5f), new Vector2(72, -4f), new Vector2(100, -4.5f) }),
+        ("Lake shore (use with Shore waves off)", new[] { new Vector2(-12, 0.5f), new Vector2(-2, 0.3f), new Vector2(0, 0),
+            new Vector2(1.5f, -0.2f), new Vector2(8, -0.7f), new Vector2(25, -1.8f), new Vector2(45, -2.4f), new Vector2(80, -2.5f) }),
+        ("Rocky drop-off", new[] { new Vector2(-12, 1.8f), new Vector2(-3, 1.3f), new Vector2(-1, 0.5f), new Vector2(0, 0),
+            new Vector2(1.5f, -1f), new Vector2(4, -3f), new Vector2(10, -5.5f), new Vector2(30, -6.5f), new Vector2(80, -6.5f) }),
+        ("Gentle beach under hills (land seen from afar)", new[] { new Vector2(-400, 40), new Vector2(-200, 28), new Vector2(-80, 10),
+            new Vector2(-25, 2.5f), new Vector2(-6, 0.8f), new Vector2(-2.4f, 0.6f), new Vector2(0, 0), new Vector2(1.4f, -0.35f),
+            new Vector2(30, -1.4f), new Vector2(48, -3.45f), new Vector2(80, -3.45f) }),
+    };
+
+    static void ApplyPreset(ClearwaterCoast coast, int index)
+    {
+        Undo.RecordObject(coast, "Cross-section preset");
+        var keys = Presets[index].keys;
+        if (keys == null)
+        {
+            // the component's own defaults
+            var tmp = new GameObject("_defaults") { hideFlags = HideFlags.HideAndDontSave };
+            var d = tmp.AddComponent<ClearwaterCoast>();
+            coast.section = ClearwaterCoast.Section.GentleBeach;
+            coast.shallowDepth = d.shallowDepth; coast.shallowSlope = d.shallowSlope; coast.shelfSlope = d.shelfSlope;
+            coast.deepDepth = d.deepDepth; coast.deepStart = d.deepStart; coast.beachSlope = d.beachSlope; coast.landHeight = d.landHeight;
+            Object.DestroyImmediate(tmp);
+        }
+        else
+        {
+            coast.section = ClearwaterCoast.Section.Curve;
+            var k = new Keyframe[keys.Length];
+            for (int i = 0; i < keys.Length; i++) k[i] = new Keyframe(keys[i].x, keys[i].y);
+            coast.curve = new AnimationCurve(k);
+            for (int i = 0; i < coast.curve.length; i++)
+            {
+                AnimationUtility.SetKeyLeftTangentMode(coast.curve, i, AnimationUtility.TangentMode.ClampedAuto);
+                AnimationUtility.SetKeyRightTangentMode(coast.curve, i, AnimationUtility.TangentMode.ClampedAuto);
+            }
+        }
+        EditorUtility.SetDirty(coast);
+    }
+
+    static void ResetLine(ClearwaterCoast coast)
+    {
+        Undo.RecordObject(coast, "Reset coast line");
+        var tmp = new GameObject("_defaults") { hideFlags = HideFlags.HideAndDontSave };
+        var d = tmp.AddComponent<ClearwaterCoast>();
+        coast.points = (Vector3[])d.points.Clone();
+        coast.closed = d.closed;
+        coast.shape = d.shape;
+        coast.handleIn = null; coast.handleOut = null; coast.corner = null;
+        Object.DestroyImmediate(tmp);
+        EditorUtility.SetDirty(coast);
+    }
     static readonly Color LineColor = new Color(0.2f, 0.85f, 1f);
     static readonly Color SeaColor = new Color(0.25f, 0.55f, 1f);
     static readonly Color AreaColor = new Color(1f, 0.85f, 0.3f, 0.7f);
@@ -55,6 +120,13 @@ public class ClearwaterCoastEditor : Editor
         EditorGUILayout.Space();
         var section = serializedObject.FindProperty("section");
         EditorGUILayout.PropertyField(section, new GUIContent("Cross-section"));
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            var names = new string[Presets.Length];
+            for (int i = 0; i < names.Length; i++) names[i] = Presets[i].name;
+            _preset = EditorGUILayout.Popup("Preset", _preset, names);
+            if (GUILayout.Button("Apply", GUILayout.Width(60))) _applyPreset = _preset;
+        }
         if (section.enumValueIndex == (int)ClearwaterCoast.Section.GentleBeach)
         {
             foreach (var p in new[] { "shallowDepth", "shallowSlope", "shelfSlope", "deepDepth", "deepStart", "beachSlope", "landHeight" })
@@ -67,6 +139,7 @@ public class ClearwaterCoastEditor : Editor
         foreach (var p in new[] { "areaSize", "resolution", "outerResolution", "groundHalfSize", "groundStep" })
             EditorGUILayout.PropertyField(serializedObject.FindProperty(p));
         serializedObject.ApplyModifiedProperties();
+        if (_applyPreset >= 0) { ApplyPreset(coast, _applyPreset); _applyPreset = -1; GUIUtility.ExitGUI(); }
         FarClipCheck(coast);
 
         if (coast.shape == ClearwaterCoast.LineShape.Handles)
@@ -113,6 +186,14 @@ public class ClearwaterCoastEditor : Editor
         EditorGUILayout.Space();
         using (new EditorGUILayout.HorizontalScope())
         {
+            if (GUILayout.Button("Reset line") && EditorUtility.DisplayDialog("Clearwater",
+                    "Put the waterline back to the default straight line (3 points, 200 m)? The cross-section and the " +
+                    "other settings stay. (Undo brings the line back.)", "Reset line", "Cancel"))
+            {
+                ResetLine(coast);
+                _selected = -1;
+                GUIUtility.ExitGUI();
+            }
             if (GUILayout.Button("Reverse direction (flip the sea side)"))
             {
                 Undo.RecordObject(coast, "Reverse coast");
@@ -147,7 +228,6 @@ public class ClearwaterCoastEditor : Editor
             ClearwaterCoastBake.Bake(coast);
     }
 
-    /// <summary>A small side view of the section: the floor (sand) against the water surface (blue).</summary>
     /// <summary>The world's reference camera (its far clip is every player's) has to reach across the sea.</summary>
     static void FarClipCheck(ClearwaterCoast coast)
     {
@@ -175,6 +255,7 @@ public class ClearwaterCoastEditor : Editor
         }
     }
 
+    /// <summary>A small side view of the section: the floor (sand) against the water surface (blue).</summary>
     static void DrawSection(ClearwaterCoast coast)
     {
         var rect = GUILayoutUtility.GetRect(10, 90, GUILayout.ExpandWidth(true));
