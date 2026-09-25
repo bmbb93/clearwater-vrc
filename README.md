@@ -17,7 +17,7 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 
 ### 既存のワールドに足す
 
-ワールドのシーンを開いて `Tools > Clearwater > Add to Current Scene` を実行します。水一式と、まっすぐな海岸（編集用）が追加されます。ワールドの太陽（Directional Light）はそのまま使い、影が無効なら有効にします。水は奥行き情報を使うため、影は有効のままにしてください。Reference Camera の Far Clip は数 km にしてください。
+ワールドのシーンを開いて `Tools > Clearwater > Add to Current Scene` を実行します。水一式と、まっすぐな海岸（編集用）が追加されます。最初に「Clearwater の空と太陽も使うか」を聞かれます。使う場合は Build Scene と同じ空・太陽（Sun (Clearwater)）になり、ワールドの Directional Light はオフになります（削除はしません）。使わない場合はワールドの太陽をそのまま使い、影が無効なら有効にします。あとから切り替えるときは `Tools > Clearwater > Use Clearwater Sky and Sun` を使います。水は奥行き情報を使うため、影は有効のままにしてください。Reference Camera の Far Clip は数 km にしてください。
 
 ## 海岸を描く（Coast (editor only)）
 

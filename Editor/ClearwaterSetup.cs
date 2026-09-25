@@ -476,13 +476,7 @@ public static class ClearwaterSetup
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
         // sun + environment
-        var sunGo = new GameObject("Sun");
-        var sun = sunGo.AddComponent<Light>();
-        sun.type = LightType.Directional;
-        sun.color = new Color(1.0f, 0.93f, 0.82f);
-        sun.intensity = 1.3f;
-        sun.shadows = LightShadows.Soft;
-        sunGo.transform.rotation = Quaternion.LookRotation(-SunVector());
+        var sun = CreateSun("Sun");
         RenderSettings.skybox = a.sky;
         RenderSettings.sun = sun;
         RenderSettings.ambientMode = AmbientMode.Skybox;
@@ -641,14 +635,75 @@ public static class ClearwaterSetup
         return water;
     }
 
+    /// <summary>The Clearwater sun: warm white, 31 deg up, straight ahead of the default spawn, soft shadows (the water
+    /// reads the camera depth texture, which VRChat only renders while the directional light casts shadows).</summary>
+    static Light CreateSun(string name)
+    {
+        var sunGo = new GameObject(name);
+        var sun = sunGo.AddComponent<Light>();
+        sun.type = LightType.Directional;
+        sun.color = new Color(1.0f, 0.93f, 0.82f);
+        sun.intensity = 1.3f;
+        sun.shadows = LightShadows.Soft;
+        sunGo.transform.rotation = Quaternion.LookRotation(-SunVector());
+        return sun;
+    }
+
+    const string ClearwaterSunName = "Sun (Clearwater)";
+
+    /// <summary>Gives the open scene the Clearwater sky and sun, as Build Scene does: a "Sun (Clearwater)" light
+    /// (made once, reused after), the Clearwater skybox, ambient light from it, and the controller pointed at the
+    /// sun. The world's other directional lights are switched off, not deleted (two suns would double the light).</summary>
+    [MenuItem("Tools/Clearwater/Use Clearwater Sky and Sun")]
+    public static void UseSkyAndSun()
+    {
+        var sky = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/Sky.mat");
+        if (sky == null) sky = BuildAssets().sky;
+        Light sun = null;
+        foreach (var l in Object.FindObjectsOfType<Light>(true))
+            if (l.type == LightType.Directional && l.name == ClearwaterSunName) { sun = l; break; }
+        if (sun == null)
+        {
+            sun = CreateSun(ClearwaterSunName);
+            Undo.RegisterCreatedObjectUndo(sun.gameObject, "Clearwater sun");
+        }
+        else
+        {
+            Undo.RecordObject(sun.gameObject, "Clearwater sun");
+            sun.gameObject.SetActive(true);
+        }
+        var off = new List<string>();
+        foreach (var l in Object.FindObjectsOfType<Light>())
+            if (l != sun && l.type == LightType.Directional && l.gameObject.activeSelf)
+            {
+                Undo.RecordObject(l.gameObject, "Switch off other sun");
+                l.gameObject.SetActive(false);
+                off.Add(l.name);
+            }
+        RenderSettings.skybox = sky;
+        RenderSettings.sun = sun;
+        RenderSettings.ambientMode = AmbientMode.Skybox;
+        var ctl = Object.FindObjectOfType<ClearwaterController>();
+        if (ctl != null)
+        {
+            Undo.RecordObject(ctl, "Clearwater sun");
+            ctl.sun = sun;
+            EditorUtility.SetDirty(ctl);
+        }
+        DynamicGI.UpdateEnvironment();
+        EditorSceneManager.MarkSceneDirty(sun.gameObject.scene);
+        Debug.Log("[Clearwater] Clearwater sky and sun set." + (off.Count > 0 ? " Switched off: " + string.Join(", ", off) + " (turn them back on to undo)." : ""));
+    }
+
     /// <summary>Adds Clearwater to the open scene (an existing world): the water rig and a straight coast to draw on.
-    /// The world's own sun, spawn and descriptor are kept.</summary>
+    /// The world's spawn and descriptor are kept; its sky and sun too, unless you choose Clearwater's.</summary>
     [MenuItem("Tools/Clearwater/Add to Current Scene")]
     public static void AddToCurrentScene()
     {
         if (Object.FindObjectOfType<ClearwaterController>() != null)
         {
-            EditorUtility.DisplayDialog("Clearwater", "This scene already has Clearwater (a ClearwaterController).", "OK");
+            EditorUtility.DisplayDialog("Clearwater", "This scene already has Clearwater (a ClearwaterController). " +
+                "For the Clearwater sky and sun, use Tools > Clearwater > Use Clearwater Sky and Sun.", "OK");
             return;
         }
         var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
@@ -657,6 +712,11 @@ public static class ClearwaterSetup
             EditorUtility.DisplayDialog("Clearwater", "Save the scene first.", "OK");
             return;
         }
+        int choice = EditorUtility.DisplayDialogComplex("Clearwater",
+            "Use Clearwater's sky and sun as well? (The water reflects its own sky and matches its sun best.) " +
+            "The world's directional lights are switched off, not deleted.",
+            "Clearwater sky and sun", "Cancel", "Keep the world's");
+        if (choice == 1) return;
         var a = BuildAssets();
         var sun = RenderSettings.sun;
         if (sun == null) foreach (var l in Object.FindObjectsOfType<Light>()) if (l.type == LightType.Directional) { sun = l; break; }
@@ -675,6 +735,7 @@ public static class ClearwaterSetup
         // the water reflects its own sky; use it as the skybox too unless the world has one of its own
         if (RenderSettings.skybox == null || RenderSettings.skybox.name == "Default-Skybox") RenderSettings.skybox = a.sky;
         CreateRig(a, sun);
+        if (choice == 0) UseSkyAndSun();
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         BakeSceneCoast();
