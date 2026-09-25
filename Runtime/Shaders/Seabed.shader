@@ -27,6 +27,7 @@ Shader "Clearwater/Seabed"
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
         _WaterOrigin ("Water origin (world)", Vector) = (0, 0, 0, 0)
         _GridCenter ("Grid centre (world xz, set by the controller)", Vector) = (0, 0, 0, 0)
+        _Surf ("Surface (FFT CRT; for a camera at the waterline)", 2D) = "black" {}
         _SwashTrack ("Break timing track (generated)", 2D) = "black" {}
         _SwashClock ("Clock (s, set by the controller from the wave audio)", Float) = 0
         _SwashLoop ("Track length (s)", Float) = 90
@@ -35,7 +36,7 @@ Shader "Clearwater/Seabed"
     }
     CGINCLUDE
     #include "UnityCG.cginc"
-    #include "ClearwaterShore.cginc"
+    #include "ClearwaterSurface.cginc"
     float4 _WaterOrigin, _GridCenter;
 
     // grid vertex (object xz) -> displaced world position
@@ -88,7 +89,10 @@ Shader "Clearwater/Seabed"
                 // Seen from above the water, submerged ground is always covered by the water surface, which traces
                 // the floor itself — skip it. The margin keeps the waterline (waves, ripples) fully shaded.
                 // Alpha 0 marks these pixels for the water, so it never mistakes them for a submerged object.
-                [branch] if (_WaterOrigin.y - i.wpos.y > 0.15 && _WorldSpaceCameraPos.y > _WaterOrigin.y)
+                // (a camera at the waterline decides per pixel: the part of its view that starts under the water
+                // sees the ground directly, with the underwater fog over it)
+                bool under = cwPixelUnder(normalize(i.wpos - _WorldSpaceCameraPos), _WaterOrigin.xyz);
+                [branch] if (_WaterOrigin.y - i.wpos.y > 0.15 && !under)
                     return float4(0, 0, 0, 0);
                 float hgt, rockM;
                 float3 alb = cwFloorAlbedo(p, dpdx, dpdy, hgt, rockM);
@@ -136,7 +140,7 @@ Shader "Clearwater/Seabed"
                     }
                 }
                 // distant land fades into the same haze as the distant water
-                [branch] if (_WorldSpaceCameraPos.y > _WaterOrigin.y)
+                [branch] if (!under)
                 {
                     float3 vd = cwToJS(i.wpos - _WorldSpaceCameraPos);
                     float dist = length(vd);

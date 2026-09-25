@@ -63,6 +63,7 @@ public static class ClearwaterCoastBake
         var mats = new List<Material> { ctl.waterMaterial, floorBake };
         if (ctl.seabedMaterial != null) mats.Add(ctl.seabedMaterial);
         if (ctl.avatarCausticsMaterial != null) mats.Add(ctl.avatarCausticsMaterial);
+        if (ctl.underwaterMaterial != null) mats.Add(ctl.underwaterMaterial); // (the surface height at the waterline)
         foreach (var m in mats)
         {
             m.SetTexture("_CoastTex", field);

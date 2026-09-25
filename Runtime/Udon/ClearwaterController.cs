@@ -79,9 +79,19 @@ public class ClearwaterController : UdonSharpBehaviour
     Vector3[] _lastTouch = new Vector3[MaxPlayers * BoneCount];
     bool[] _wasTouching = new bool[MaxPlayers * BoneCount];
 
+    // Cameras closer than this (m) to the water surface may have the waterline across their view: the underwater
+    // fog then draws the part below it (keep equal to CW_SURFACE_BAND in ClearwaterSurface.cginc)
+    const float SurfaceBand = 0.6f;
+
     void Start()
     {
         RefreshPlayers();
+        if (underwaterMaterial != null && waterMaterial != null)
+        {
+            // the fog finds the waterline with the water's own breakers
+            underwaterMaterial.SetFloat("_SwashHeight", waterMaterial.GetFloat("_SwashHeight"));
+            underwaterMaterial.SetFloat("_SwashRunup", waterMaterial.GetFloat("_SwashRunup"));
+        }
     }
 
     public override void OnPlayerJoined(VRCPlayerApi player) { RefreshPlayers(); }
@@ -132,6 +142,7 @@ public class ClearwaterController : UdonSharpBehaviour
         rippleMaterial.SetVector("_Shift", new Vector4(dxT / rippleResolution, dzT / rippleResolution, 0, 0));
         Vector4 rc = new Vector4(_center.x, _center.y, 0, 0);
         waterMaterial.SetVector("_RipCenter", rc);
+        if (underwaterMaterial != null) underwaterMaterial.SetVector("_RipCenter", rc);
         if (seabedMaterial != null)
         {
             seabedMaterial.SetVector("_RipCenter", rc);
@@ -150,10 +161,11 @@ public class ClearwaterController : UdonSharpBehaviour
         UpdateAudio(head.position, under);
         if (underwaterVolume != null)
         {
-            // the fog box is needed while any camera of ours is under water: the head, the screen view (it can
-            // differ from the head, e.g. third person) or the photo camera; its shader hides it per camera for
-            // cameras above the water, so a dry head and a diving photo camera both look right
-            bool fog = under || CameraUnder(VRCCameraSettings.ScreenCamera) || CameraUnder(VRCCameraSettings.PhotoCamera);
+            // the fog box is needed while any camera of ours is under water or at the waterline: the head, the
+            // screen view (it can differ from the head, e.g. third person) or the photo camera; its shader picks
+            // its pixels per camera, so a dry head and a diving photo camera both look right
+            bool fog = head.position.y < water.position.y + SurfaceBand ||
+                       CameraUnder(VRCCameraSettings.ScreenCamera) || CameraUnder(VRCCameraSettings.PhotoCamera);
             if (underwaterVolume.enabled != fog) underwaterVolume.enabled = fog;
         }
 
@@ -167,7 +179,7 @@ public class ClearwaterController : UdonSharpBehaviour
 
     bool CameraUnder(VRCCameraSettings cam)
     {
-        return Utilities.IsValid(cam) && cam.Active && cam.Position.y < water.position.y;
+        return Utilities.IsValid(cam) && cam.Active && cam.Position.y < water.position.y + SurfaceBand;
     }
 
     // Nearest point of the waterline to p (in plan). Udon is slow, so each frame only the segments around the last
@@ -203,6 +215,7 @@ public class ClearwaterController : UdonSharpBehaviour
         float clock = (shoreAudio != null && shoreAudio.isPlaying) ? shoreAudio.time : Time.time % swashLoop;
         waterMaterial.SetFloat("_SwashClock", clock);
         if (seabedMaterial != null) seabedMaterial.SetFloat("_SwashClock", clock);
+        if (underwaterMaterial != null) underwaterMaterial.SetFloat("_SwashClock", clock);
 
         // quick crossfade into / out of the muffled underwater loop
         _submerged = Mathf.MoveTowards(_submerged, under ? 1f : 0f, Time.deltaTime * 5f);

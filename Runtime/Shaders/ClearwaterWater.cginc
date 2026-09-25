@@ -6,10 +6,8 @@
 #define CLEARWATER_WATER_INCLUDED
 #include "UnityCG.cginc"
 #define CW_ROCK_DETAIL_FP_SCALE 4.0
-#include "ClearwaterShore.cginc"
+#include "ClearwaterSurface.cginc"
 
-sampler2D _Surf;
-float4 _Surf_TexelSize;
 float _SeaHalfSize; // the water plane's half size (m)
 UNITY_DECLARE_SCREENSPACE_TEXTURE(_CWGrabWater);
 UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
@@ -33,18 +31,22 @@ v2f vertSide(appdata v)
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
     o.wpos = mul(unity_ObjectToWorld, v.vertex).xyz;
     o.origin = mul(unity_ObjectToWorld, float4(0, 0, 0, 1)).xyz;
+    if (cwCameraNearSurface(o.origin.y))
+    {
+        // a camera at the waterline draws both passes, each keeping its own pixels (fragSide); the plane only
+        // marks where to shade, so it is moved clear of the near clip plane, to the camera's side of the surface
+        // that the pass looks at (the fragment traces the true surface from the camera)
+        float off = 0.1 + 4.0 * _ProjectionParams.y;
+        o.wpos.y = (CW_WATER_BELOW != 0) ? max(o.wpos.y, _WorldSpaceCameraPos.y + off) : min(o.wpos.y, _WorldSpaceCameraPos.y - off);
+    }
     o.pos = UnityWorldToClipPos(o.wpos);
-    if ((_WorldSpaceCameraPos.y < o.origin.y) != (CW_WATER_BELOW != 0)) o.pos = float4(-2, -2, -2, 1); // the other side's pass
+    if (!cwCameraNearSurface(o.origin.y) && (_WorldSpaceCameraPos.y < o.origin.y) != (CW_WATER_BELOW != 0))
+        o.pos = float4(-2, -2, -2, 1); // the other side's pass
     o.grabPos = ComputeGrabScreenPos(o.pos);
     o.screenPos = ComputeScreenPos(o.pos);
     return o;
 }
 
-// GLSL mat2 products from the demo, written out
-float2 mulM(float2 v)   { return float2(0.8 * v.x + 0.6 * v.y, -0.6 * v.x + 0.8 * v.y); }
-float2 mulMt(float2 v)  { return float2(0.8 * v.x - 0.6 * v.y, 0.6 * v.x + 0.8 * v.y); }
-float2 mulM2(float2 v)  { return float2(0.28 * v.x - 0.96 * v.y, 0.96 * v.x + 0.28 * v.y); }
-float2 mulM2t(float2 v) { return float2(0.28 * v.x + 0.96 * v.y, -0.96 * v.x + 0.28 * v.y); }
 
 float4 texBS(sampler2D t, float2 uv) // cubic B-spline filtering in 4 bilinear taps: smooth slopes -> smooth highlights
 {
@@ -116,6 +118,13 @@ float4 fragSide(v2f i)
     float fwRd = fwidth(rd.y); // taken here, outside any branch, for the sky evaluations below
     float footprint = length(fwidth(i.wpos)); // metres per pixel, for the foam detail
     bool below = uCam.y < 0.0; // a run-time value on purpose: as a constant, the view from above compiles slower
+    [branch] if (cwCameraNearSurface(i.origin.y))
+    {
+        // lens at the waterline: this pixel's side, from where its ray starts (see ClearwaterSurface.cginc)
+        below = cwPixelUnder(rdWorld, i.origin);
+        clip(below == (CW_WATER_BELOW != 0) ? 1.0 : -1.0);
+        uCam = cwToJS(cwNearPoint(rdWorld) - i.origin);
+    }
     if (below) { wd.y = max(wd.y, 0.0015); } else { wd.y = min(wd.y, -0.0015); }
     wd = normalize(wd);
     float2 ripC = _RipCenter.xy;

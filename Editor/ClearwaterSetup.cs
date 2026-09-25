@@ -206,6 +206,11 @@ public static class ClearwaterSetup
         a.underwater.SetVector("_SunDir", SunVector());
         a.underwater.SetFloat("_Depth", DEPTH);
         a.underwater.EnableKeyword("_CW_TONEMAP");
+        // the surface's height, for a camera at the waterline (ClearwaterSurface.cginc)
+        foreach (var m in new[] { a.seabed, a.underwater }) m.SetTexture("_Surf", surf);
+        a.underwater.SetTexture("_Rip", ripN);
+        a.underwater.SetFloat("_PatchSize", L);
+        a.underwater.SetFloat("_RipSize", RSIZE);
         // caustics projected on avatars in the water
         a.avatarCaustics = Mat("Clearwater/AvatarCaustics", "AvatarCaustics");
         a.avatarCaustics.SetTexture("_Caus", a.causRT);
@@ -215,7 +220,7 @@ public static class ClearwaterSetup
         a.avatarCaustics.SetVector("_WaterOrigin", Vector4.zero);
         var (track, loop) = BuildSwashTrack();
         track = Save(track, "SwashTrack.asset");
-        foreach (var m in new[] { a.water, a.seabed })
+        foreach (var m in new[] { a.water, a.seabed, a.underwater })
         {
             m.SetTexture("_SwashTrack", track);
             m.SetFloat("_SwashLoop", loop);
@@ -225,7 +230,7 @@ public static class ClearwaterSetup
         Texture2D rocks = null;
         if (Rocks) rocks = Save(BakeRocks(), "RockHeight.asset");
         else AssetDatabase.DeleteAsset(Gen + "/RockHeight.asset");
-        foreach (var m in new[] { a.water, a.seabed, a.avatarCaustics })
+        foreach (var m in new[] { a.water, a.seabed, a.avatarCaustics, a.underwater })
         {
             m.SetTexture("_RockTex", rocks); // none = the shaders' default black: no rock anywhere
             m.SetVector("_RockArea", new Vector4(0, 0, RockArea, 0));
