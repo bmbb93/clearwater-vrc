@@ -320,7 +320,14 @@ float3 cwFloorAlbedo(float2 p, float2 dpdx, float2 dpdy, out float hgt, out floa
     float zone = cwFbm2(p * 0.16 + 3.0) + 0.10 * (cwNoise(p * 2.5) - 0.5);
     float sandM = smoothstep(hgt + 0.02, hgt + 0.16, (zone - 0.46) * 1.6);
     float fp = max(length(dpdx), length(dpdy)); // metres per pixel
-    float marks = lerp(0.5, 0.5 + 0.5 * sin(dot(p, float2(0.93, 0.37)) * 16.0 + 3.0 * cwNoise(p * 0.8)), saturate(2.0 - fp * 8.0));
+    // ripple marks: crests along the shore that meander, fork and change spacing (the phase is warped by noise),
+    // in patches; smoothed out where the swash runs and faint on the dry beach (a single straight sine read as
+    // regular stripes)
+    float us = cwShoreU(p), du = us - _CoastProfileU.z;
+    float ripPh = us * 16.0 + cwFbm2(p * 0.35 + 7.0) * 9.0 + cwNoise(p * 1.1 + 2.0) * 2.5;
+    float ripZone = du > 0.0 ? smoothstep(2.0, 6.0, du) : 0.35 * smoothstep(3.0, 8.0, -du);
+    float ripA = smoothstep(0.3, 0.7, cwNoise(p * 0.09 + 17.0)) * ripZone * saturate(2.0 - fp * 8.0);
+    float marks = 0.5 + 0.5 * ripA * sin(ripPh);
     float grain = lerp(0.5, cwNoise(p * 40.0), saturate(2.0 - fp * 60.0));
     float3 sand = float3(0.60, 0.55, 0.44) * (0.82 + 0.22 * grain + 0.10 * marks);
     sand = sand * sand * 1.4; // to linear-ish, matching the texture
