@@ -46,6 +46,7 @@ public class ClearwaterCoastEditor : Editor
 
         EditorGUILayout.PropertyField(serializedObject.FindProperty("points"), true);
         EditorGUILayout.PropertyField(serializedObject.FindProperty("closed"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("smooth"), new GUIContent("Smooth curve"));
 
         EditorGUILayout.Space();
         var section = serializedObject.FindProperty("section");
@@ -139,16 +140,24 @@ public class ClearwaterCoastEditor : Editor
         Handles.color = GroundColor;
         Handles.DrawWireCube(tf.position, new Vector3(2 * coast.groundHalfSize, 0, 2 * coast.groundHalfSize));
 
-        // the line, with arrows towards the sea
+        // the line as drawn (a smooth curve through the points, or straight segments), with arrows towards the sea;
+        // a smooth line also shows its points joined straight, faintly
+        if (coast.smooth && n > 1)
+        {
+            Handles.color = new Color(LineColor.r, LineColor.g, LineColor.b, 0.25f);
+            for (int k = 0; k < segs; k++) Handles.DrawDottedLine(w[k], w[(k + 1) % n], 4f);
+        }
         for (int k = 0; k < segs; k++)
         {
-            Vector3 a = w[k], b = w[(k + 1) % n];
+            const int N = 24;
+            var seg = new Vector3[N + 1];
+            for (int j = 0; j <= N; j++) seg[j] = tf.TransformPoint(coast.PointOn(k, j / (float)N));
             Handles.color = LineColor;
-            Handles.DrawAAPolyLine(5f, a, b);
-            Vector3 d = b - a; d.y = 0;
-            if (d.sqrMagnitude < 1e-6f) continue;
+            Handles.DrawAAPolyLine(5f, seg);
+            Vector3 mid = tf.TransformPoint(coast.PointOn(k, 0.5f));
+            Vector3 d = tf.TransformPoint(coast.PointOn(k, 0.55f)) - tf.TransformPoint(coast.PointOn(k, 0.45f)); d.y = 0;
+            if (d.sqrMagnitude < 1e-8f) continue;
             Vector3 sea = new Vector3(-d.z, 0, d.x).normalized; // left of the direction, seen from above
-            Vector3 mid = (a + b) * 0.5f;
             float s = HandleUtility.GetHandleSize(mid);
             Handles.color = SeaColor;
             Handles.ArrowHandleCap(0, mid, Quaternion.LookRotation(sea), s * 0.6f, EventType.Repaint);

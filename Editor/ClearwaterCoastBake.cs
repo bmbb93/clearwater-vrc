@@ -34,8 +34,11 @@ public static class ClearwaterCoastBake
         }
         Vector3 origin = ctl.water.position;
         Vector2 ToWater(Vector3 w) => new Vector2(w.x - origin.x, -(w.z - origin.z));
+        // the line as drawn (straight segments, or the smooth curve sampled about every metre)
+        var line = coast.Sampled();
+        if (coast.closed) line.RemoveAt(line.Count - 1); // the bake closes the loop itself
         var world = new List<Vector3>();
-        foreach (var p in coast.points) world.Add(coast.transform.TransformPoint(ClearwaterCoast.Flat(p)));
+        foreach (var p in line) world.Add(coast.transform.TransformPoint(p));
 
         // shore coordinates
         var pts = new Vector4[world.Count];
