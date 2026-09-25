@@ -1,0 +1,15 @@
+{
+    "name": "VBamboo.Clearwater.Editor",
+    "rootNamespace": "",
+    "references": ["VBamboo.Clearwater.Udon", "VBamboo.Clearwater.Authoring", "UdonSharp.Editor", "UdonSharp.Runtime",
+                   "VRC.SDKBase", "VRC.SDK3", "VRC.Udon", "VRC.Udon.Editor", "VRC.SDK3.Editor", "VRC.SDKBase.Editor"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

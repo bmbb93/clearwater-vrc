@@ -1,0 +1,14 @@
+{
+    "name": "VBamboo.Clearwater.Udon",
+    "rootNamespace": "",
+    "references": ["VRC.SDKBase", "VRC.SDK3", "VRC.Udon", "UdonSharp.Runtime", "UdonSharp.Lib"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

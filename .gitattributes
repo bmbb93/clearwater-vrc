@@ -1,0 +1,2 @@
+*.ogg !text !filter !merge !diff
+*.jpg !text !filter !merge !diff

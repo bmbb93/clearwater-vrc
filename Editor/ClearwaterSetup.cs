@@ -1,0 +1,804 @@
+using System.Collections.Generic;
+using System.IO;
+using UdonSharp;
+using UdonSharpEditor;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.Rendering;
+using VRC.SDK3.Components;
+
+/// <summary>
+/// Builds everything the Clearwater port needs: the initial ocean spectrum, the CustomRenderTexture chain
+/// (spectrum -> 4-pass FFT, ripple sim -> ripple normals), the caustics grid/camera, materials and a ready
+/// VRChat world scene. Re-running regenerates Assets/Clearwater/Generated and the scene.
+/// </summary>
+public static class ClearwaterSetup
+{
+    // what this world makes (materials, render textures, bakes, the scene) lives in the project; what every world
+    // shares (shaders, scripts, sounds, textures) comes from the package
+    internal const string Root = "Assets/Clearwater";
+    internal const string Gen = Root + "/Generated";
+    const string ScenePath = Root + "/Scenes/Clearwater.unity";
+    internal const string Pkg = "Packages/com.vbamboo.clearwater/Runtime";
+
+    // Ocean spectrum (same constants as the demo)
+    const int N = 256;
+    const float L = 4.6f;
+    const float DEPTH = 1.6f;
+    const double TARGET_SLOPE = 0.078;
+    // Ripples: the demo's texel density (7 m / 256) over a larger window, so everyone nearby is inside it
+    const int RN = 512;
+    const float RSIZE = 14f;
+    // Caustics
+    const int C = 1024;
+    const int G = 282;          // grid cells across the source range
+    const float Margin = 0.05f; // source range [-Margin, 1+Margin] covers patterns bent in from the neighbours
+    const int CausticsLayer = 23;
+    const float CausticsOrtho = 7.77f;
+    static readonly Vector3 CausticsRigPos = new Vector3(0, -20000, 0);
+    // Sun: 31 deg up, 6 deg off the view axis, straight ahead of the spawn
+    const float SunEl = 31f, SunAz = 6f;
+    const float WaterHalfSize = 2500f;
+    // The coast itself is a ClearwaterCoast in the scene (drawn there, baked by ClearwaterCoastBake); a new scene
+    // gets a straight one: the waterline along x at this z, the sea towards +z, the "gentle beach" section.
+    const float DefaultWaterlineZ = -35.9f;
+    const float SeabedInner = 20f, SeabedStep = 0.25f;       // rendered ground: 25 cm cells out to 20 m (rock outlines),
+    const float SeabedFar = 3000f, SeabedGrowth = 1.08f;     // then 8% larger each step out to the horizon
+    static readonly Vector3 SpawnPos = new Vector3(0, 0.8f, -41f); // on the beach, facing the water and the sun
+
+    // Rebuilds everything in Generated/. The assets are updated in place (same files, same IDs), so an existing scene
+    // keeps pointing at them and is otherwise left alone: things placed or tuned by hand, and the uploaded world's
+    // ID, stay. Only a missing scene is created.
+    [MenuItem("Tools/Clearwater/Build Scene")]
+    public static void BuildScene()
+    {
+        var a = BuildAssets();
+        if (File.Exists(ScenePath)) UpdateScene(a);
+        else CreateScene(a);
+    }
+
+    /// <summary>The scene's coast (a straight default one is added if there is none), baked and saved.</summary>
+    static void BakeSceneCoast()
+    {
+        var coast = Object.FindObjectOfType<ClearwaterCoast>();
+        if (coast == null) coast = CreateDefaultCoast();
+        ClearwaterCoastBake.Bake(coast);
+        var scene = coast.gameObject.scene;
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+    }
+
+    static ClearwaterCoast CreateDefaultCoast()
+    {
+        var go = new GameObject("Coast (editor only)") { tag = "EditorOnly" };
+        go.transform.position = new Vector3(0, 0, DefaultWaterlineZ);
+        return go.AddComponent<ClearwaterCoast>();
+    }
+
+    [MenuItem("Tools/Clearwater/Recreate Scene (discards changes to the scene)")]
+    public static void RecreateScene()
+    {
+        if (File.Exists(ScenePath) && !EditorUtility.DisplayDialog("Recreate the Clearwater scene",
+                "The scene is built again from scratch: anything placed or changed in it by hand is lost " +
+                "(the uploaded world's ID is kept).", "Recreate", "Cancel"))
+            return;
+        CreateScene(BuildAssets());
+    }
+
+    // keep the scene; refresh only the values derived from the rebuilt assets
+    static void UpdateScene(Assets a)
+    {
+        var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        if (scene.path != ScenePath)
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            scene = EditorSceneManager.OpenScene(ScenePath);
+        }
+        var ctl = Object.FindObjectOfType<ClearwaterController>();
+        if (ctl != null)
+        {
+            ctl.swashLoop = a.water.GetFloat("_SwashLoop");    // follows the wave audio
+            EditorUtility.SetDirty(ctl);
+        }
+        BakeSceneCoast();
+    }
+
+    public class Assets
+    {
+        public Material water, sky, caustics, ripple, seabed, underwater, avatarCaustics;
+        public RenderTexture causRT;
+        public Mesh grid, plane, seabedGrid;
+    }
+
+    // ---------------------------------------------------------------- assets
+
+    public static Assets BuildAssets()
+    {
+        // assets are updated in place (same GUIDs), so rebuilding with unchanged settings leaves git clean
+        if (!AssetDatabase.IsValidFolder(Root)) AssetDatabase.CreateFolder("Assets", "Clearwater");
+        if (!AssetDatabase.IsValidFolder(Gen)) AssetDatabase.CreateFolder(Root, "Generated");
+        SetupPebbleImporter();
+        var a = new Assets();
+
+        // spectrum + FFT chain
+        var h0 = BuildH0();
+        h0 = Save(h0, "H0.asset");
+        var specMat = Mat("Clearwater/CRT/Spectrum", "CRT_Spectrum");
+        specMat.SetTexture("_H0", h0);
+        specMat.SetFloat("_PatchSize", L);
+        var spec = CRT("CRT_Spectrum", N, RenderTextureFormat.ARGBFloat, specMat, FilterMode.Point, TextureWrapMode.Repeat);
+
+        Texture src = spec;
+        string[] names = { "CRT_FFT_X0", "CRT_FFT_X1", "CRT_FFT_Y0", "CRT_FFT_Y1_Surface" };
+        CustomRenderTexture surf = null;
+        for (int p = 0; p < 4; p++)
+        {
+            var m = Mat("Clearwater/CRT/FFT", names[p]);
+            m.SetTexture("_Src", src);
+            m.SetFloat("_Axis", p / 2);
+            m.SetFloat("_Stage", p % 2);
+            bool last = p == 3;
+            m.SetFloat("_Resolve", last ? 1 : 0);
+            var crt = last
+                ? CRT(names[p], N, RenderTextureFormat.ARGBHalf, m, FilterMode.Trilinear, TextureWrapMode.Repeat, mips: true, aniso: 8)
+                : CRT(names[p], N, RenderTextureFormat.ARGBFloat, m, FilterMode.Point, TextureWrapMode.Repeat);
+            src = crt;
+            surf = crt;
+        }
+
+        // ripples
+        a.ripple = Mat("Clearwater/CRT/Ripple", "CRT_Ripple");
+        var rip = CRT("CRT_Ripple", RN, RenderTextureFormat.ARGBHalf, a.ripple, FilterMode.Bilinear, TextureWrapMode.Clamp, doubleBuffered: true);
+        var ripNMat = Mat("Clearwater/CRT/RippleNormals", "CRT_RippleNormals");
+        ripNMat.SetTexture("_Src", rip);
+        ripNMat.SetFloat("_RipSize", RSIZE);
+        var ripN = CRT("CRT_RippleNormals", RN, RenderTextureFormat.ARGBHalf, ripNMat, FilterMode.Bilinear, TextureWrapMode.Clamp);
+
+        // caustics
+        a.causRT = new RenderTexture(C, C, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear)
+        {
+            name = "RT_Caustics", useMipMap = true, autoGenerateMips = true,
+            wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 8
+        };
+        a.causRT = Save(a.causRT, "RT_Caustics.renderTexture");
+        a.caustics = Mat("Clearwater/Caustics", "Caustics");
+        a.caustics.SetTexture("_Surf", surf);
+        a.caustics.SetFloat("_PatchSize", L);
+        a.caustics.SetFloat("_Depth", DEPTH);
+        a.caustics.SetFloat("_CausRes", C);
+        a.caustics.SetFloat("_CamOrthoSize", CausticsOrtho);
+        a.caustics.SetVector("_SunDir", SunVector());
+        a.grid = BuildGrid();
+        a.grid = Save(a.grid, "CausticsGrid.asset");
+
+        // water + sky
+        a.water = Mat("Clearwater/Water", "Water");
+        a.water.SetTexture("_Surf", surf);
+        a.water.SetTexture("_Caus", a.causRT);
+        a.water.SetTexture("_Rip", ripN);
+        a.water.SetTexture("_Peb", AssetDatabase.LoadAssetAtPath<Texture2D>(Pkg + "/Textures/Pebbles.jpg"));
+        a.water.SetFloat("_PatchSize", L);
+        a.water.SetFloat("_Depth", DEPTH);
+        a.water.SetFloat("_RipSize", RSIZE);
+        a.water.SetVector("_SunDir", SunVector());
+        a.water.EnableKeyword("_CW_TONEMAP");
+        a.sky = Mat("Clearwater/Skybox", "Sky");
+        a.sky.SetVector("_SunDir", SunVector());
+        a.sky.EnableKeyword("_CW_TONEMAP");
+        a.plane = BuildPlane();
+        a.plane = Save(a.plane, "WaterPlane.asset");
+
+        // seabed / beach and the underwater view
+        a.seabed = Mat("Clearwater/Seabed", "Seabed");
+        a.seabed.SetTexture("_Caus", a.causRT);
+        a.seabed.SetTexture("_Rip", ripN);
+        a.seabed.SetTexture("_Peb", a.water.GetTexture("_Peb"));
+        a.seabed.SetFloat("_PatchSize", L);
+        a.seabed.SetFloat("_Depth", DEPTH);
+        a.seabed.SetFloat("_RipSize", RSIZE);
+        a.seabed.SetVector("_SunDir", SunVector());
+        a.seabed.SetVector("_WaterOrigin", Vector4.zero);
+        a.seabed.EnableKeyword("_CW_TONEMAP");
+        a.underwater = Mat("Clearwater/Underwater", "Underwater");
+        a.underwater.SetVector("_SunDir", SunVector());
+        a.underwater.SetFloat("_Depth", DEPTH);
+        a.underwater.EnableKeyword("_CW_TONEMAP");
+        // caustics projected on avatars in the water
+        a.avatarCaustics = Mat("Clearwater/AvatarCaustics", "AvatarCaustics");
+        a.avatarCaustics.SetTexture("_Caus", a.causRT);
+        a.avatarCaustics.SetFloat("_PatchSize", L);
+        a.avatarCaustics.SetFloat("_Depth", DEPTH);
+        a.avatarCaustics.SetVector("_SunDir", SunVector());
+        a.avatarCaustics.SetVector("_WaterOrigin", Vector4.zero);
+        var (track, loop) = BuildSwashTrack();
+        track = Save(track, "SwashTrack.asset");
+        foreach (var m in new[] { a.water, a.seabed })
+        {
+            m.SetTexture("_SwashTrack", track);
+            m.SetFloat("_SwashLoop", loop);
+        }
+        // (the coast textures, the walkable ground and the shore sound's path come from the scene's ClearwaterCoast:
+        // BakeSceneCoast, after the scene exists)
+        Texture2D rocks = null;
+        if (Rocks) rocks = Save(BakeRocks(), "RockHeight.asset");
+        else AssetDatabase.DeleteAsset(Gen + "/RockHeight.asset");
+        foreach (var m in new[] { a.water, a.seabed, a.avatarCaustics })
+        {
+            m.SetTexture("_RockTex", rocks); // none = the shaders' default black: no rock anywhere
+            m.SetVector("_RockArea", new Vector4(0, 0, RockArea, 0));
+        }
+        a.seabedGrid = BuildFarGrid("SeabedGrid");
+        a.seabedGrid = Save(a.seabedGrid, "SeabedGrid.asset");
+
+        AssetDatabase.SaveAssets();
+        return a;
+    }
+
+    static Vector3 SunVector()
+    {
+        float el = SunEl * Mathf.Deg2Rad, az = SunAz * Mathf.Deg2Rad;
+        // the demo's (sin az cos el, sin el, -cos az cos el), with z flipped into Unity space
+        return new Vector3(Mathf.Sin(az) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Cos(az) * Mathf.Cos(el));
+    }
+
+    static void SetupPebbleImporter()
+    {
+        var ti = (TextureImporter)AssetImporter.GetAtPath(Pkg + "/Textures/Pebbles.jpg");
+        if (ti.sRGBTexture && ti.mipmapEnabled && ti.wrapMode == TextureWrapMode.Repeat && ti.filterMode == FilterMode.Trilinear &&
+            ti.anisoLevel == 16 && ti.maxTextureSize == 1024 && ti.textureCompression == TextureImporterCompression.CompressedHQ)
+            return; // (the package ships with these settings; only fix them if they were changed)
+        ti.sRGBTexture = true;
+        ti.mipmapEnabled = true;
+        ti.wrapMode = TextureWrapMode.Repeat;
+        ti.filterMode = FilterMode.Trilinear;
+        ti.anisoLevel = 16;
+        ti.maxTextureSize = 1024;
+        ti.textureCompression = TextureImporterCompression.CompressedHQ;
+        ti.SaveAndReimport();
+    }
+
+    static Material Mat(string shader, string name)
+    {
+        var s = Shader.Find(shader);
+        if (s == null) throw new System.Exception("Shader not found: " + shader);
+        return Save(new Material(s) { name = name }, name + ".mat");
+    }
+
+    static CustomRenderTexture CRT(string name, int size, RenderTextureFormat fmt, Material mat, FilterMode filter, TextureWrapMode wrap,
+        bool mips = false, int aniso = 0, bool doubleBuffered = false)
+    {
+        var crt = new CustomRenderTexture(size, size, fmt, RenderTextureReadWrite.Linear)
+        {
+            name = name,
+            material = mat,
+            initializationMode = CustomRenderTextureUpdateMode.OnLoad,
+            initializationSource = CustomRenderTextureInitializationSource.TextureAndColor,
+            initializationColor = Color.clear,
+            updateMode = CustomRenderTextureUpdateMode.Realtime,
+            doubleBuffered = doubleBuffered,
+            filterMode = filter,
+            wrapMode = wrap,
+            useMipMap = mips,
+            autoGenerateMips = mips,
+            anisoLevel = aniso,
+        };
+        return Save(crt, name + ".asset");
+    }
+
+    /// <summary>Stores o at Generated/file. If that asset already exists its content is overwritten in place,
+    /// keeping its GUID (and every reference to it); returns the object that now lives in the asset.</summary>
+    internal static T Save<T>(T o, string file) where T : Object
+    {
+        string path = Gen + "/" + file;
+        var existing = AssetDatabase.LoadAssetAtPath<T>(path);
+        if (existing == null || existing.GetType() != o.GetType())
+        {
+            if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
+            AssetDatabase.CreateAsset(o, path);
+            return o;
+        }
+        if (existing is RenderTexture ert) ert.Release(); // size/format changes apply on next use
+        EditorUtility.CopySerialized(o, existing);
+        EditorUtility.SetDirty(existing);
+        Object.DestroyImmediate(o);
+        return existing;
+    }
+
+    // ---- initial spectrum: a port of the demo's buildH0(), same seed, so the waves are the demo's waves
+    class Mulberry32
+    {
+        uint a;
+        public Mulberry32(uint seed) { a = seed; }
+        public double Next()
+        {
+            unchecked
+            {
+                a += 0x6D2B79F5;
+                uint t = (a ^ (a >> 15)) * (1u | a);
+                t = (t + (t ^ (t >> 7)) * (61u | t)) ^ t;
+                return (t ^ (t >> 14)) / 4294967296.0;
+            }
+        }
+    }
+
+    static Texture2D BuildH0()
+    {
+        var rnd = new Mulberry32(7);
+        double Gauss()
+        {
+            double u = 0, v;
+            while (u == 0) u = rnd.Next();
+            v = rnd.Next();
+            return System.Math.Sqrt(-2 * System.Math.Log(u)) * System.Math.Cos(2 * System.Math.PI * v);
+        }
+        double kp = 2 * System.Math.PI / 0.62, kcut = 2 * System.Math.PI / 0.045;
+        double[] wd = { 0.8, 0.6 };
+        var re = new double[N * N];
+        var im = new double[N * N];
+        double s2 = 0;
+        for (int m = 0; m < N; m++)
+            for (int n = 0; n < N; n++)
+            {
+                int nx = n < N / 2 ? n : n - N, nz = m < N / 2 ? m : m - N;
+                double kx = 2 * System.Math.PI * nx / L, kz = 2 * System.Math.PI * nz / L, k = System.Math.Sqrt(kx * kx + kz * kz);
+                double P = 0;
+                if (k > 1e-6)
+                {
+                    double lk = System.Math.Log(k / kp);
+                    double bump = System.Math.Exp(-0.5 * (lk / 0.36) * (lk / 0.36));
+                    double tail = 0.035 * System.Math.Exp(-(kp / k) * (kp / k)) * System.Math.Exp(-(k / kcut) * (k / kcut));
+                    double ls = System.Math.Log(k / (2 * System.Math.PI / 1.6)) / 0.3;
+                    double swell = 0.35 * System.Math.Exp(-0.5 * ls * ls);
+                    double c = (kx * wd[0] + kz * wd[1]) / k;
+                    double spread = (0.3 + 0.7 * c * c) * (c < 0 ? 0.35 : 1);
+                    P = (bump + tail + swell) * spread / (k * k * k * k);
+                }
+                double amp = System.Math.Sqrt(P / 2);
+                int i = m * N + n;
+                re[i] = Gauss() * amp;
+                im[i] = Gauss() * amp;
+                s2 += 2 * k * k * (re[i] * re[i] + im[i] * im[i]);
+            }
+        double sc = TARGET_SLOPE / System.Math.Sqrt(s2);
+        var data = new Color[N * N];
+        for (int m = 0; m < N; m++)
+            for (int n = 0; n < N; n++)
+            {
+                int i = m * N + n, j = ((N - m) % N) * N + ((N - n) % N);
+                data[i] = new Color((float)(re[i] * sc), (float)(im[i] * sc), (float)(re[j] * sc), (float)(-im[j] * sc));
+            }
+        var tex = new Texture2D(N, N, TextureFormat.RGBAFloat, false, true)
+        {
+            name = "H0", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Repeat
+        };
+        tex.SetPixels(data);
+        tex.Apply(false, false);
+        return tex;
+    }
+
+    static Mesh BuildGrid()
+    {
+        int n = G + 1;
+        var v = new Vector3[n * n];
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++)
+                v[j * n + i] = new Vector3(-Margin + (1 + 2 * Margin) * i / G, -Margin + (1 + 2 * Margin) * j / G, 0);
+        var idx = new int[G * G * 6];
+        int o = 0;
+        for (int j = 0; j < G; j++)
+            for (int i = 0; i < G; i++)
+            {
+                int a = j * n + i, b = a + 1, c = a + n, d = c + 1;
+                idx[o++] = a; idx[o++] = b; idx[o++] = c; idx[o++] = b; idx[o++] = d; idx[o++] = c;
+            }
+        var mesh = new Mesh { name = "CausticsGrid", indexFormat = IndexFormat.UInt32 };
+        mesh.vertices = v;
+        mesh.triangles = idx;
+        mesh.bounds = new Bounds(new Vector3(0.5f, 0.5f, 0), new Vector3(2, 2, 1));
+        return mesh;
+    }
+
+    // ---- rocks: baked on the GPU from the shader's own cwRockAnalytic, then shared by every shader and the collider
+    const float AvatarCausticsHalfSize = 16f; // avatars within this many metres of the local player get caustics
+    const float AvatarCausticsAbove = 3f;     // projector height above the surface (its box reaches 8 m below)
+    static readonly bool Rocks = false; // rocky areas off for now (the user preferred the open beach); true brings them back
+    const int RockRes = 2048;
+    const float RockArea = 204.8f; // metres, centred on the water origin: 10 cm per texel over the walkable area
+    static Texture2D BakeRocks()
+    {
+        var mat = new Material(Shader.Find("Hidden/Clearwater/RockBake"));
+        mat.SetVector("_RockArea", new Vector4(0, 0, RockArea, 0));
+        var px = ClearwaterCoastBake.BlitRead(mat, RockRes, RockRes);
+        Object.DestroyImmediate(mat);
+        var tex = new Texture2D(RockRes, RockRes, TextureFormat.RHalf, true, true) // mips: the shaders read cavities from them
+        {
+            name = "RockHeight", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear
+        };
+        tex.SetPixels(px); tex.Apply(true, false);
+        return tex;
+    }
+
+    /// <summary>Grid for the rendered ground: uniform cells near the centre, growing geometrically outward. The
+    /// seabed shader moves it with the viewer (snapped to the inner cell size) and computes every height.</summary>
+    static Mesh BuildFarGrid(string name)
+    {
+        var half = new List<float>();
+        for (int i = 0; i * SeabedStep <= SeabedInner + 1e-3f; i++) half.Add(i * SeabedStep);
+        for (float s = SeabedStep, x = half[half.Count - 1]; x < SeabedFar;) { s *= SeabedGrowth; x += s; half.Add(x); }
+        var ax = new List<float>();
+        for (int i = half.Count - 1; i > 0; i--) ax.Add(-half[i]);
+        ax.AddRange(half);
+        int n = ax.Count;
+        var v = new Vector3[n * n];
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++)
+                v[j * n + i] = new Vector3(ax[i], 0, ax[j]);
+        var idx = new int[(n - 1) * (n - 1) * 6];
+        int o = 0;
+        for (int j = 0; j < n - 1; j++)
+            for (int i = 0; i < n - 1; i++)
+            {
+                int a = j * n + i, b = a + 1, c = a + n, d = c + 1;
+                idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d; // facing up
+            }
+        var mesh = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
+        mesh.vertices = v;
+        mesh.triangles = idx;
+        // never culled: it moves with the viewer and its heights are set on the GPU
+        mesh.bounds = new Bounds(Vector3.zero, new Vector3(4 * SeabedFar, 40, 4 * SeabedFar));
+        return mesh;
+    }
+
+    static Mesh BuildPlane()
+    {
+        float s = WaterHalfSize;
+        var mesh = new Mesh { name = "WaterPlane" };
+        mesh.vertices = new[] { new Vector3(-s, 0, -s), new Vector3(-s, 0, s), new Vector3(s, 0, s), new Vector3(s, 0, -s) };
+        mesh.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
+        mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    // ---------------------------------------------------------------- scene
+
+    public static void CreateScene(Assets a)
+    {
+        // keep the uploaded world's ID across rebuilds, or the next upload would create a second world
+        string worldId = null;
+        if (File.Exists(ScenePath))
+        {
+            // a plain field, or (the VRCWorld prefab's case) an override: "propertyPath: blueprintId" + "value: wrld_..."
+            var m = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(ScenePath), @"blueprintId\s*(?:\r?\n\s*value)?:\s*(wrld_[0-9a-fA-F-]+)");
+            if (m.Success) worldId = m.Groups[1].Value;
+        }
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+        // sun + environment
+        var sunGo = new GameObject("Sun");
+        var sun = sunGo.AddComponent<Light>();
+        sun.type = LightType.Directional;
+        sun.color = new Color(1.0f, 0.93f, 0.82f);
+        sun.intensity = 1.3f;
+        sun.shadows = LightShadows.Soft;
+        sunGo.transform.rotation = Quaternion.LookRotation(-SunVector());
+        RenderSettings.skybox = a.sky;
+        RenderSettings.sun = sun;
+        RenderSettings.ambientMode = AmbientMode.Skybox;
+        RenderSettings.fog = false;
+
+        CreateRig(a, sun);
+
+        // VRChat world descriptor, spawn facing +z (toward the sun), reference camera
+        var refGo = new GameObject("Reference Camera");
+        refGo.transform.position = SpawnPos + Vector3.up * 1.5f;
+        var refCam = refGo.AddComponent<Camera>();
+        refCam.enabled = false;
+        refCam.nearClipPlane = 0.03f;
+        refCam.farClipPlane = 4000f;
+        refCam.cullingMask = ~(1 << CausticsLayer);
+        refCam.allowHDR = true;
+        refCam.clearFlags = CameraClearFlags.Skybox;
+
+        var worldPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Packages/com.vrchat.worlds/Samples/UdonExampleScene/Prefabs/VRCWorld.prefab");
+        var world = (GameObject)PrefabUtility.InstantiatePrefab(worldPrefab);
+        world.transform.position = SpawnPos;
+        world.transform.rotation = Quaternion.identity;
+        var desc = world.GetComponent<VRCSceneDescriptor>();
+        desc.ReferenceCamera = refGo;
+        desc.RespawnHeightY = -50;
+        desc.spawns = new[] { world.transform };
+        if (worldId != null) world.GetComponent<VRC.Core.PipelineManager>().blueprintId = worldId;
+
+        // editor-only preview camera with the demo's framing (1.55 m up, 41 deg down, 64 deg vertical FOV)
+        var prevGo = new GameObject("Preview Camera (editor only)") { tag = "EditorOnly" };
+        prevGo.transform.position = new Vector3(0, 1.55f, 0);
+        prevGo.transform.rotation = Quaternion.Euler(0.72f * Mathf.Rad2Deg, 0, 0);
+        var prev = prevGo.AddComponent<Camera>();
+        prev.fieldOfView = 64;
+        prev.nearClipPlane = 0.03f;
+        prev.farClipPlane = 4000f;
+        prev.cullingMask = ~(1 << CausticsLayer);
+        prev.depth = -1;
+
+        Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
+        EditorSceneManager.SaveScene(scene, ScenePath);
+        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+        BakeSceneCoast(); // the coast, the walkable ground and the shore sound's path
+        Debug.Log("[Clearwater] scene built: " + ScenePath);
+    }
+
+    /// <summary>The water and everything that drives it: the surface, the seabed, the underwater fog, the caustics
+    /// on avatars, the caustics rig, the wave sound and the controller. Returns the water object.</summary>
+    static GameObject CreateRig(Assets a, Light sun)
+    {
+        NameLayer(CausticsLayer, "Caustics");
+        // water surface + something to stand on (the demo's viewpoint is ~1.55 m above the water)
+        var water = new GameObject("Clearwater");
+        water.AddComponent<MeshFilter>().sharedMesh = a.plane;
+        var mr = water.AddComponent<MeshRenderer>();
+        mr.sharedMaterial = a.water;
+        mr.shadowCastingMode = ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        mr.lightProbeUsage = LightProbeUsage.Off;
+        mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        GameObjectUtility.SetStaticEditorFlags(water, 0);
+
+        var seabed = new GameObject("Seabed");
+        seabed.transform.SetParent(water.transform, false);
+        seabed.AddComponent<MeshFilter>().sharedMesh = a.seabedGrid;
+        var smr = seabed.AddComponent<MeshRenderer>();
+        smr.sharedMaterial = a.seabed;
+        smr.shadowCastingMode = ShadowCastingMode.On; // puts it in the camera depth texture
+        smr.receiveShadows = false;
+        smr.lightProbeUsage = LightProbeUsage.Off;
+        smr.reflectionProbeUsage = ReflectionProbeUsage.Off;
+
+        var under = new GameObject("Underwater Volume");
+        under.transform.SetParent(water.transform, false);
+        under.transform.localScale = Vector3.one * 1000f;
+        under.AddComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
+        var umr = under.AddComponent<MeshRenderer>();
+        umr.sharedMaterial = a.underwater;
+        umr.shadowCastingMode = ShadowCastingMode.Off;
+        umr.receiveShadows = false;
+        umr.lightProbeUsage = LightProbeUsage.Off;
+        umr.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        umr.enabled = false;
+
+        // caustics on avatars: a Projector looking straight down that only sees the player layers; the controller
+        // keeps it over the local player (the shader places the pattern from world positions, so only its box matters)
+        var projGo = new GameObject("Avatar Caustics Projector");
+        projGo.transform.SetParent(water.transform, false);
+        projGo.transform.localPosition = new Vector3(0, AvatarCausticsAbove, 0);
+        projGo.transform.localRotation = Quaternion.Euler(90, 0, 0);
+        var proj = projGo.AddComponent<Projector>();
+        proj.orthographic = true;
+        proj.orthographicSize = AvatarCausticsHalfSize;
+        proj.aspectRatio = 1;
+        proj.nearClipPlane = 0.1f;
+        proj.farClipPlane = AvatarCausticsAbove + 8f;
+        proj.material = a.avatarCaustics;
+        proj.ignoreLayers = ~((1 << 9) | (1 << 10) | (1 << 18) | (1 << ClearwaterCoastBake.PropsLayer)); // Player, PlayerLocal, MirrorReflection, ClearwaterProps
+
+        // caustics rig, far below the world so no player camera ever sees it
+        var rig = new GameObject("Caustics Rig");
+        rig.transform.position = CausticsRigPos;
+        var gridGo = new GameObject("Caustics Grid");
+        gridGo.layer = CausticsLayer;
+        gridGo.transform.SetParent(rig.transform, false);
+        gridGo.AddComponent<MeshFilter>().sharedMesh = a.grid;
+        var gmr = gridGo.AddComponent<MeshRenderer>();
+        gmr.sharedMaterial = a.caustics;
+        gmr.shadowCastingMode = ShadowCastingMode.Off;
+        gmr.receiveShadows = false;
+        gmr.lightProbeUsage = LightProbeUsage.Off;
+        gmr.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        var camGo = new GameObject("Caustics Camera");
+        camGo.transform.SetParent(rig.transform, false);
+        camGo.transform.localPosition = new Vector3(0.5f, 0.5f, -1f);
+        var cam = camGo.AddComponent<Camera>();
+        cam.orthographic = true;
+        cam.orthographicSize = CausticsOrtho;
+        cam.nearClipPlane = 0.1f;
+        cam.farClipPlane = 5f;
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0, 0, 0, 0);
+        cam.cullingMask = 1 << CausticsLayer;
+        cam.targetTexture = a.causRT;
+        cam.depth = -100;
+        cam.allowHDR = false;
+        cam.allowMSAA = false;
+        cam.useOcclusionCulling = false;
+
+        // wave ambience
+        var audio = BuildAudio(water.transform);
+
+        // controller
+        var ctlGo = new GameObject("Clearwater Controller");
+        EnsureProgramAsset(Pkg + "/Udon/ClearwaterController.cs");
+        var ctl = UdonSharpUndo.AddComponent<ClearwaterController>(ctlGo);
+        ctl.water = water.transform;
+        ctl.sun = sun;
+        ctl.waterMaterial = a.water;
+        ctl.rippleMaterial = a.ripple;
+        ctl.causticsMaterial = a.caustics;
+        ctl.skyMaterial = a.sky;
+        ctl.seabedMaterial = a.seabed;
+        ctl.underwaterMaterial = a.underwater;
+        ctl.underwaterVolume = umr;
+        ctl.avatarCausticsMaterial = a.avatarCaustics;
+        ctl.avatarCausticsProjector = projGo.transform;
+        ctl.shoreAudio = audio.shore;
+        ctl.bedAudio = audio.bed;
+        ctl.underwaterAudio = audio.under;
+        ctl.swashLoop = a.water.GetFloat("_SwashLoop");
+        ctl.rippleResolution = RN;
+        ctl.rippleSize = RSIZE;
+        EditorUtility.SetDirty(ctl);
+
+        return water;
+    }
+
+    /// <summary>Adds Clearwater to the open scene (an existing world): the water rig and a straight coast to draw on.
+    /// The world's own sun, spawn and descriptor are kept.</summary>
+    [MenuItem("Tools/Clearwater/Add to Current Scene")]
+    public static void AddToCurrentScene()
+    {
+        if (Object.FindObjectOfType<ClearwaterController>() != null)
+        {
+            EditorUtility.DisplayDialog("Clearwater", "This scene already has Clearwater (a ClearwaterController).", "OK");
+            return;
+        }
+        var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        if (string.IsNullOrEmpty(scene.path))
+        {
+            EditorUtility.DisplayDialog("Clearwater", "Save the scene first.", "OK");
+            return;
+        }
+        var a = BuildAssets();
+        var sun = RenderSettings.sun;
+        if (sun == null) foreach (var l in Object.FindObjectsOfType<Light>()) if (l.type == LightType.Directional) { sun = l; break; }
+        if (sun == null)
+        {
+            var sunGo = new GameObject("Sun");
+            sun = sunGo.AddComponent<Light>();
+            sun.type = LightType.Directional;
+            sun.color = new Color(1.0f, 0.93f, 0.82f);
+            sun.intensity = 1.3f;
+            sunGo.transform.rotation = Quaternion.LookRotation(-SunVector());
+            RenderSettings.sun = sun;
+        }
+        // the water reads depth, which VRChat only renders while the directional light casts shadows
+        if (sun.shadows == LightShadows.None) sun.shadows = LightShadows.Soft;
+        // the water reflects its own sky; use it as the skybox too unless the world has one of its own
+        if (RenderSettings.skybox == null || RenderSettings.skybox.name == "Default-Skybox") RenderSettings.skybox = a.sky;
+        CreateRig(a, sun);
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        BakeSceneCoast();
+        Debug.Log("[Clearwater] added to " + scene.path + ". Move the 'Coast (editor only)' points to draw your waterline, then Bake. " +
+                  "Give the world's reference camera a far clip of a few km.");
+    }
+
+    // ---------------------------------------------------------------- shoreline wave timing
+
+    [System.Serializable]
+    class Breaks { public float loopSeconds; public float[] times; public float[] amps; }
+
+    /// <summary>Wave phase + strength over the shore audio loop, one texel per ~0.09 s (see ClearwaterShore.cginc):
+    /// phase runs 0 -> 2pi from one detected break to the next, so a crest reaches the waterline on each break.</summary>
+    static (Texture2D, float) BuildSwashTrack()
+    {
+        var b = JsonUtility.FromJson<Breaks>(AssetDatabase.LoadAssetAtPath<TextAsset>(AudioDir + "/WavesShore_breaks.json").text);
+        int n = b.times.Length;
+        const int W = 1024;
+        var px = new Color[W];
+        for (int i = 0; i < W; i++)
+        {
+            float t = b.loopSeconds * i / W;
+            int k = n - 1; // last break at or before t (wrapping)
+            for (int j = 0; j < n; j++) if (b.times[j] <= t) k = j;
+            int k2 = (k + 1) % n;
+            float t0 = b.times[k], t1 = b.times[k2];
+            if (t0 > t) t0 -= b.loopSeconds;
+            if (t1 <= t0) t1 += b.loopSeconds;
+            float ph = 2 * Mathf.PI * (t - t0) / (t1 - t0);
+            // strength: the wave that just broke while it drains, the next one while it comes in
+            float amp = Mathf.Lerp(b.amps[k], b.amps[k2], Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.6f * Mathf.PI, 1.4f * Mathf.PI, ph)));
+            px[i] = new Color(Mathf.Cos(ph), Mathf.Sin(ph), amp, 1);
+        }
+        var tex = new Texture2D(W, 1, TextureFormat.RGBAHalf, false, true)
+        {
+            name = "SwashTrack", wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear
+        };
+        tex.SetPixels(px);
+        tex.Apply(false, false);
+        return (tex, b.loopSeconds);
+    }
+
+    // ---------------------------------------------------------------- audio
+
+    const string AudioDir = Pkg + "/Audio";
+
+    struct AudioRig { public AudioSource shore, bed, under; public float shoreZ; }
+
+
+
+    static AudioRig BuildAudio(Transform water)
+    {
+        foreach (var name in new[] { "WavesShore", "WavesBed", "WavesUnderwater" })
+        {
+            var imp = (AudioImporter)AssetImporter.GetAtPath($"{AudioDir}/{name}.ogg");
+            var st = imp.defaultSampleSettings;
+            bool mono = name == "WavesShore";
+            if (st.loadType == AudioClipLoadType.CompressedInMemory && st.compressionFormat == AudioCompressionFormat.Vorbis &&
+                Mathf.Approximately(st.quality, 0.6f) && st.preloadAudioData && imp.forceToMono == mono && imp.loadInBackground)
+                continue; // (shipped this way)
+            st.loadType = AudioClipLoadType.CompressedInMemory;
+            st.compressionFormat = AudioCompressionFormat.Vorbis;
+            st.quality = 0.6f;
+            st.preloadAudioData = true;
+            imp.defaultSampleSettings = st;
+            imp.forceToMono = mono;
+            imp.loadInBackground = true;
+            imp.SaveAndReimport();
+        }
+
+        var root = new GameObject("Wave Audio");
+        root.transform.SetParent(water, false);
+        AudioSource Source(string name, string clip, float volume, bool spatial)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, false);
+            var src = go.AddComponent<AudioSource>();
+            src.clip = AssetDatabase.LoadAssetAtPath<AudioClip>($"{AudioDir}/{clip}.ogg");
+            src.loop = true;
+            src.playOnAwake = true;
+            src.volume = volume;
+            src.dopplerLevel = 0;
+            src.spatialBlend = spatial ? 1 : 0;
+            src.priority = 64;
+            var sp = go.AddComponent<VRCSpatialAudioSource>();
+            sp.EnableSpatialization = spatial;
+            if (spatial)
+            {
+                sp.Gain = 6;              // dB
+                sp.Near = 1.5f;           // full level within 1.5 m of the waterline
+                sp.Far = 60;              // fades out ~60 m from the shore
+                sp.VolumetricRadius = 4;  // a broad source, not a point
+            }
+            return src;
+        }
+        float shoreZ = DefaultWaterlineZ; // until the coast bake lays the source along the waterline
+        var rig = new AudioRig
+        {
+            shore = Source("Shore Waves (3D, follows the listener along the waterline)", "WavesShore", 0.9f, true),
+            bed = Source("Sea Bed (2D)", "WavesBed", 0.3f, false),
+            under = Source("Underwater (2D)", "WavesUnderwater", 0f, false),
+            shoreZ = shoreZ,
+        };
+        rig.shore.transform.position = new Vector3(0, water.position.y + 0.2f, shoreZ);
+        return rig;
+    }
+
+    static void EnsureProgramAsset(string scriptPath)
+    {
+        string assetPath = Path.ChangeExtension(scriptPath, ".asset");
+        if (AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(assetPath) != null) return;
+        var prog = ScriptableObject.CreateInstance<UdonSharpProgramAsset>();
+        prog.sourceCsScript = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+        AssetDatabase.CreateAsset(prog, assetPath);
+        AssetDatabase.SaveAssets();
+        UdonSharpProgramAsset.CompileAllCsPrograms(true);
+    }
+
+    internal static void NameLayer(int layer, string name)
+    {
+        var tm = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+        var layers = tm.FindProperty("layers");
+        var p = layers.GetArrayElementAtIndex(layer);
+        if (string.IsNullOrEmpty(p.stringValue)) { p.stringValue = name; tm.ApplyModifiedProperties(); }
+    }
+}
