@@ -20,6 +20,8 @@ Shader "Clearwater/AvatarCaustics"
         _CoastArea ("Coast bake area (centre xz in water space, size m)", Vector) = (0, 0, 512, 0)
         _CoastProfile ("Coast: cross-section depth, wave travel time (baked)", 2D) = "black" {}
         _CoastProfileU ("Cross-section range (u min, u max, waterline u)", Vector) = (-32, 224, -1.4, 0)
+        _CoastFarTex ("Coast over the whole sea (baked, coarse)", 2D) = "black" {}
+        _CoastFarArea ("Its area (centre xz in water space, size m; 0 = none)", Vector) = (0, 0, 0, 0)
         _RockTex ("Rock heights (baked by Build Scene)", 2D) = "black" {}
         _RockArea ("Rock bake area (centre xz, size)", Vector) = (0, 0, 204.8, 0)
         _StampTex ("Stamps: raise, carve, obstacle heights (baked)", 2D) = "black" {}

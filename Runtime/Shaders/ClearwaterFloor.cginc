@@ -13,10 +13,12 @@ float _PatchSize, _Depth, _RipSize, _SunIntensity;
 // The coast, baked by the editor (ClearwaterCoastBake):
 //  _CoastTex      RG = shore coordinates over _CoastArea (xy = centre in water space, z = size in m):
 //                 u = signed distance from the shore line (+ towards the sea), v = distance along it
+//  _CoastFarTex   the same, coarser, over the whole sea (_CoastFarArea; z = 0: none, the fine field is extended),
+//                 so the coast drawn far outside the walkable area shapes the distant shore too
 //  _CoastProfile  the cross-section as a table over u in [_CoastProfileU.x, .y]: R = depth of the relief-free
 //                 floor, G = seconds for a wave at u to reach the waterline; _CoastProfileU.z = the waterline's u
-sampler2D _CoastTex, _CoastProfile;
-float4 _CoastTex_TexelSize, _CoastProfile_TexelSize, _CoastArea, _CoastProfileU;
+sampler2D _CoastTex, _CoastProfile, _CoastFarTex;
+float4 _CoastTex_TexelSize, _CoastProfile_TexelSize, _CoastArea, _CoastProfileU, _CoastFarTex_TexelSize, _CoastFarArea;
 
 // seen through the moving water surface the finest rock detail (cracks, crystals) is lost in refraction and
 // caustics; the water shader defines this > 1 so that detail fades out (and is skipped) closer to the viewer
@@ -35,23 +37,37 @@ inline float3 cwSkyIrr() { return float3(0.62, 0.70, 0.78) * CW_PI * 0.22; }
 float cwSmin(float a, float b, float k) { float h = max(k - abs(a - b), 0.0) / k; return min(a, b) - h * h * k * 0.25; }
 float cwSmax(float a, float b, float k) { float h = max(k - abs(a - b), 0.0) / k; return max(a, b) + h * h * k * 0.25; }
 
-// Shore coordinates (u, v) at a water-space point. Outside the baked area the coast carries on the way it leaves
-// it: the field is extended along its own slope at the edge (exact for a straight coast).
-float2 cwShoreUV(float2 xz)
+// A baked shore field at a water-space point. Outside its area the coast carries on the way it leaves it: the
+// field is extended along its own slope at the edge (exact for a straight coast).
+float2 cwCoastField(sampler2D tex, float4 texel, float4 area, float2 xz)
 {
-    float2 uv = (xz - _CoastArea.xy) / max(_CoastArea.z, 1e-3) + 0.5;
-    float2 h = 0.5 * _CoastTex_TexelSize.xy;
+    float2 uv = (xz - area.xy) / max(area.z, 1e-3) + 0.5;
+    float2 h = 0.5 * texel.xy;
     float2 uvc = clamp(uv, h, 1.0 - h);
-    float2 c = tex2Dlod(_CoastTex, float4(uvc, 0, 0)).rg;
+    float2 c = tex2Dlod(tex, float4(uvc, 0, 0)).rg;
     float2 out_ = uv - uvc;
     [branch] if (any(out_ != 0.0))
     {
-        float2 s = sign(out_), e = 4.0 * _CoastTex_TexelSize.xy;
-        float2 cx = tex2Dlod(_CoastTex, float4(uvc - float2(s.x * e.x, 0), 0, 0)).rg;
-        float2 cz = tex2Dlod(_CoastTex, float4(uvc - float2(0, s.y * e.y), 0, 0)).rg;
+        float2 s = sign(out_), e = 4.0 * texel.xy;
+        float2 cx = tex2Dlod(tex, float4(uvc - float2(s.x * e.x, 0), 0, 0)).rg;
+        float2 cz = tex2Dlod(tex, float4(uvc - float2(0, s.y * e.y), 0, 0)).rg;
         c += (c - cx) * abs(out_.x) / e.x + (c - cz) * abs(out_.y) / e.y;
     }
     return c;
+}
+
+// Shore coordinates (u, v) at a water-space point: the fine field around the walkable area, the coarse one over
+// the rest of the sea (blended over the fine area's outer 10%).
+float2 cwShoreUV(float2 xz)
+{
+    float2 q = abs(xz - _CoastArea.xy) / max(_CoastArea.z, 1e-3);
+    float edge = 2.0 * max(q.x, q.y); // 0 at the fine area's centre, 1 at its edge
+    [branch] if (_CoastFarArea.z <= 0.0 || edge < 0.9)
+        return cwCoastField(_CoastTex, _CoastTex_TexelSize, _CoastArea, xz);
+    float2 far = cwCoastField(_CoastFarTex, _CoastFarTex_TexelSize, _CoastFarArea, xz);
+    [branch] if (edge >= 1.0) return far;
+    float2 fine = cwCoastField(_CoastTex, _CoastTex_TexelSize, _CoastArea, xz);
+    return lerp(fine, far, smoothstep(0.9, 1.0, edge));
 }
 inline float cwShoreU(float2 xz) { return cwShoreUV(xz).x; } // distance out from the shore line
 inline float cwShoreV(float2 xz) { return cwShoreUV(xz).y; } // distance along it

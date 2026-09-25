@@ -34,6 +34,7 @@ public class ClearwaterCoastEditor : Editor
     static readonly Color SeaColor = new Color(0.25f, 0.55f, 1f);
     static readonly Color AreaColor = new Color(1f, 0.85f, 0.3f, 0.7f);
     static readonly Color GroundColor = new Color(0.5f, 1f, 0.5f, 0.6f);
+    static readonly Color SeaAreaColor = new Color(0.4f, 0.7f, 1f, 0.5f);
     static readonly Color HandleColor = new Color(1f, 0.55f, 0.2f);
 
     public override void OnInspectorGUI()
@@ -62,7 +63,7 @@ public class ClearwaterCoastEditor : Editor
 
         EditorGUILayout.Space();
         EditorGUILayout.PropertyField(serializedObject.FindProperty("seaSize"), new GUIContent("Sea size (m)"));
-        foreach (var p in new[] { "areaSize", "resolution", "groundHalfSize", "groundStep" })
+        foreach (var p in new[] { "areaSize", "resolution", "outerResolution", "groundHalfSize", "groundStep" })
             EditorGUILayout.PropertyField(serializedObject.FindProperty(p));
         serializedObject.ApplyModifiedProperties();
         FarClipCheck(coast);
@@ -217,6 +218,14 @@ public class ClearwaterCoastEditor : Editor
         Handles.DrawWireCube(tf.position, new Vector3(coast.areaSize, 0, coast.areaSize));
         Handles.color = GroundColor;
         Handles.DrawWireCube(tf.position, new Vector3(2 * coast.groundHalfSize, 0, 2 * coast.groundHalfSize));
+        // the sea (the coarse outer bake): around the water object
+        var ctl = Object.FindObjectOfType<ClearwaterController>();
+        if (ctl != null && ctl.water != null)
+        {
+            Handles.color = SeaAreaColor;
+            float sea = Mathf.Max(coast.seaSize, coast.areaSize);
+            Handles.DrawWireCube(new Vector3(ctl.water.position.x, tf.position.y, ctl.water.position.z), new Vector3(sea, 0, sea));
+        }
 
         // the line as drawn (a smooth curve through the points, or straight segments), with arrows towards the sea;
         // a smooth line also shows its points joined straight, faintly

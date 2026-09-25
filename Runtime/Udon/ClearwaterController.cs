@@ -82,6 +82,8 @@ public class ClearwaterController : UdonSharpBehaviour
     // Cameras closer than this (m) to the water surface may have the waterline across their view: the underwater
     // fog then draws the part below it (keep equal to CW_SURFACE_BAND in ClearwaterSurface.cginc)
     const float SurfaceBand = 0.6f;
+    // a shore point below this separates pieces of the line (the coast bake keeps only the parts within earshot)
+    const float BreakY = -50000f;
 
     void Start()
     {
@@ -198,6 +200,7 @@ public class ClearwaterController : UdonSharpBehaviour
         {
             int s = shoreClosed ? (k % segs + segs) % segs : Mathf.Clamp(k, 0, segs - 1);
             Vector3 a = shorePoints[s], b = shorePoints[(s + 1) % n];
+            if (a.y < BreakY || b.y < BreakY) continue; // between two pieces of the line
             Vector3 ab = b - a;
             float t = Mathf.Clamp01(((p.x - a.x) * ab.x + (p.z - a.z) * ab.z) / Mathf.Max(ab.x * ab.x + ab.z * ab.z, 1e-6f));
             Vector3 q = a + ab * t;

@@ -41,6 +41,7 @@ public static class ClearwaterSetup
     const float SunEl = 31f, SunAz = 6f;
     internal const float DefaultSeaSize = 5000f;   // side of the water plane (m); set per scene on the ClearwaterCoast
     internal const float FarClipPerSeaSize = 0.8f; // cameras see the plane's corners and the ground's far edge
+    internal const float SoundBreakY = -100000f;    // a shore sound point this low separates two pieces of the line
     // The coast itself is a ClearwaterCoast in the scene (drawn there, baked by ClearwaterCoastBake); a new scene
     // gets a straight one: the waterline along x at this z, the sea towards +z, the "gentle beach" section.
     const float DefaultWaterlineZ = -35.9f;
@@ -193,6 +194,7 @@ public static class ClearwaterSetup
 
         // seabed / beach and the underwater view
         a.seabed = Mat("Clearwater/Seabed", "Seabed");
+        a.seabed.SetFloat("_SeaHalfSize", seaSize * 0.5f);
         a.seabed.SetTexture("_Caus", a.causRT);
         a.seabed.SetTexture("_Rip", ripN);
         a.seabed.SetTexture("_Peb", a.water.GetTexture("_Peb"));
@@ -446,8 +448,12 @@ public static class ClearwaterSetup
         var grid = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/SeabedGrid.asset");
         if (grid == null || !Mathf.Approximately(grid.bounds.extents.x, 2 * far))
             Save(BuildFarGrid("SeabedGrid", far), "SeabedGrid.asset");
-        ctl.waterMaterial.SetFloat("_SeaHalfSize", size * 0.5f);
-        EditorUtility.SetDirty(ctl.waterMaterial);
+        foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial })
+        {
+            if (m == null) continue;
+            m.SetFloat("_SeaHalfSize", size * 0.5f);
+            EditorUtility.SetDirty(m);
+        }
         if (ctl.underwaterVolume != null)
         {
             var t = ctl.underwaterVolume.transform;

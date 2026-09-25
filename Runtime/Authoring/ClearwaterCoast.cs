@@ -58,10 +58,14 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     public float seaSize = 5000f;
 
     [Header("Bake")]
-    [Tooltip("Size of the square baked around this object (m). Outside it the coast carries on the way it leaves it.")]
+    [Tooltip("Size of the square baked in detail around this object (m). The coast is drawn outside it too (see " +
+             "Outer resolution); beyond the sea it carries on the way it leaves it.")]
     public float areaSize = 512f;
     [Tooltip("Texels per side of the bake (512 m / 1024 = 0.5 m)")]
     public int resolution = 1024;
+    [Tooltip("Texels per side of the coarse bake over the whole sea (Sea size), which shapes the coast outside the " +
+             "detailed square: points drawn far out make headlands, bays or a far shore (5000 m / 1024 = 4.9 m)")]
+    public int outerResolution = 1024;
     [Tooltip("Walkable ground: half its size around this object (m); invisible walls stand at its edge")]
     public float groundHalfSize = 100f;
     [Tooltip("Walkable ground: grid spacing (m)")]
@@ -85,33 +89,54 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
 
     // ---- the line as drawn: a cubic Bezier between each pair of points (straight, auto-smooth, or your handles)
 
-    const float SampleStep = 1f;   // m between samples of a curved segment
+    const float SampleStep = 1f;   // m between samples of a curved segment in the detailed area
+    const int OuterSamples = 16;   // samples of a curved segment outside it (only seen from afar)
     const int MaxSamples = 511;    // the bake takes at most 512 points (a loop repeats its first)
 
-    /// <summary>The waterline as a polyline in this object's space (height 0), curves sampled about every metre.
-    /// A loop ends with its first point again.</summary>
+    /// <summary>The waterline as a polyline in this object's space (height 0): curves sampled about every metre in
+    /// the detailed area, more coarsely outside it. A loop ends with its first point again.</summary>
     public System.Collections.Generic.List<Vector3> Sampled()
     {
         var outp = new System.Collections.Generic.List<Vector3>();
         if (points == null || points.Length < 2) return outp;
         int n = points.Length, segs = closed ? n : n - 1;
-        int total = 0;
         var per = new int[segs];
+        var near = new bool[segs];
+        int nearTotal = 0, farTotal = 0;
+        float reach = areaSize * 0.75f; // (the detailed square's corner, in any rotation)
         for (int k = 0; k < segs; k++)
         {
             var (a, b, c, d) = Segment(k);
             float len = Vector3.Distance(a, b) + Vector3.Distance(b, c) + Vector3.Distance(c, d); // (>= the curve's length)
-            per[k] = shape == LineShape.Straight ? 1 : Mathf.Clamp(Mathf.CeilToInt(len / SampleStep), 4, 64);
-            total += per[k];
+            near[k] = DistanceToOrigin(a, d) < reach;
+            per[k] = shape == LineShape.Straight ? 1
+                : near[k] ? Mathf.Clamp(Mathf.CeilToInt(len / SampleStep), 4, 64)
+                : Mathf.Clamp(Mathf.CeilToInt(len / SampleStep), 4, OuterSamples);
+            if (near[k]) nearTotal += per[k]; else farTotal += per[k];
         }
-        float scale = total > MaxSamples ? (float)MaxSamples / total : 1f; // very long lines: fewer samples each
+        // too many: thin the outer part first, then everything
+        float farScale = 1f, allScale = 1f;
+        if (nearTotal + farTotal > MaxSamples)
+        {
+            farScale = farTotal > 0 ? Mathf.Max(MaxSamples - nearTotal, farTotal / 4f) / farTotal : 1f;
+            if (farScale > 1f) farScale = 1f;
+            float t = nearTotal + farTotal * farScale;
+            if (t > MaxSamples) allScale = MaxSamples / t;
+        }
         for (int k = 0; k < segs; k++)
         {
-            int m = Mathf.Max(1, Mathf.FloorToInt(per[k] * scale));
+            int m = Mathf.Max(1, Mathf.FloorToInt(per[k] * (near[k] ? 1f : farScale) * allScale));
             for (int j = 0; j < m; j++) outp.Add(PointOn(k, j / (float)m));
         }
         outp.Add(closed ? outp[0] : Flat(points[n - 1]));
         return outp;
+    }
+
+    static float DistanceToOrigin(Vector3 a, Vector3 b) // of the chord a-b, in plan
+    {
+        Vector2 p = new Vector2(a.x, a.z), q = new Vector2(b.x, b.z), ab = q - p;
+        float t = Mathf.Clamp01(-Vector2.Dot(p, ab) / Mathf.Max(ab.sqrMagnitude, 1e-6f));
+        return (p + ab * t).magnitude;
     }
 
     /// <summary>The point at t (0..1) along segment k (from point k to point k+1).</summary>

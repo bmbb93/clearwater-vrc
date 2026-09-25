@@ -1,0 +1,74 @@
+# Release and VPM listing.
+#
+# Push a tag "v<version>" (matching package.json) to build the package zip and publish it as a GitHub release;
+# the VPM listing (index.json on GitHub Pages, for ALCOM / VCC "Add repository") is then rebuilt from every
+# release. "Run workflow" (manual) rebuilds only the listing.
+#
+# (One workflow for both: a release made with the workflow's own token does not start other workflows.)
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag against package.json
+        run: |
+          name=$(jq -r .name package.json)
+          version=$(jq -r .version package.json)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          echo "ZIP=$name-$version.zip" >> "$GITHUB_ENV"
+
+      - name: Zip the package
+        run: |
+          # the package root is the repository root; leave out the repository's own files
+          zip -r -X -q "$RUNNER_TEMP/$ZIP" . -x ".git/*" ".github/*" ".gitignore" ".gitattributes"
+          unzip -l "$RUNNER_TEMP/$ZIP" | tail -1
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/$ZIP" package.json \
+            --title "$GITHUB_REF_NAME" --generate-notes
+
+  listing:
+    needs: release
+    if: always() && (needs.release.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the listing from every release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/build-listing.sh _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

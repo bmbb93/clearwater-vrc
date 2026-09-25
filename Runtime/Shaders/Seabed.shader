@@ -21,12 +21,15 @@ Shader "Clearwater/Seabed"
         _CoastArea ("Coast bake area (centre xz in water space, size m)", Vector) = (0, 0, 512, 0)
         _CoastProfile ("Coast: cross-section depth, wave travel time (baked)", 2D) = "black" {}
         _CoastProfileU ("Cross-section range (u min, u max, waterline u)", Vector) = (-32, 224, -1.4, 0)
+        _CoastFarTex ("Coast over the whole sea (baked, coarse)", 2D) = "black" {}
+        _CoastFarArea ("Its area (centre xz in water space, size m; 0 = none)", Vector) = (0, 0, 0, 0)
         _RockTex ("Rock heights (baked by Build Scene)", 2D) = "black" {}
         _RockArea ("Rock bake area (centre xz, size)", Vector) = (0, 0, 204.8, 0)
         _StampTex ("Stamps: raise, carve, obstacle heights (baked)", 2D) = "black" {}
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
         _WaterOrigin ("Water origin (world)", Vector) = (0, 0, 0, 0)
         _GridCenter ("Grid centre (world xz, set by the controller)", Vector) = (0, 0, 0, 0)
+        _SeaHalfSize ("Sea half size (m, set by the coast bake)", Float) = 2500
         _Surf ("Surface (FFT CRT; for a camera at the waterline)", 2D) = "black" {}
         _SwashTrack ("Break timing track (generated)", 2D) = "black" {}
         _SwashClock ("Clock (s, set by the controller from the wave audio)", Float) = 0
@@ -38,6 +41,7 @@ Shader "Clearwater/Seabed"
     #include "UnityCG.cginc"
     #include "ClearwaterSurface.cginc"
     float4 _WaterOrigin, _GridCenter;
+    float _SeaHalfSize;
 
     // grid vertex (object xz) -> displaced world position
     float3 seabedWorld(float4 vertex)
@@ -93,7 +97,18 @@ Shader "Clearwater/Seabed"
                 // sees the ground directly, with the underwater fog over it)
                 bool under = cwPixelUnder(normalize(i.wpos - _WorldSpaceCameraPos), _WaterOrigin.xyz);
                 [branch] if (_WaterOrigin.y - i.wpos.y > 0.15 && !under)
+                {
+                    // past the water plane nothing covers it: the haze the water fades into at its edge
+                    float2 e = abs(i.wpos.xz - _WaterOrigin.xz);
+                    [branch] if (max(e.x, e.y) > _SeaHalfSize)
+                    {
+                        float3 vh = cwToJS(i.wpos - _WorldSpaceCameraPos);
+                        float mh = max(dot(normalize(float3(vh.x, 0.0, vh.z) + 1e-5), sun), 0.0);
+                        float3 hz = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(mh, 6.0) + 0.3 * pow(mh, 64.0));
+                        return float4(cwTonemap(hz * 0.95), 1.0);
+                    }
                     return float4(0, 0, 0, 0);
+                }
                 float hgt, rockM;
                 float3 alb = cwFloorAlbedo(p, dpdx, dpdy, hgt, rockM);
                 float3 L;

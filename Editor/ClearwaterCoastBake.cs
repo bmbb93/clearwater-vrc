@@ -50,9 +50,18 @@ public static class ClearwaterCoastBake
             pts[i] = new Vector4(w.x, w.y, along, 0);
         }
         Vector2 centre = ToWater(coast.transform.position);
+        // v counts from the line's point nearest this object, so it stays small (precise in the half-float bake)
+        // around the walkable area however far the line runs
+        float v0 = AlongAt(pts, centre);
+        for (int i = 0; i < pts.Length; i++) pts[i].z -= v0;
         float size = Mathf.Max(coast.areaSize, 1f);
         int res = Mathf.Clamp(coast.resolution, 64, 4096);
         var field = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, centre, size, res), "CoastField.asset");
+        // the same over the whole sea, coarse: the coast drawn outside the detailed square
+        float seaSize = Mathf.Max(coast.seaSize, size);
+        int outerRes = Mathf.Clamp(coast.outerResolution, 64, 4096);
+        var farField = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, Vector2.zero, seaSize, outerRes), "CoastFieldOuter.asset");
+        farField.name = "CoastFieldOuter";
 
         // cross-section
         var (profile, range) = BuildProfile(coast);
@@ -68,6 +77,8 @@ public static class ClearwaterCoastBake
         {
             m.SetTexture("_CoastTex", field);
             m.SetVector("_CoastArea", new Vector4(centre.x, centre.y, size, 0));
+            m.SetTexture("_CoastFarTex", farField);
+            m.SetVector("_CoastFarArea", new Vector4(0, 0, seaSize, 0));
             m.SetTexture("_CoastProfile", profile);
             m.SetVector("_CoastProfileU", range);
             EditorUtility.SetDirty(m);
@@ -91,8 +102,10 @@ public static class ClearwaterCoastBake
         ClearwaterSetup.ApplySeaSize(ctl, coast.seaSize);
 
         // the shore sound follows the listener along the line
-        ctl.shorePoints = SoundPath(world, coast.closed, origin.y);
-        ctl.shoreClosed = coast.closed;
+        bool soundClosed;
+        ctl.shorePoints = SoundPath(world, coast.closed, origin.y, coast.transform.position,
+                                    coast.groundHalfSize + SoundReach, out soundClosed);
+        ctl.shoreClosed = soundClosed;
         EditorUtility.SetDirty(ctl);
 
         coast.bakedHash = Hash(coast);
@@ -409,27 +422,80 @@ public static class ClearwaterCoastBake
 
     // ---------------------------------------------------------------- shore sound
 
-    /// <summary>The line for the sound (world, at the water's height), resampled to at most MaxSoundPoints.</summary>
-    static Vector3[] SoundPath(List<Vector3> world, bool closed, float y)
+    const float SoundReach = 100f; // m past the walkable ground's edge where the shore can still be heard
+
+    /// <summary>The distance along the line (pts: xy = point, z = along) of its point nearest p.</summary>
+    static float AlongAt(Vector4[] pts, Vector2 p)
+    {
+        float best = float.MaxValue, along = 0;
+        for (int i = 0; i + 1 < pts.Length; i++)
+        {
+            Vector2 a = pts[i], b = pts[i + 1], ab = b - a;
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Mathf.Max(ab.sqrMagnitude, 1e-6f));
+            float d = (a + ab * t - p).sqrMagnitude;
+            if (d < best) { best = d; along = Mathf.Lerp(pts[i].z, pts[i + 1].z, t); }
+        }
+        return along;
+    }
+
+    /// <summary>The line for the sound (world, at the water's height): only the part within reach of the walkable
+    /// ground (the rest is never heard), split where the line leaves it and comes back (a break point between
+    /// pieces, see ClearwaterController), resampled to at most MaxSoundPoints.</summary>
+    static Vector3[] SoundPath(List<Vector3> world, bool closed, float y, Vector3 centre, float reach, out bool loop)
     {
         var line = new List<Vector3>(world);
         if (closed) line.Add(world[0]);
         for (int i = 0; i < line.Count; i++) line[i] = new Vector3(line[i].x, y + 0.2f, line[i].z);
-        if (line.Count <= MaxSoundPoints) return line.ToArray();
+        bool Inside(Vector3 p) => Mathf.Abs(p.x - centre.x) <= reach && Mathf.Abs(p.z - centre.z) <= reach;
+
+        // the pieces inside (each keeps one point beyond the edge on either side, so it reaches the edge)
+        var pieces = new List<List<Vector3>>();
+        List<Vector3> cur = null;
+        for (int i = 0; i < line.Count; i++)
+        {
+            bool inNow = Inside(line[i]) || (i + 1 < line.Count && Inside(line[i + 1])) || (i > 0 && Inside(line[i - 1]));
+            if (inNow) { if (cur == null) { cur = new List<Vector3>(); pieces.Add(cur); } cur.Add(line[i]); }
+            else cur = null;
+        }
+        loop = closed && pieces.Count == 1 && pieces[0].Count == line.Count;
+        if (pieces.Count == 0) pieces.Add(new List<Vector3> { line[0], line[line.Count - 1] }); // (none near: anything)
+
+        // points per piece in proportion to its length
+        var lengths = new float[pieces.Count];
+        float total = 0;
+        for (int p = 0; p < pieces.Count; p++)
+        {
+            for (int i = 1; i < pieces[p].Count; i++) lengths[p] += Vector3.Distance(pieces[p][i - 1], pieces[p][i]);
+            total += lengths[p];
+        }
+        int budget = MaxSoundPoints - (pieces.Count - 1); // (break points)
+        var outp = new List<Vector3>();
+        for (int p = 0; p < pieces.Count; p++)
+        {
+            if (p > 0) outp.Add(new Vector3(0, ClearwaterSetup.SoundBreakY, 0));
+            int m = Mathf.Max(2, Mathf.FloorToInt(budget * lengths[p] / Mathf.Max(total, 1e-3f)));
+            outp.AddRange(Resample(pieces[p], m));
+        }
+        return outp.ToArray();
+    }
+
+    static List<Vector3> Resample(List<Vector3> line, int count)
+    {
+        if (line.Count <= count) return new List<Vector3>(line);
         float total = 0;
         for (int i = 1; i < line.Count; i++) total += Vector3.Distance(line[i - 1], line[i]);
-        var outp = new Vector3[MaxSoundPoints];
+        var outp = new List<Vector3>();
         int seg = 0; float segStart = 0;
-        for (int k = 0; k < MaxSoundPoints; k++)
+        for (int k = 0; k < count; k++)
         {
-            float s = total * k / (MaxSoundPoints - 1);
+            float s = total * k / (count - 1);
             while (seg < line.Count - 2 && segStart + Vector3.Distance(line[seg], line[seg + 1]) < s)
             {
                 segStart += Vector3.Distance(line[seg], line[seg + 1]);
                 seg++;
             }
             float len = Mathf.Max(Vector3.Distance(line[seg], line[seg + 1]), 1e-4f);
-            outp[k] = Vector3.Lerp(line[seg], line[seg + 1], Mathf.Clamp01((s - segStart) / len));
+            outp.Add(Vector3.Lerp(line[seg], line[seg + 1], Mathf.Clamp01((s - segStart) / len)));
         }
         return outp;
     }
