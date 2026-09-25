@@ -61,9 +61,11 @@ public class ClearwaterCoastEditor : Editor
         else EditorGUILayout.PropertyField(serializedObject.FindProperty("curve"), GUILayout.Height(60));
 
         EditorGUILayout.Space();
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("seaSize"), new GUIContent("Sea size (m)"));
         foreach (var p in new[] { "areaSize", "resolution", "groundHalfSize", "groundStep" })
             EditorGUILayout.PropertyField(serializedObject.FindProperty(p));
         serializedObject.ApplyModifiedProperties();
+        FarClipCheck(coast);
 
         if (coast.shape == ClearwaterCoast.LineShape.Handles)
         {
@@ -144,6 +146,33 @@ public class ClearwaterCoastEditor : Editor
     }
 
     /// <summary>A small side view of the section: the floor (sand) against the water surface (blue).</summary>
+    /// <summary>The world's reference camera (its far clip is every player's) has to reach across the sea.</summary>
+    static void FarClipCheck(ClearwaterCoast coast)
+    {
+        var desc = Object.FindObjectOfType<VRC.SDK3.Components.VRCSceneDescriptor>();
+        if (desc == null) return;
+        var cam = desc.ReferenceCamera != null ? desc.ReferenceCamera.GetComponent<Camera>() : null;
+        float need = Mathf.Round(Mathf.Max(coast.seaSize, 100f) * ClearwaterSetup.FarClipPerSeaSize);
+        if (cam == null)
+        {
+            EditorGUILayout.HelpBox($"The world has no Reference Camera, so players get VRChat's default far clip (1000 m). " +
+                $"For this sea, give it one with a far clip of {need} m.", MessageType.Warning);
+            return;
+        }
+        if (cam.farClipPlane + 0.5f >= need) return;
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            EditorGUILayout.HelpBox($"The Reference Camera's far clip ({cam.farClipPlane:0} m) is short of this sea: the far " +
+                $"water and ground would be cut off. {need} m is needed.", MessageType.Warning);
+            if (GUILayout.Button($"Set {need} m", GUILayout.Width(90), GUILayout.Height(38)))
+            {
+                Undo.RecordObject(cam, "Far clip");
+                cam.farClipPlane = need;
+                EditorUtility.SetDirty(cam);
+            }
+        }
+    }
+
     static void DrawSection(ClearwaterCoast coast)
     {
         var rect = GUILayoutUtility.GetRect(10, 90, GUILayout.ExpandWidth(true));

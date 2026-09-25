@@ -51,6 +51,12 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
         new Keyframe(-10f, 0.6f), new Keyframe(-2.4f, 0.6f), new Keyframe(0f, 0f), new Keyframe(1.4f, -0.35f),
         new Keyframe(30f, -1.4f), new Keyframe(48f, -3.45f), new Keyframe(80f, -3.45f));
 
+    [Header("Sea")]
+    [Tooltip("Side of the square of sea around the water object (m). Its edge fades into the haze; the ground is drawn " +
+             "out to 0.6 x this from the viewer. Cameras need a far clip of about 0.8 x this (the inspector checks the " +
+             "reference camera).")]
+    public float seaSize = 5000f;
+
     [Header("Bake")]
     [Tooltip("Size of the square baked around this object (m). Outside it the coast carries on the way it leaves it.")]
     public float areaSize = 512f;

@@ -23,6 +23,7 @@ Shader "Clearwater/Water"
         _SunIntensity ("Sun intensity", Float) = 6
         [Toggle(_CW_TONEMAP)] _Tonemap ("Tone map in shader (turn off when using post-process tone mapping)", Float) = 1
         _Exposure ("Exposure", Float) = 0.63
+        _SeaHalfSize ("Sea half size (m, set by the coast bake): the edge fades into the haze", Float) = 2500
 
         [Header(Floor shape)]
         _CoastTex ("Coast: shore coordinates u, v (baked)", 2D) = "black" {}

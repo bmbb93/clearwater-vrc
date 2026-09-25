@@ -39,12 +39,13 @@ public static class ClearwaterSetup
     static readonly Vector3 CausticsRigPos = new Vector3(0, -20000, 0);
     // Sun: 31 deg up, 6 deg off the view axis, straight ahead of the spawn
     const float SunEl = 31f, SunAz = 6f;
-    const float WaterHalfSize = 2500f;
+    internal const float DefaultSeaSize = 5000f;   // side of the water plane (m); set per scene on the ClearwaterCoast
+    internal const float FarClipPerSeaSize = 0.8f; // cameras see the plane's corners and the ground's far edge
     // The coast itself is a ClearwaterCoast in the scene (drawn there, baked by ClearwaterCoastBake); a new scene
     // gets a straight one: the waterline along x at this z, the sea towards +z, the "gentle beach" section.
     const float DefaultWaterlineZ = -35.9f;
     const float SeabedInner = 20f, SeabedStep = 0.25f;       // rendered ground: 25 cm cells out to 20 m (rock outlines),
-    const float SeabedFar = 3000f, SeabedGrowth = 1.08f;     // then 8% larger each step out to the horizon
+    const float SeabedFarPerSeaSize = 0.6f, SeabedGrowth = 1.08f; // then 8% larger each step out to the horizon
     static readonly Vector3 SpawnPos = new Vector3(0, 0.8f, -41f); // on the beach, facing the water and the sun
 
     // Rebuilds everything in Generated/. The assets are updated in place (same files, same IDs), so an existing scene
@@ -186,8 +187,9 @@ public static class ClearwaterSetup
         a.sky = Mat("Clearwater/Skybox", "Sky");
         a.sky.SetVector("_SunDir", SunVector());
         a.sky.EnableKeyword("_CW_TONEMAP");
-        a.plane = BuildPlane();
-        a.plane = Save(a.plane, "WaterPlane.asset");
+        float seaSize = SceneSeaSize();
+        a.plane = Save(BuildPlane(seaSize), "WaterPlane.asset");
+        a.water.SetFloat("_SeaHalfSize", seaSize * 0.5f);
 
         // seabed / beach and the underwater view
         a.seabed = Mat("Clearwater/Seabed", "Seabed");
@@ -228,8 +230,7 @@ public static class ClearwaterSetup
             m.SetTexture("_RockTex", rocks); // none = the shaders' default black: no rock anywhere
             m.SetVector("_RockArea", new Vector4(0, 0, RockArea, 0));
         }
-        a.seabedGrid = BuildFarGrid("SeabedGrid");
-        a.seabedGrid = Save(a.seabedGrid, "SeabedGrid.asset");
+        a.seabedGrid = Save(BuildFarGrid("SeabedGrid", seaSize * SeabedFarPerSeaSize), "SeabedGrid.asset");
 
         AssetDatabase.SaveAssets();
         return a;
@@ -421,11 +422,44 @@ public static class ClearwaterSetup
 
     /// <summary>Grid for the rendered ground: uniform cells near the centre, growing geometrically outward. The
     /// seabed shader moves it with the viewer (snapped to the inner cell size) and computes every height.</summary>
-    static Mesh BuildFarGrid(string name)
+    /// <summary>The sea size set on the open scene's coast (the default when it has none).</summary>
+    static float SceneSeaSize()
+    {
+        var coast = Object.FindObjectOfType<ClearwaterCoast>();
+        return coast != null ? Mathf.Max(coast.seaSize, 100f) : DefaultSeaSize;
+    }
+
+    /// <summary>Resizes the sea to size (m): the water plane, the rendered ground's reach, the water's edge fade and
+    /// the underwater box. Meshes are rewritten in place only when they change.</summary>
+    internal static void ApplySeaSize(ClearwaterController ctl, float size)
+    {
+        size = Mathf.Max(size, 100f);
+        var plane = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/WaterPlane.asset");
+        if (plane == null || !Mathf.Approximately(plane.bounds.extents.x, size * 0.5f))
+            Save(BuildPlane(size), "WaterPlane.asset");
+        float far = size * SeabedFarPerSeaSize;
+        var grid = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/SeabedGrid.asset");
+        if (grid == null || !Mathf.Approximately(grid.bounds.extents.x, 2 * far))
+            Save(BuildFarGrid("SeabedGrid", far), "SeabedGrid.asset");
+        ctl.waterMaterial.SetFloat("_SeaHalfSize", size * 0.5f);
+        EditorUtility.SetDirty(ctl.waterMaterial);
+        if (ctl.underwaterVolume != null)
+        {
+            var t = ctl.underwaterVolume.transform;
+            var scale = UnderwaterScale(size);
+            if (t.localScale != scale) { Undo.RecordObject(t, "Sea size"); t.localScale = scale; }
+        }
+    }
+
+    // The underwater box is drawn around each camera (see Underwater.shader); the object only has to be big enough
+    // for its bounds to hold any camera in the sea, so it is never culled.
+    static Vector3 UnderwaterScale(float size) => new Vector3(size, 1000f, size);
+
+    static Mesh BuildFarGrid(string name, float seabedFar)
     {
         var half = new List<float>();
         for (int i = 0; i * SeabedStep <= SeabedInner + 1e-3f; i++) half.Add(i * SeabedStep);
-        for (float s = SeabedStep, x = half[half.Count - 1]; x < SeabedFar;) { s *= SeabedGrowth; x += s; half.Add(x); }
+        for (float s = SeabedStep, x = half[half.Count - 1]; x < seabedFar;) { s *= SeabedGrowth; x += s; half.Add(x); }
         var ax = new List<float>();
         for (int i = half.Count - 1; i > 0; i--) ax.Add(-half[i]);
         ax.AddRange(half);
@@ -446,13 +480,13 @@ public static class ClearwaterSetup
         mesh.vertices = v;
         mesh.triangles = idx;
         // never culled: it moves with the viewer and its heights are set on the GPU
-        mesh.bounds = new Bounds(Vector3.zero, new Vector3(4 * SeabedFar, 40, 4 * SeabedFar));
+        mesh.bounds = new Bounds(Vector3.zero, new Vector3(4 * seabedFar, 40, 4 * seabedFar));
         return mesh;
     }
 
-    static Mesh BuildPlane()
+    static Mesh BuildPlane(float size)
     {
-        float s = WaterHalfSize;
+        float s = size * 0.5f;
         var mesh = new Mesh { name = "WaterPlane" };
         mesh.vertices = new[] { new Vector3(-s, 0, -s), new Vector3(-s, 0, s), new Vector3(s, 0, s), new Vector3(s, 0, -s) };
         mesh.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
@@ -490,7 +524,7 @@ public static class ClearwaterSetup
         var refCam = refGo.AddComponent<Camera>();
         refCam.enabled = false;
         refCam.nearClipPlane = 0.03f;
-        refCam.farClipPlane = 4000f;
+        refCam.farClipPlane = DefaultSeaSize * FarClipPerSeaSize;
         refCam.cullingMask = ~(1 << CausticsLayer);
         refCam.allowHDR = true;
         refCam.clearFlags = CameraClearFlags.Skybox;
@@ -512,7 +546,7 @@ public static class ClearwaterSetup
         var prev = prevGo.AddComponent<Camera>();
         prev.fieldOfView = 64;
         prev.nearClipPlane = 0.03f;
-        prev.farClipPlane = 4000f;
+        prev.farClipPlane = DefaultSeaSize * FarClipPerSeaSize;
         prev.cullingMask = ~(1 << CausticsLayer);
         prev.depth = -1;
 
@@ -551,7 +585,7 @@ public static class ClearwaterSetup
 
         var under = new GameObject("Underwater Volume");
         under.transform.SetParent(water.transform, false);
-        under.transform.localScale = Vector3.one * 1000f;
+        under.transform.localScale = UnderwaterScale(DefaultSeaSize);
         under.AddComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
         var umr = under.AddComponent<MeshRenderer>();
         umr.sharedMaterial = a.underwater;

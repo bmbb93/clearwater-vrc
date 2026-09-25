@@ -86,6 +86,9 @@ public static class ClearwaterCoastBake
         BakeGround(ctl, coast, floorBake);
         Object.DestroyImmediate(floorBake);
 
+        // the sea's extent
+        ClearwaterSetup.ApplySeaSize(ctl, coast.seaSize);
+
         // the shore sound follows the listener along the line
         ctl.shorePoints = SoundPath(world, coast.closed, origin.y);
         ctl.shoreClosed = coast.closed;

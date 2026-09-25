@@ -17,7 +17,7 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 
 ### 既存のワールドに足す
 
-ワールドのシーンを開いて `Tools > Clearwater > Add to Current Scene` を実行します。水一式と、まっすぐな海岸（編集用）が追加されます。最初に「Clearwater の空と太陽も使うか」を聞かれます。使う場合は Build Scene と同じ空・太陽（Sun (Clearwater)）になり、ワールドの Directional Light はオフになります（削除はしません）。使わない場合はワールドの太陽をそのまま使い、影が無効なら有効にします。あとから切り替えるときは `Tools > Clearwater > Use Clearwater Sky and Sun` を使います。水は奥行き情報を使うため、影は有効のままにしてください。Reference Camera の Far Clip は数 km にしてください。
+ワールドのシーンを開いて `Tools > Clearwater > Add to Current Scene` を実行します。水一式と、まっすぐな海岸（編集用）が追加されます。最初に「Clearwater の空と太陽も使うか」を聞かれます。使う場合は Build Scene と同じ空・太陽（Sun (Clearwater)）になり、ワールドの Directional Light はオフになります（削除はしません）。使わない場合はワールドの太陽をそのまま使い、影が無効なら有効にします。あとから切り替えるときは `Tools > Clearwater > Use Clearwater Sky and Sun` を使います。水は奥行き情報を使うため、影は有効のままにしてください。Reference Camera の Far Clip は Sea size の 0.8 倍（初期値なら 4000 m）にしてください。
 
 ## 海岸を描く（Coast (editor only)）
 
@@ -30,6 +30,8 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 - 開いた線は両端の先へまっすぐ続きます。「Closed」にすると輪（島・湖）になります
 - 断面：`Gentle Beach`（遠浅の浜、数値で調整）か `Curve`（波打ち際からの距離に対する地面の高さを曲線で描く）
 - 変更したら **Bake**。水・海底・波・歩ける地面・波音の位置が形に合わせて更新されます
+
+海の広さは「Sea size」（初期値 5000 m 四方、水のオブジェクトが中心）で変えられます。Bake で水面・遠くまで描く地面・水中の表現が合わせて変わり、水面の端は遠くのもやに溶け込みます。カメラの Far Clip は Sea size の 0.8 倍ほど必要です。足りないと Inspector に警告と「Set ○○ m」ボタンが出ます（ワールドの Reference Camera に設定されます）。
 
 黄色の四角が焼き込む範囲（外側は線がそのまま続くとみなします）、緑の四角が歩ける地面の範囲（端に見えない壁）です。
 

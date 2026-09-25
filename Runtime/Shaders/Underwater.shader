@@ -51,7 +51,9 @@ Shader "Clearwater/Underwater"
                 UNITY_INITIALIZE_OUTPUT(v2f, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 float waterY = unity_ObjectToWorld._m13;
-                o.wpos = mul(unity_ObjectToWorld, v.vertex).xyz;
+                // a 2 m box around this camera, whatever the object's size (that only keeps it from being culled
+                // anywhere in the sea), so it never reaches the far clip
+                o.wpos = _WorldSpaceCameraPos + v.vertex.xyz * 2.0;
                 o.pos = UnityWorldToClipPos(o.wpos);
                 if (_WorldSpaceCameraPos.y > waterY) o.pos = float4(-2, -2, -2, 1);
                 o.grabPos = ComputeGrabScreenPos(o.pos);
