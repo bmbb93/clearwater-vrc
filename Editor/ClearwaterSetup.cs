@@ -222,10 +222,16 @@ public static class ClearwaterSetup
         a.avatarCaustics.SetVector("_WaterOrigin", Vector4.zero);
         var (track, loop) = BuildSwashTrack();
         track = Save(track, "SwashTrack.asset");
+        var (breaks, idx, count) = BuildSwashBreaks();
+        breaks = Save(breaks, "SwashBreaks.asset");
+        idx = Save(idx, "SwashIdx.asset");
         foreach (var m in new[] { a.water, a.seabed, a.underwater })
         {
             m.SetTexture("_SwashTrack", track);
             m.SetFloat("_SwashLoop", loop);
+            m.SetTexture("_SwashBreaks", breaks);
+            m.SetTexture("_SwashIdx", idx);
+            m.SetFloat("_SwashCount", count);
         }
         // (the coast textures, the walkable ground and the shore sound's path come from the scene's ClearwaterCoast:
         // BakeSceneCoast, after the scene exists)
@@ -795,6 +801,36 @@ public static class ClearwaterSetup
 
     /// <summary>Wave phase + strength over the shore audio loop, one texel per ~0.09 s (see ClearwaterShore.cginc):
     /// phase runs 0 -> 2pi from one detected break to the next, so a crest reaches the waterline on each break.</summary>
+    /// <summary>The breaks for the ballistic swash (ClearwaterShore.cginc): one texel each (r = time in the loop,
+    /// g = strength), and per ~0.09 s of the loop the index of the last break at or before it. Point-sampled.</summary>
+    static (Texture2D, Texture2D, int) BuildSwashBreaks()
+    {
+        var b = JsonUtility.FromJson<Breaks>(AssetDatabase.LoadAssetAtPath<TextAsset>(AudioDir + "/WavesShore_breaks.json").text);
+        int n = b.times.Length;
+        var br = new Texture2D(n, 1, TextureFormat.RGFloat, false, true)
+        {
+            name = "SwashBreaks", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Point
+        };
+        var px = new Color[n];
+        for (int i = 0; i < n; i++) px[i] = new Color(b.times[i], b.amps[i], 0, 1);
+        br.SetPixels(px); br.Apply(false, false);
+        const int W = 1024;
+        var ix = new Texture2D(W, 1, TextureFormat.RFloat, false, true)
+        {
+            name = "SwashIdx", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Point
+        };
+        var ipx = new Color[W];
+        for (int i = 0; i < W; i++)
+        {
+            float t = b.loopSeconds * i / W;
+            int k = n - 1; // (before the first break: the last one of the loop)
+            for (int j = 0; j < n; j++) if (b.times[j] <= t) k = j;
+            ipx[i] = new Color(k, 0, 0, 1);
+        }
+        ix.SetPixels(ipx); ix.Apply(false, false);
+        return (br, ix, n);
+    }
+
     static (Texture2D, float) BuildSwashTrack()
     {
         var b = JsonUtility.FromJson<Breaks>(AssetDatabase.LoadAssetAtPath<TextAsset>(AudioDir + "/WavesShore_breaks.json").text);

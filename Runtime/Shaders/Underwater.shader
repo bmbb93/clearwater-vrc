@@ -31,11 +31,17 @@ Shader "Clearwater/Underwater"
         _StampTex ("Stamps: raise, carve, obstacle heights (baked)", 2D) = "black" {}
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
         _SwashTrack ("Break timing track (generated)", 2D) = "black" {}
+        _SwashBreaks ("Breaks: time, strength (generated)", 2D) = "black" {}
+        _SwashIdx ("Last break per moment (generated)", 2D) = "black" {}
+        _SwashCount ("Number of breaks (generated)", Float) = 1
+        _SwashSlope ("Beach face slope over the swash zone (set by the coast bake)", Float) = 0.1
         _SwashClock ("Clock (s, set by the controller)", Float) = 0
         _SwashLoop ("Track length (s)", Float) = 90
         _SwashHeight ("Breaker height (m, copied from the water by the controller)", Float) = 0.14
-        _SwashRunup ("Run-up (x breaker height, copied from the water)", Float) = 2.2
+        _SwashRunup ("Run-up (x breaker height, copied from the water)", Float) = 2.6
         [ToggleUI] _ShoreWaves ("Shore waves (set by the coast bake)", Float) = 1
+        _FoamRelief ("Foam relief (m): the densest foam's height, for its light and shade; 0 = flat (costs ~2 ms/eye close up)", Float) = 0
+        _FoamLift ("Whitewater height (m): the run-up's front lip and the breaking roller stand up this far; 0 = flat", Float) = 0.03
     }
     SubShader
     {

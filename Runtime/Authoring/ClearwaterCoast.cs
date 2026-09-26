@@ -44,7 +44,7 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     [Tooltip("Gentle beach: distance from the waterline to where the deep bottom starts (m)")]
     public float deepStart = 48.3f;
     [Tooltip("Gentle beach: slope of the beach face")]
-    public float beachSlope = 0.25f;
+    public float beachSlope = 0.1f;
     [Tooltip("Gentle beach: height of the dry land behind the beach (m)")]
     public float landHeight = 0.6f;
 

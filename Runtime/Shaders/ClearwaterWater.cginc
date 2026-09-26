@@ -39,6 +39,14 @@ v2f vertSide(appdata v)
         float off = 0.1 + 4.0 * _ProjectionParams.y;
         o.wpos.y = (CW_WATER_BELOW != 0) ? max(o.wpos.y, _WorldSpaceCameraPos.y + off) : min(o.wpos.y, _WorldSpaceCameraPos.y - off);
     }
+    else if (CW_WATER_BELOW == 0 && _ShoreWaves > 0.5)
+    {
+        // Seen from above, the plane is raised to the highest the run-up reaches: at the still-water height the beach
+        // face above it hid it, so the sheet running up the beach was never drawn, only the wet sand it leaves (two
+        // layers meeting at a fixed line). The fragment traces the true surface and drops the dry beach itself.
+        float reach = _SwashHeight * _SwashRunup * 1.2 + _FoamLift + 0.05;
+        o.wpos.y += min(reach, max(_WorldSpaceCameraPos.y - o.origin.y - 0.2, 0.0));
+    }
     o.pos = UnityWorldToClipPos(o.wpos);
     if (!cwCameraNearSurface(o.origin.y) && (_WorldSpaceCameraPos.y < o.origin.y) != (CW_WATER_BELOW != 0))
         o.pos = float4(-2, -2, -2, 1); // the other side's pass
@@ -102,6 +110,23 @@ float3 cwScreenTrace(float3 Pw, float3 dirW, float D, out float3 S, out float hi
     return cwInvTonemap(CW_GRAB_LOD(uvG).rgb);
 }
 
+// Whitewater density at xz (water space) for this pixel's shore state (cover, cc, run, sheetW, obst: see fragSide):
+// the run-up foam laid out in shore coordinates, pushed by the surge and dragged into streaks by the backwash, and
+// the breaking crest's foam (lace swirling round an obstacle). Also taken beside the pixel, for the foam's relief.
+float cwWhitewater(float2 xz, float cover, float cc, float run, float sheetW, float obst, float footprint)
+{
+    float2 suv = cwShoreUV(xz);
+    float foam = 0.0;
+    [branch] if (cover > 0.014) // (below that cwFoam is 0)
+        foam = cwRunupFoam(suv, cover, run, sheetW, footprint);
+    [branch] if (cc > 0.014)
+    {
+        float2 cq = lerp(float2(suv.y, -suv.x + 0.4 * _SwashClock), xz * 1.3 + float2(0.0, 0.25 * _SwashClock), obst);
+        foam = max(foam, cwFoam(cq, saturate(cc), _SwashClock, lerp(max(footprint, 0.15), footprint, obst)) * saturate(cc * 1.6));
+    }
+    return foam;
+}
+
 float4 fragSide(v2f i)
 {
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
@@ -129,6 +154,21 @@ float4 fragSide(v2f i)
     wd = normalize(wd);
     float2 ripC = _RipCenter.xy;
 
+    // The plane is raised over the beach face (vertSide), so many pixels look at dry sand: where the ray gets down to
+    // the highest the swash can be right now, is the sand already above it there? Then it met the sand first: done.
+    // the swash along the shore where the ray meets still water, once for the pixel
+    CwSwash swPix = cwSwashNone();
+    [branch] if (_ShoreWaves > 0.5)
+    {
+        swPix = cwSwashNow(cwShoreUV((uCam + wd * (-uCam.y / wd.y)).xz));
+    }
+    [branch] if (!below && _ShoreWaves > 0.5 && uCam.y > 0.3)
+    {
+        float top = swPix.level + _FoamLift + 0.12; // (lobes, the lip, small waves)
+        float3 Q = uCam + wd * ((top - uCam.y) / wd.y);
+        clip(-cwFloorDepth(Q.xz) <= top ? 1.0 : -1.0);
+    }
+
     // ---- surface intersection (height field, fixed-point) ----
     float t = -uCam.y / wd.y;
     float2 xz; float4 A, B, R;
@@ -141,7 +181,7 @@ float4 fragSide(v2f i)
         B = tex2D(_Surf, mulM(xz) / (uL * SC) + 0.37);
         float2 ruv = (xz - ripC) / _RipSize + 0.5;
         R = tex2D(_Rip, ruv);
-        CwShore shi = cwShore(xz, cwFloorDepth2(xz).y); // waves feel obstacles too
+        CwShore shi = cwShoreSw(xz, cwFloorDepth2(xz).y, swPix); // waves feel obstacles too
         // the thin run-up sheet does not carry the open-water swell
         hsum = (A.x + WB * SC * B.x) * (1.0 - 0.75 * shi.swash) + R.x + shi.eta;
         t = (hsum - uCam.y) / wd.y;
@@ -155,10 +195,10 @@ float4 fragSide(v2f i)
     // buffer (its mesh is drawn first), which always agrees with the rock you actually see
     clip(floorP + cwRock(P.xz) + P.y);
     // shore waves here, and their slope from two nearby samples (+u is seaward = -z in JS space)
-    CwShore shore = cwShore(P.xz, fd.y);
+    CwShore shore = cwShoreSw(P.xz, fd.y, swPix);
     const float SE = 0.06;
-    float etaU = cwShore(P.xz - float2(0, SE), cwFloorDepth2(P.xz - float2(0, SE)).y).eta;
-    float etaX = cwShore(P.xz + float2(SE, 0), cwFloorDepth2(P.xz + float2(SE, 0)).y).eta;
+    float etaU = cwShoreSw(P.xz - float2(0, SE), cwFloorDepth2(P.xz - float2(0, SE)).y, swPix).eta;
+    float etaX = cwShoreSw(P.xz + float2(SE, 0), cwFloorDepth2(P.xz + float2(SE, 0)).y, swPix).eta;
 
     A = texBS(_Surf, P.xz / uL);
     B = texBS(_Surf, mulM(P.xz) / (uL * SC) + 0.37);
@@ -335,7 +375,10 @@ float4 fragSide(v2f i)
     // (the grab read uses implicit derivatives, so it has to happen outside the branch or the compiler
     // flattens the branch and every pixel pays for the foam)
     float3 behindGrab = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, i.grabPos.xy / i.grabPos.w).rgb;
-    [branch] if (shore.breaking + shore.swash > 0.0)
+    // (worked out here, late: carried through the whole shader its values cost ~2 ms/eye in register pressure)
+    float boreBand = 0.0;
+    [branch] if (_ShoreWaves > 0.5) boreBand = cwBoreBand(cwShoreUV(P.xz));
+    [branch] if (shore.breaking + shore.swash + boreBand > 0.0 || P.y + fd.y < 0.16) // (and any thin water: its floor is the seabed's)
     {
         // on a breaking crest and in the churned water just behind it; handed over to the run-up
         // foam where the sheet takes over, so the two never show as separate bands
@@ -343,32 +386,61 @@ float4 fragSide(v2f i)
         float crest = smoothstep(-1.0, -0.2, ph) * exp(-max(ph, 0.0) * 0.6) * step(-1.0, ph);
         float crestCover = saturate(shore.breaking * 1.6) * crest * 0.8 * (1.0 - 0.6 * shore.swash);
         // run-up: densest right at the leading edge, thinning out behind it
-        float thick = max(P.y + fd.y, 0.0); // water over the ground, or over an obstacle's skirt
+        float thick = max(P.y + fd.y - shore.lift, 0.0); // water over the ground (or an obstacle's skirt), not counting the whitewater standing on it
         float2 suv = cwShoreUV(P.xz); // shore coordinates: u out to sea, v along the shore
-        float2 sb = cwSwashState(_SwashClock + cwSwashJitter(suv.y));
-        float pb = sb.x < 0.0 ? sb.x + 6.2831853 : sb.x;
-        float surge = smoothstep(0.0, 0.3, pb) * (1.0 - smoothstep(0.9, 2.6, pb));
-        float cover = shore.swash * (0.85 * exp(-thick / 0.02) + 0.35 * surge * exp(-thick / 0.07));
+        float surge = swPix.surge, run = swPix.run;
+        // (the thin edge keeps its foam a little further out than the run-up sheet reaches, so when the backwash
+        // leaves the water edge below the sheet zone the foam on the sand still carries on into the water)
+        float edgeGate = max(shore.swash, 1.0 - saturate((suv.x - cwWaterlineU() - 1.5) / 3.0));
+        // (as dense at the very edge as the foam the sheet leaves on the sand, and thinning out over the first 8 cm of
+        // depth, so the lace runs on from the sand into the water)
+        float cover = edgeGate * 0.45 * exp(-thick / 0.08) * smoothstep(0.075, 0.04, thick) + shore.swash * 0.35 * surge * exp(-thick / 0.07);
+        // (gone by 7.5 cm of water: past 8 cm this branch only runs in the sheet zone, and the foam must not end in a line)
         cover *= cwFoamAlong(suv.y, _SwashClock);
+        cover += 0.5 * saturate(shore.lift / max(_FoamLift, 1e-3)) * shore.swash; // the lip is whitewater
+        // A real water edge is no clean curve: it frays into fingers and a rim of bubbles. The sheet ends where its
+        // thickness, less a lace pattern riding with the water, runs out (up to 3 cm of water, ~12 cm up the slope),
+        // and a thin rim of foam follows that ragged line.
+        float thickSand = P.y + floorP + cwRock(P.xz); // (the ground's water, not an obstacle's skirt: this fades into the beach)
+        // Under thin water the floor is the seabed's own render (the grab), the same sand, film and foam as on the
+        // beach beside it; the water only adds its surface (reflection, glints) and a little absorption. Deeper, over
+        // 5-15 cm, the water's own floor trace with its caustics takes over.
+        {
+            float3 floorThin = cwInvTonemap(behindGrab) * exp(-SIG_T * max(thickSand, 0.0) * 2.0);
+            float3 colThin = F * refl + (1.0 - F) * floorThin + spec;
+            col = lerp(colThin, col, smoothstep(0.05, 0.15, thickSand));
+        }
+        float2 eq = float2(suv.y, -(suv.x + run * shore.swash)) * 3.0;
+        float rag = saturate(cwFbm2(eq) * 1.4 - 0.35) * 0.03 + cwNoise(eq * 6.0) * 0.008;
+        float thickEdge = thickSand - rag * saturate(1.5 - footprint * 15.0);
+        cover += 0.55 * exp(-max(thickEdge, 0.0) / 0.006) * step(0.0, thickEdge) * edgeGate;
+        cover = min(cover, 0.65); // (never a solid slab: even the densest foam keeps its holes and lace)
         // pushed shoreward by the surge; the backwash drags it into streaks down the slope (foam laid out in shore
         // coordinates: along the shore, and up the beach)
-        float drain = smoothstep(1.2, 2.2, pb) * shore.swash;
-        float2 fp = float2(suv.y * lerp(1.0, 1.8, drain), (-suv.x + (1.0 - drain) * 0.4 * _SwashClock) * lerp(1.0, 0.4, drain));
-        float foam = cwFoam(fp, saturate(cover), _SwashClock, footprint) * saturate(cover * 1.6);
         // the breaking crest is a narrow band: soft whitewater only, no lace (it would shred into lines). Round an
         // obstacle (where it, not the ground, makes the water shallow) the broken water is lace swirling round it.
         crestCover *= cwFoamAlong(suv.y, _SwashClock);
         float obst = saturate((fd.x - fd.y) * 3.0);
-        float2 cq = lerp(float2(suv.y, -suv.x + 0.4 * _SwashClock), P.xz * 1.3 + float2(0.0, 0.25 * _SwashClock), obst);
         float cc = crestCover * lerp(1.0, 0.7, obst);
-        foam = max(foam, cwFoam(cq, saturate(cc), _SwashClock, lerp(max(footprint, 0.15), footprint, obst)) * saturate(cc * 1.6));
+        cc = max(cc, boreBand); // the next bore running in: soft whitewater, like a breaking crest
+        cover = max(cover, 0.6 * boreBand); // ...threaded with lace
+        float foam = cwWhitewater(P.xz, cover, cc, run, shore.swash, obst, footprint);
+        // relief: the density's slope from two samples beside the pixel (a pixel apart at least, so it never
+        // aliases), fading out before the bubbles get smaller than a pixel
+        float2 g = 0;
+        float reliefW = saturate(1.5 - footprint * 12.0);
+        [branch] if (foam > 0.01 && _FoamRelief > 0.0 && reliefW > 0.0)
+        {
+            float e = max(0.04, footprint);
+            g = float2(cwWhitewater(P.xz + float2(e, 0), cover, cc, run, shore.swash, obst, footprint) - foam,
+                       cwWhitewater(P.xz + float2(0, e), cover, cc, run, shore.swash, obst, footprint) - foam) / e * reliefW;
+        }
         // thin foam lets the water through; dense foam is brighter, its thin edges darker
-        col = lerp(col, cwFoamRadiance(n, uSun) * (0.7 + 0.45 * foam), saturate(foam * 1.15) * 0.9);
+        col = lerp(col, cwFoamLit(foam, g, n, uSun, v), saturate(foam * 1.15) * 0.9);
         // the last few millimetres of the sheet fade into the wet beach behind it, no hard clip line
         float3 behind = cwInvTonemap(behindGrab);
         // (only at the edge over sand: rock standing out of the water is cut by the depth buffer instead)
-        float thickSand = P.y + floorP + cwRock(P.xz); // (the ground's water, not an obstacle's skirt: this fades into the beach)
-        col = lerp(behind, col, smoothstep(0.0, 0.012, thickSand) * 0.85 + 0.15 * saturate(thickSand * 400.0));
+        col = lerp(behind, col, smoothstep(0.0, 0.05, thickEdge) * 0.9 + 0.1 * saturate(thickEdge * 100.0));
     }
 
     // distant haze over the water

@@ -56,16 +56,20 @@ public static class ClearwaterCoastBake
         for (int i = 0; i < pts.Length; i++) pts[i].z -= v0;
         float size = Mathf.Max(coast.areaSize, 1f);
         int res = Mathf.Clamp(coast.resolution, 64, 4096);
-        var field = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, centre, size, res), "CoastField.asset");
+        var field = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, centre, size, res, TextureFormat.RGFloat), "CoastField.asset");
         // the same over the whole sea, coarse: the coast drawn outside the detailed square
         float seaSize = Mathf.Max(coast.seaSize, size);
         int outerRes = Mathf.Clamp(coast.outerResolution, 64, 4096);
-        var farField = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, Vector2.zero, seaSize, outerRes), "CoastFieldOuter.asset");
+        var farField = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, Vector2.zero, seaSize, outerRes, TextureFormat.RGHalf), "CoastFieldOuter.asset");
         farField.name = "CoastFieldOuter";
 
         // cross-section
         var (profile, range) = BuildProfile(coast);
         profile = ClearwaterSetup.Save(profile, "CoastProfile.asset");
+
+        // the beach face's slope over the height the swash climbs (it sets how long the swash takes: gravity along it)
+        float swashSlope = SwashSlope(coast, range.z, ctl.waterMaterial.GetFloat("_SwashHeight") * ctl.waterMaterial.GetFloat("_SwashRunup"));
+        if (ctl.underwaterMaterial != null) ctl.underwaterMaterial.SetFloat("_SwashSlope", swashSlope);
 
         // every material that draws or follows the floor
         var floorBake = new Material(Shader.Find("Hidden/Clearwater/FloorBake"));
@@ -80,6 +84,7 @@ public static class ClearwaterCoastBake
             m.SetTexture("_CoastFarTex", farField);
             m.SetVector("_CoastFarArea", new Vector4(0, 0, seaSize, 0));
             m.SetFloat("_ShoreWaves", coast.shoreWaves ? 1 : 0);
+            m.SetFloat("_SwashSlope", swashSlope);
             m.SetTexture("_CoastProfile", profile);
             m.SetVector("_CoastProfileU", range);
             EditorUtility.SetDirty(m);
@@ -219,7 +224,9 @@ public static class ClearwaterCoastBake
 
     // ---------------------------------------------------------------- shore coordinates
 
-    static Texture2D BakeCoastField(Vector4[] shore, bool closed, Vector2 centre, float size, int res)
+    // format: the detailed field is full float - half floats step v by 3 cm 40 m along the shore, which the foam's
+    // fine lace (laid out along v) showed as blocks; the coarse field over the whole sea is only seen from afar
+    static Texture2D BakeCoastField(Vector4[] shore, bool closed, Vector2 centre, float size, int res, TextureFormat format)
     {
         var mat = new Material(Shader.Find("Hidden/Clearwater/CoastBake"));
         var arr = new Vector4[MaxShorePoints];
@@ -231,7 +238,7 @@ public static class ClearwaterCoastBake
         mat.SetVector("_CoastArea", new Vector4(centre.x, centre.y, size, 0));
         var data = BlitRead(mat, res, res);
         Object.DestroyImmediate(mat);
-        var tex = new Texture2D(res, res, TextureFormat.RGHalf, false, true)
+        var tex = new Texture2D(res, res, format, false, true)
         {
             name = "CoastField", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear
         };
@@ -255,6 +262,15 @@ public static class ClearwaterCoastBake
         d = Smin(d, c.deepDepth, 0.5f);
         d = Smin(d, beach, 0.3f);
         return Smax(d, -c.landHeight, 0.3f);
+    }
+
+    /// <summary>Mean rise per metre of the beach from the waterline (u = uw) up to height rise above still water.</summary>
+    static float SwashSlope(ClearwaterCoast c, float uw, float rise)
+    {
+        rise = Mathf.Max(rise, 0.05f);
+        for (float d = 0.05f; d < 60f; d += 0.05f)
+            if (-SectionDepth(c, uw - d) >= rise) return Mathf.Clamp(rise / d, 0.02f, 0.6f);
+        return 0.02f; // (the land never gets that high: a very flat beach)
     }
 
     /// <summary>The section's u range (m).</summary>

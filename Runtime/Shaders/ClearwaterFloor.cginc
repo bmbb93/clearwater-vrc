@@ -395,10 +395,16 @@ float3 cwFloorRadianceUnder(float2 FP, float depthHere, float hgt, float3 alb, f
     float2 S = FP - sunT.xz * depthHere / (-sunT.y);
     float lap = tex2Dlod(_Rip, float4((S - _RipCenter.xy) / _RipSize + 0.5, 0, 0)).a;
     caus *= clamp(1.0 / (1.0 + 0.12 * depthHere * lap), 0.45, 3.0);
+    // the net of light needs depth to form: under a few centimetres of water the waves barely focus the sun, so it
+    // fades to even light at the water edge (as on the wet sand beside it) instead of ending in a line
+    caus = lerp(1.0, caus, smoothstep(0.01, 0.35, depthHere));
     float ao = lerp(0.55, 1.0, smoothstep(0.08, 0.42, hgt));
     float3 Esun = SUN * Ts * exp(-SIG_T * depthHere / (-sunT.y)) * caus * (-sunT.y) * lerp(0.75, 1.0, ao) * sunShade;
     float3 Esky = cwSkyIrr() * exp(-(SIG_A + 0.4 * SIG_S) * depthHere * 1.25) * ao;
-    return alb / CW_PI * (Esun + Esky);
+    // sand under the last few centimetres of water is as dark as the wet sand just above the waterline (its pores are
+    // full of water too), so the water edge does not show as a step in brightness; deeper, the floor as before
+    float wet = lerp(0.65, 1.0, smoothstep(0.0, 0.25, depthHere));
+    return alb / CW_PI * (Esun + Esky) * wet;
 }
 
 // light scattered toward the viewer along a water path of length s (direction tr, away from the viewer),
