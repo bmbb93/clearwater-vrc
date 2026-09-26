@@ -287,8 +287,8 @@ float4 fragSide(v2f i)
             [branch] if (hitU > 0.0) Dm = length(S2 - Pw);
             else
             {
-                // the seabed seen in the mirror is far, dim and blurred: a plain pebble tone under the caustics
-                float3 albR = float3(0.085, 0.085, 0.075) * lerp(0.7, 1.25, cwNoise(RP.xz * 0.45));
+                // the seabed seen in the mirror is far, dim and blurred: the bed look's average colour under the caustics
+                float3 albR = _BedMean.rgb * lerp(0.7, 1.25, cwNoise(RP.xz * 0.45));
                 float3 causR = tex2Dlod(_Caus, float4(cwCausUV(RP.xz, 0.35, uSun), 0, 2)).rgb;
                 mir = cwFloorRadianceUnder(RP.xz, depthR, 0.35, albR, uSun, causR, 1.0);
             }

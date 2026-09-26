@@ -7,6 +7,16 @@
 #include "ClearwaterCommon.cginc"
 
 sampler2D _Peb, _Caus, _Rip;
+// The bed look (ClearwaterBedLook, copied onto the materials by the coast; the defaults are the pebbles):
+//  _Peb the colour texture, _BedHeight its height (when _BedHasHeight; else guessed from the colour's brightness),
+//  one tile over _BedTile m; _BedCoarse = share of the same texture at 1.7x the size in patches; _BedSandFill = sand
+//  gathered between the stones (_BedSandColor); _BedSandBed = 1: the bed is sand itself (ripples form all over);
+//  _BedRipple = ripple marks where there is sand; _BedWeed = olive weed film; then the colour: _BedSat, _BedTint,
+//  _BedVar (large patches of lighter and darker), _BedGrade (the pebbles' muted grade), _BedBright.
+//  _BedMean = its average colour (for what is too far or too blurred to texture).
+sampler2D _BedHeight;
+float _BedTile, _BedHasHeight, _BedCoarse, _BedSandFill, _BedSandBed, _BedRipple, _BedWeed, _BedSat, _BedVar, _BedGrade, _BedBright;
+float4 _BedSandColor, _BedTint, _BedMean;
 float4 _RipCenter;
 float _PatchSize, _Depth, _RipSize, _SunIntensity;
 
@@ -291,34 +301,48 @@ float2 cwRockDetailSlope(float2 p)
     return g1 * 1.3 * 0.12 + g2 * 4.1 * 0.03;
 }
 
-// dxdx / dxdy = screen derivatives of x, passed in so callers can use this inside dynamic branches
-float3 cwPebbles(float2 x, float2 dxdx, float2 dxdy, float sc, out float hgt)
+// the bed look's texture at x, its tiling broken up by shifting it between a few offsets in patches; sc scales its
+// size. dxdx / dxdy = screen derivatives of x, passed in so callers can use this inside dynamic branches
+float3 cwBedTexture(float2 x, float2 dxdx, float2 dxdy, float sc, out float hgt)
 {
-    float2 uv = x / (float2(0.78, 0.78) * sc);
-    float2 dx = dxdx / (0.78 * sc), dy = dxdy / (0.78 * sc);
+    float tile = max(_BedTile, 0.01) * sc;
+    float2 uv = x / tile;
+    float2 dx = dxdx / tile, dy = dxdy / tile;
     float k = cwNoise(x * 0.85);
     float l = k * 8.0; float ia = floor(l), f = frac(l);
     float2 oa = sin(float2(3.0, 7.0) * ia), ob = sin(float2(3.0, 7.0) * (ia + 1.0));
     float3 a = tex2Dgrad(_Peb, uv + oa, dx, dy).rgb, b = tex2Dgrad(_Peb, uv + ob, dx, dy).rgb;
     float s = dot(a - b, float3(1, 1, 1));
     float m = smoothstep(0.2, 0.8, f - 0.1 * s);
-    // coarse luminance as pseudo-height (pale stone tops, dark gaps)
-    float3 ca = tex2Dgrad(_Peb, uv + oa, dx * 6.0, dy * 6.0).rgb, cb = tex2Dgrad(_Peb, uv + ob, dx * 6.0, dy * 6.0).rgb;
-    hgt = dot(lerp(ca, cb, m), float3(0.3, 0.55, 0.15));
+    [branch] if (_BedHasHeight > 0.5)
+    {
+        // its own height (slightly softened, as the caustics and shading want it)
+        hgt = lerp(tex2Dgrad(_BedHeight, uv + oa, dx * 2.0, dy * 2.0).r, tex2Dgrad(_BedHeight, uv + ob, dx * 2.0, dy * 2.0).r, m);
+    }
+    else
+    {
+        // coarse luminance as pseudo-height (pale stone tops, dark gaps)
+        float3 ca = tex2Dgrad(_Peb, uv + oa, dx * 6.0, dy * 6.0).rgb, cb = tex2Dgrad(_Peb, uv + ob, dx * 6.0, dy * 6.0).rgb;
+        hgt = dot(lerp(ca, cb, m), float3(0.3, 0.55, 0.15));
+    }
     return lerp(a, b, m);
 }
 
-// bottom made of zones: fine pebbles, coarse cobbles, and sand that fills the gaps first
+// the bed (its look set by the bed look): the texture, with a larger scale of it in patches, sand gathered in the
+// low parts, ripple marks where there is sand, and the colour grading
 // dpdx / dpdy = screen derivatives of p (explicit, so this works inside dynamic branches)
 float3 cwFloorAlbedo(float2 p, float2 dpdx, float2 dpdy, out float hgt, out float rockM)
 {
-    float hgt2;
-    float3 pf = cwPebbles(p, dpdx, dpdy, 1.0, hgt);
-    float3 pc = cwPebbles(p.yx * float2(-1.0, 1.0) + 5.3, dpdx.yx * float2(-1.0, 1.0), dpdy.yx * float2(-1.0, 1.0), 1.7, hgt2);
-    float coarse = smoothstep(0.45, 0.62, cwFbm2(p * 0.21 + 40.0));
-    float3 alb = lerp(pf, pc, coarse); hgt = lerp(hgt, hgt2, coarse);
+    float3 alb = cwBedTexture(p, dpdx, dpdy, 1.0, hgt);
+    [branch] if (_BedCoarse > 0.0)
+    {
+        float hgt2;
+        float3 pc = cwBedTexture(p.yx * float2(-1.0, 1.0) + 5.3, dpdx.yx * float2(-1.0, 1.0), dpdy.yx * float2(-1.0, 1.0), 1.7, hgt2);
+        float coarse = smoothstep(0.45, 0.62, cwFbm2(p * 0.21 + 40.0)) * _BedCoarse;
+        alb = lerp(alb, pc, coarse); hgt = lerp(hgt, hgt2, coarse);
+    }
     float zone = cwFbm2(p * 0.16 + 3.0) + 0.10 * (cwNoise(p * 2.5) - 0.5);
-    float sandM = smoothstep(hgt + 0.02, hgt + 0.16, (zone - 0.46) * 1.6);
+    float sandM = smoothstep(hgt + 0.02, hgt + 0.16, (zone - 0.46) * 1.6) * _BedSandFill;
     float fp = max(length(dpdx), length(dpdy)); // metres per pixel
     // ripple marks: crests along the shore that meander, fork and change spacing (the phase is warped by noise),
     // in patches; smoothed out where the swash runs and faint on the dry beach (a single straight sine read as
@@ -326,10 +350,12 @@ float3 cwFloorAlbedo(float2 p, float2 dpdx, float2 dpdy, out float hgt, out floa
     float us = cwShoreU(p), du = us - _CoastProfileU.z;
     float ripPh = us * 16.0 + cwFbm2(p * 0.35 + 7.0) * 9.0 + cwNoise(p * 1.1 + 2.0) * 2.5;
     float ripZone = du > 0.0 ? smoothstep(2.0, 6.0, du) : 0.35 * smoothstep(3.0, 8.0, -du);
-    float ripA = smoothstep(0.3, 0.7, cwNoise(p * 0.09 + 17.0)) * ripZone * saturate(2.0 - fp * 8.0);
+    float ripA = smoothstep(0.3, 0.7, cwNoise(p * 0.09 + 17.0)) * ripZone * saturate(2.0 - fp * 8.0) * _BedRipple;
     float marks = 0.5 + 0.5 * ripA * sin(ripPh);
+    // a bed of sand: the ripples shade and shape all of it
+    alb *= 1.0 + 0.24 * (marks - 0.5) * _BedSandBed; hgt += 0.12 * (marks - 0.5) * _BedSandBed;
     float grain = lerp(0.5, cwNoise(p * 40.0), saturate(2.0 - fp * 60.0));
-    float3 sand = float3(0.60, 0.55, 0.44) * (0.82 + 0.22 * grain + 0.10 * marks);
+    float3 sand = _BedSandColor.rgb * (0.82 + 0.22 * grain + 0.10 * marks);
     sand = sand * sand * 1.4; // to linear-ish, matching the texture
     alb = lerp(alb, sand, sandM); hgt = lerp(hgt, 0.42 + 0.05 * marks, sandM);
     // rock, with a band of gathered pebbles and shadow around its foot
@@ -337,13 +363,14 @@ float3 cwFloorAlbedo(float2 p, float2 dpdx, float2 dpdy, out float hgt, out floa
     rockM = smoothstep(0.03, 0.12, rh);
     alb *= lerp(1.0, 0.8, smoothstep(0.0, 0.03, rh) * (1.0 - rockM));
     hgt = lerp(hgt, 0.6, rockM);
-    alb = lerp(dot(alb, float3(0.3, 0.55, 0.15)).xxx, alb, 0.8) * float3(1.10, 1.0, 0.86);
+    alb = lerp(dot(alb, float3(0.3, 0.55, 0.15)).xxx, alb, _BedSat) * _BedTint.rgb;
     // large-scale variation: sun-bleached patches, darker weedy hollows, a hint of olive film
     float big = cwNoise(p * 0.45) * 0.65 + cwNoise(p * 1.3 + 3.1) * 0.35;
     float weed = smoothstep(0.55, 0.85, cwNoise(p * 0.32 + 11.0));
-    alb *= lerp(0.62, 1.22, big);
-    alb = lerp(alb, alb * float3(0.55, 0.62, 0.40), weed * 0.7);
-    alb = lerp(float3(0.30, 0.29, 0.27), pow(alb, float3(1.2, 1.2, 1.2)), 0.72) * 0.6;
+    alb *= lerp(1.0 - 0.38 * _BedVar, 1.0 + 0.22 * _BedVar, big);
+    alb = lerp(alb, alb * float3(0.55, 0.62, 0.40), weed * _BedWeed);
+    alb = lerp(alb, lerp(float3(0.30, 0.29, 0.27), pow(max(alb, 0.0), float3(1.2, 1.2, 1.2)), 0.72) * 0.6, _BedGrade);
+    alb *= _BedBright;
     // the rock keeps its own colour (the grading above is for the loose floor)
     float3 rockCol = alb; float cav = 0.0;
     [branch] if (rh > 0.0)

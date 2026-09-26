@@ -150,11 +150,24 @@ public class ClearwaterCoastEditor : Editor
         }
         else EditorGUILayout.PropertyField(serializedObject.FindProperty("curve"), GUILayout.Height(60));
 
+        // the bed's look: shows at once (no bake)
+        EditorGUILayout.Space();
+        var look = serializedObject.FindProperty("bedLook");
+        EditorGUI.BeginChangeCheck();
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            EditorGUILayout.PropertyField(look, new GUIContent("Bed look"));
+            if (GUILayout.Button("Pebbles", GUILayout.Width(62))) look.objectReferenceValue = ClearwaterBedLooks.Pebbles;
+            if (GUILayout.Button("Sand", GUILayout.Width(48))) look.objectReferenceValue = ClearwaterBedLooks.Sand;
+        }
+        bool lookChanged = EditorGUI.EndChangeCheck();
+
         EditorGUILayout.Space();
         EditorGUILayout.PropertyField(serializedObject.FindProperty("seaSize"), new GUIContent("Sea size (m)"));
         foreach (var p in new[] { "areaSize", "resolution", "outerResolution", "groundHalfSize", "groundStep" })
             EditorGUILayout.PropertyField(serializedObject.FindProperty(p));
         serializedObject.ApplyModifiedProperties();
+        if (lookChanged) ClearwaterBedLooks.Apply(coast);
         if (_applyPreset >= 0) { ApplyPreset(coast, _applyPreset); _applyPreset = -1; GUIUtility.ExitGUI(); }
         if (_resetLine) { _resetLine = false; ResetLine(coast); _selected = -1; GUIUtility.ExitGUI(); }
         FarClipCheck(coast);

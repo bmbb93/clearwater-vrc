@@ -8,7 +8,22 @@ Shader "Clearwater/Seabed"
     {
         _Caus ("Caustics RT", 2D) = "black" {}
         _Rip ("Ripple normals CRT", 2D) = "black" {}
-        _Peb ("Pebble bed", 2D) = "grey" {}
+        _Peb ("Bed look: colour (set by the coast from its bed look)", 2D) = "grey" {}
+        [HideInInspector] _BedHeight ("Bed look: height", 2D) = "grey" {}
+        [HideInInspector] _BedTile ("Bed look: tile size (m)", Float) = 0.78
+        [HideInInspector] _BedHasHeight ("Bed look: has a height texture", Float) = 0
+        [HideInInspector] _BedCoarse ("Bed look: larger patches", Float) = 1
+        [HideInInspector] _BedSandFill ("Bed look: sand between the stones", Float) = 1
+        [HideInInspector] _BedSandColor ("Bed look: that sand", Vector) = (0.60, 0.55, 0.44, 1)
+        [HideInInspector] _BedSandBed ("Bed look: the bed is sand", Float) = 0
+        [HideInInspector] _BedRipple ("Bed look: ripple marks", Float) = 1
+        [HideInInspector] _BedWeed ("Bed look: weed", Float) = 0.7
+        [HideInInspector] _BedSat ("Bed look: saturation", Float) = 0.8
+        [HideInInspector] _BedTint ("Bed look: tint", Vector) = (1.10, 1.0, 0.86, 1)
+        [HideInInspector] _BedVar ("Bed look: patchiness", Float) = 1
+        [HideInInspector] _BedGrade ("Bed look: muted grade", Float) = 1
+        [HideInInspector] _BedBright ("Bed look: brightness", Float) = 1
+        [HideInInspector] _BedMean ("Bed look: average colour", Vector) = (0.085, 0.085, 0.075, 1)
         _PatchSize ("Wave patch size (m)", Float) = 4.6
         _Depth ("Caustics depth (m)", Float) = 1.6
         _RipSize ("Ripple window size (m)", Float) = 14

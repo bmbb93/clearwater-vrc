@@ -52,6 +52,15 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 - 線が長くても、歩ける範囲の近くは約 1 m 間隔で細かく焼き込みます。遠くの区間ほど粗くなります（線全体で最大 512 点）
 - 波音の音源は、歩ける範囲から 100 m 以内の部分の線だけを使います
 
+## 水底の見た目（Bed look）
+
+水の下から浜までの地面（Bed）の見た目は、Coast の `Bed look` で選びます。水の下と浜は同じ見た目になり、変更は Bake なしですぐ反映されます。
+
+- 同梱のプリセット：`Pebbles`（小石、初期値）/ `Sand`（ベージュ〜茶色の砂浜）。Coast の `Pebbles` / `Sand` ボタンで切り替えられます
+- 自分の見た目：Project で右クリック > Create > Clearwater > Bed Look。`Color`（色、必須・タイル状）と `Height`（高さ、任意。なければ色の明るさから推定）、1 枚が何 m 四方か（`Tile size`）を指定します
+- 重ねる効果：隙間の砂（`Sand fill`）、波紋（`Ripple marks`。`Sand bed` をオンにすると底全体に）、藻の色（`Weed tint`）、色味（`Tint`・`Saturation`・`Brightness`・大きなまだら `Patchiness`・小石の落ち着いた色調 `Muted grade`）
+- 同梱のテクスチャはどちらも計算で作ったもので、写真は使っていません（小石は移植元の `tools/make_pebbles.py`、砂は `Tools~/make_sand.py`）
+
 ## 物を置く（Clearwater Stamp）
 
 海岸の上に置いた物は、`ClearwaterStamp` を付けてから Bake すると、海岸の一部として扱われます。

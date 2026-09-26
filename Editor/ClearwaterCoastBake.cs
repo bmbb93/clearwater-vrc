@@ -112,6 +112,8 @@ public static class ClearwaterCoastBake
 
         // the sea's extent
         ClearwaterSetup.ApplySeaSize(ctl, coast.seaSize);
+        // how the bed looks
+        ClearwaterBedLooks.Apply(coast);
 
         // the shore sound follows the listener along the line
         bool soundClosed;
@@ -188,10 +190,13 @@ public static class ClearwaterCoastBake
     public static string Hash(ClearwaterCoast coast)
     {
         string saved = coast.bakedHash;
+        var look = coast.bedLook; // (the bed's look needs no bake: it goes straight onto the materials)
         coast.bakedHash = "";
+        coast.bedLook = null;
         var sb = new System.Text.StringBuilder(JsonUtility.ToJson(coast));
         sb.Append(coast.transform.position).Append(coast.transform.rotation).Append(coast.transform.lossyScale);
         coast.bakedHash = saved;
+        coast.bedLook = look;
         foreach (var s in Object.FindObjectsOfType<ClearwaterStamp>())
         {
             sb.Append((int)s.mode).Append(s.receiveCaustics);

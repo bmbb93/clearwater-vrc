@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cdecc66e071ef5049a39af6c663ebdbf, type: 3}
+  m_Name: Sand
+  m_EditorClassIdentifier: 
+  color: {fileID: 2800000, guid: 671bd90f13cc6d7429d1e963a9a0e6a6, type: 3}
+  height: {fileID: 2800000, guid: 07644ff14a0939d47aebf3e6739fbed3, type: 3}
+  tileSize: 1
+  largerPatches: 0
+  sandFill: 0
+  sandFillAmount: 1
+  sandColor: {r: 0.62, g: 0.55, b: 0.43, a: 1}
+  sandBed: 1
+  rippleMarks: 1
+  rippleStrength: 1
+  weedTint: 0
+  weedAmount: 0.3
+  tint: {r: 1, g: 1, b: 1, a: 1}
+  saturation: 0.9
+  brightness: 0.8
+  patchiness: 0.35
+  mutedGrade: 0

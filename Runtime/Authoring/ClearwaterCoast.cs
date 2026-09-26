@@ -62,6 +62,11 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
         new Keyframe(-10f, 0.6f), new Keyframe(-2.4f, 0.6f), new Keyframe(0f, 0f), new Keyframe(1.4f, -0.35f),
         new Keyframe(30f, -1.4f), new Keyframe(48f, -3.45f), new Keyframe(80f, -3.45f));
 
+    [Header("Bed")]
+    [Tooltip("How the bed looks, under the water and up the beach (a Bed Look asset: the package's Pebbles or Sand, or " +
+             "your own from Create > Clearwater > Bed Look). None: Pebbles. Shows at once, no bake needed.")]
+    public ClearwaterBedLook bedLook;
+
     [Header("Sea")]
     [Tooltip("Side of the square of sea around the water object (m). Its edge fades into the haze; the ground is drawn " +
              "out to 0.6 x this from the viewer. Cameras need a far clip of about 0.8 x this (the inspector checks the " +

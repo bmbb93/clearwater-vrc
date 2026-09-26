@@ -120,7 +120,7 @@ public static class ClearwaterSetup
         // assets are updated in place (same GUIDs), so rebuilding with unchanged settings leaves git clean
         if (!AssetDatabase.IsValidFolder(Root)) AssetDatabase.CreateFolder("Assets", "Clearwater");
         if (!AssetDatabase.IsValidFolder(Gen)) AssetDatabase.CreateFolder(Root, "Generated");
-        SetupPebbleImporter();
+        ClearwaterBedLooks.SetupImporters();
         var a = new Assets();
 
         // spectrum + FFT chain
@@ -198,6 +198,8 @@ public static class ClearwaterSetup
         a.seabed.SetTexture("_Caus", a.causRT);
         a.seabed.SetTexture("_Rip", ripN);
         a.seabed.SetTexture("_Peb", a.water.GetTexture("_Peb"));
+        // (the bed look: Pebbles until a coast with its own is baked)
+        if (ClearwaterBedLooks.Pebbles != null) { ClearwaterBedLooks.Pebbles.ApplyTo(a.water); ClearwaterBedLooks.Pebbles.ApplyTo(a.seabed); }
         a.seabed.SetFloat("_PatchSize", L);
         a.seabed.SetFloat("_Depth", DEPTH);
         a.seabed.SetFloat("_RipSize", RSIZE);
@@ -254,22 +256,6 @@ public static class ClearwaterSetup
         float el = SunEl * Mathf.Deg2Rad, az = SunAz * Mathf.Deg2Rad;
         // the demo's (sin az cos el, sin el, -cos az cos el), with z flipped into Unity space
         return new Vector3(Mathf.Sin(az) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Cos(az) * Mathf.Cos(el));
-    }
-
-    static void SetupPebbleImporter()
-    {
-        var ti = (TextureImporter)AssetImporter.GetAtPath(Pkg + "/Textures/Pebbles.jpg");
-        if (ti.sRGBTexture && ti.mipmapEnabled && ti.wrapMode == TextureWrapMode.Repeat && ti.filterMode == FilterMode.Trilinear &&
-            ti.anisoLevel == 16 && ti.maxTextureSize == 1024 && ti.textureCompression == TextureImporterCompression.CompressedHQ)
-            return; // (the package ships with these settings; only fix them if they were changed)
-        ti.sRGBTexture = true;
-        ti.mipmapEnabled = true;
-        ti.wrapMode = TextureWrapMode.Repeat;
-        ti.filterMode = FilterMode.Trilinear;
-        ti.anisoLevel = 16;
-        ti.maxTextureSize = 1024;
-        ti.textureCompression = TextureImporterCompression.CompressedHQ;
-        ti.SaveAndReimport();
     }
 
     static Material Mat(string shader, string name)
