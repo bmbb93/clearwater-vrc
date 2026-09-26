@@ -40,6 +40,21 @@ public static class ClearwaterCoastBake
         var world = new List<Vector3>();
         foreach (var p in line) world.Add(coast.transform.TransformPoint(p));
 
+        // the user terrain: its heights, and the waterline found on it in place of the line through the walkable area
+        var user = ClearwaterUserTerrain.Bake(ctl, coast);
+        if (user != null) user.tex = ClearwaterSetup.Save(user.tex, "UserTerrain.asset");
+        if (user != null && !coast.closed)
+        {
+            var js = new List<Vector2>();
+            foreach (var w in world) js.Add(ToWater(w));
+            js = ClearwaterUserTerrain.Splice(js, user, new Vector2(user.area.x, user.area.y), Mathf.Max(coast.groundHalfSize, 1f),
+                                              MaxShorePoints, out string note);
+            if (note != null) Debug.LogWarning("[Clearwater] User terrain: " + note + ".");
+            world.Clear();
+            foreach (var p in js) world.Add(new Vector3(p.x + origin.x, origin.y, -p.y + origin.z));
+        }
+        else if (user != null) Debug.LogWarning("[Clearwater] User terrain: a closed coast line is not joined to the waterline found on it.");
+
         // shore coordinates
         var pts = new Vector4[world.Count];
         float along = 0;
@@ -73,6 +88,7 @@ public static class ClearwaterCoastBake
 
         // the beach face's slope over the height the swash climbs (it sets how long the swash takes: gravity along it)
         float swashSlope = SwashSlope(coast, range.z, ctl.waterMaterial.GetFloat("_SwashHeight") * ctl.waterMaterial.GetFloat("_SwashRunup"));
+        if (user != null && user.slope > 0f) swashSlope = user.slope; // (the user terrain's own beach face)
         if (ctl.underwaterMaterial != null) ctl.underwaterMaterial.SetFloat("_SwashSlope", swashSlope);
 
         // every material that draws or follows the floor
@@ -93,6 +109,9 @@ public static class ClearwaterCoastBake
             m.SetVector("_CoastProfileU", range);
             m.SetTexture("_ShoreExposure", exposure);
             m.SetVector("_ShoreExposureV", exposureV);
+            m.SetTexture("_UserTex", user != null ? user.tex : null);
+            m.SetVector("_UserArea", user != null ? user.area : Vector4.zero);
+            m.SetVector("_UserMean", user != null ? user.mean : new Vector4(0.2f, 0.2f, 0.2f, 1));
             EditorUtility.SetDirty(m);
         }
         floorBake.SetTexture("_RockTex", ctl.waterMaterial.GetTexture("_RockTex"));
@@ -107,7 +126,7 @@ public static class ClearwaterCoastBake
         }
 
         // walkable ground around the coast object, with invisible walls at its edge
-        BakeGround(ctl, coast, floorBake);
+        BakeGround(ctl, coast, floorBake, user == null);
         Object.DestroyImmediate(floorBake);
 
         // the sea's extent
@@ -203,6 +222,12 @@ public static class ClearwaterCoastBake
             foreach (var mf in s.GetComponentsInChildren<MeshFilter>())
                 sb.Append(mf.sharedMesh != null ? mf.sharedMesh.name : "-").Append(mf.transform.localToWorldMatrix);
         }
+        if (coast.terrainSource == ClearwaterCoast.TerrainSource.User)
+            foreach (var r in ClearwaterUserTerrain.Renderers(coast))
+            {
+                var mesh = r.GetComponent<MeshFilter>().sharedMesh;
+                sb.Append(mesh.name).Append(mesh.vertexCount).Append(r.transform.localToWorldMatrix);
+            }
         return Hash128.Compute(sb.ToString()).ToString();
     }
 
@@ -441,7 +466,7 @@ public static class ClearwaterCoastBake
 
     // ---------------------------------------------------------------- walkable ground
 
-    static void BakeGround(ClearwaterController ctl, ClearwaterCoast coast, Material floorBake)
+    static void BakeGround(ClearwaterController ctl, ClearwaterCoast coast, Material floorBake, bool ground)
     {
         Transform water = ctl.water;
         var groundTf = water.Find("Seabed Collider");
@@ -477,10 +502,12 @@ public static class ClearwaterCoastBake
         mesh.bounds = new Bounds(Vector3.zero, new Vector3(2 * half, 12, 2 * half));
         mesh = ClearwaterSetup.Save(mesh, "SeabedCollider.asset");
 
+        // (on a user terrain the ground to walk on is its own meshes' colliders: only the walls are made)
         var mc = groundTf.GetComponent<MeshCollider>();
         if (mc == null) mc = groundTf.gameObject.AddComponent<MeshCollider>();
         mc.sharedMesh = null; // re-cook
         mc.sharedMesh = mesh;
+        mc.enabled = ground;
 
         // invisible walls at the edge (the existing ones are kept and moved, so a re-bake leaves the scene file quiet)
         var walls = new List<Transform>();

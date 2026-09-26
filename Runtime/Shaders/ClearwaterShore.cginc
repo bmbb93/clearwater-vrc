@@ -29,7 +29,7 @@ float _FoamLift;   // m: how far the whitewater stands up out of the water (the 
 // crest gets there (it bends into bays and sweeps along a shore it meets at an angle). _ShoreExposureV: x = v of the
 // first sample, y = the samples' span (m), z = 1 for a closed line, w = 1 once baked (before that every shore is open
 // and in step).
-sampler2D _ShoreExposure;
+Texture2D _ShoreExposure;
 float4 _ShoreExposure_TexelSize, _ShoreExposureV;
 
 #define CW_G 9.81
@@ -52,7 +52,7 @@ float2 cwShoreSwell(float v)
     if (_ShoreExposureV.w < 0.5) return float2(1.0, 0.0);
     float x = (v - _ShoreExposureV.x) / max(_ShoreExposureV.y, 1e-3);
     x = _ShoreExposureV.z > 0.5 ? frac(x) : saturate(x);
-    return tex2Dlod(_ShoreExposure, float4(x * (1.0 - _ShoreExposure_TexelSize.x) + 0.5 * _ShoreExposure_TexelSize.x, 0.5, 0, 0)).rg;
+    return _ShoreExposure.SampleLevel(cw_linear_clamp_sampler, float2(x * (1.0 - _ShoreExposure_TexelSize.x) + 0.5 * _ShoreExposure_TexelSize.x, 0.5), 0).rg;
 }
 inline float cwShoreExposure(float v) { return cwShoreSwell(v).x; }
 

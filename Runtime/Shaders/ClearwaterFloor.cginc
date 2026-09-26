@@ -7,6 +7,10 @@
 #include "ClearwaterCommon.cginc"
 
 sampler2D _Peb, _Caus, _Rip;
+// The baked data (rock, stamps, user terrain, the shore's exposure) share one sampler, and the bed look's height
+// another: the water shader would run past the 16 samplers a pixel shader has with one each.
+SamplerState cw_linear_clamp_sampler;
+SamplerState cw_trilinear_repeat_sampler;
 // The bed look (ClearwaterBedLook, copied onto the materials by the coast; the defaults are the pebbles):
 //  _Peb the colour texture, _BedHeight its height (when _BedHasHeight; else guessed from the colour's brightness),
 //  one tile over _BedTile m; _BedCoarse = share of the same texture at 1.7x the size in patches; _BedSandFill = sand
@@ -14,7 +18,7 @@ sampler2D _Peb, _Caus, _Rip;
 //  _BedRipple = ripple marks where there is sand; _BedWeed = olive weed film; then the colour: _BedSat, _BedTint,
 //  _BedVar (large patches of lighter and darker), _BedGrade (the pebbles' muted grade), _BedBright.
 //  _BedMean = its average colour (for what is too far or too blurred to texture).
-sampler2D _BedHeight;
+Texture2D _BedHeight;
 float _BedTile, _BedHasHeight, _BedCoarse, _BedSandFill, _BedSandBed, _BedRipple, _BedWeed, _BedSat, _BedVar, _BedGrade, _BedBright;
 float4 _BedSandColor, _BedTint, _BedMean;
 float4 _RipCenter;
@@ -216,13 +220,13 @@ float cwRockAnalytic(float2 xz)
 }
 
 // the baked rock heights: _RockArea.xy = centre (water space), .z = size (m); faded out at the edge
-sampler2D _RockTex;
+Texture2D _RockTex;
 float4 _RockArea;
 float cwRock(float2 xz)
 {
     float2 uv = (xz - _RockArea.xy) / max(_RockArea.z, 1e-3) + 0.5;
     float edge = saturate(min(min(uv.x, uv.y), min(1.0 - uv.x, 1.0 - uv.y)) * 40.0);
-    return tex2Dlod(_RockTex, float4(uv, 0, 0)).r * edge;
+    return _RockTex.SampleLevel(cw_linear_clamp_sampler, uv, 0).r * edge;
 }
 
 // 0..1 concavity of the rock around a point: crevices, joints, gaps between boulders. The bake has mipmaps, so
@@ -231,31 +235,50 @@ float cwRockCavity(float2 xz, float c)
 {
     float2 uv = (xz - _RockArea.xy) / max(_RockArea.z, 1e-3) + 0.5;
     float edge = saturate(min(min(uv.x, uv.y), min(1.0 - uv.x, 1.0 - uv.y)) * 40.0);
-    return saturate((tex2Dlod(_RockTex, float4(uv, 0, 2)).r * edge - c) * 5.0);
+    return saturate((_RockTex.SampleLevel(cw_linear_clamp_sampler, uv, 2).r * edge - c) * 5.0);
 }
 
 // Stamps (ClearwaterStamp, baked over _StampArea: xy = centre in water space, z = size, w = 1 when there are any):
 // R = top of "raise ground" brushes, G = top of "carve ground" brushes, B = top of obstacles (props in the water),
 // each a height in water space; -50 / +50 / -50 where there is none.
-sampler2D _StampTex;
+Texture2D _StampTex;
 float4 _StampArea;
 
-// x = depth of the ground (the coast, its relief, rocks, raise/carve brushes); y = the depth the waves feel (the
-// ground, or an obstacle's top where one stands higher)
+// User terrain (the coast's own mesh round the walkable area, baked over _UserArea: xy = centre in water space,
+// z = size, w = 1 when there is one): R = the mesh's top (a height in water space; past its edge the edge's height
+// carried outward), G = how much the ground is the mesh's: 1 on it, falling to 0 across the seam round it, where the
+// generated terrain is brought to meet its edge. _UserMean = its average colour (where it cannot be seen on screen).
+Texture2D _UserTex;
+float4 _UserArea, _UserMean;
+
+// x = the user terrain's height, y = its weight (0 outside it and its seam)
+float2 cwUserTerrain(float2 xz)
+{
+    [branch] if (_UserArea.w <= 0.0) return float2(0.0, 0.0);
+    float2 uv = (xz - _UserArea.xy) / _UserArea.z + 0.5;
+    if (any(uv <= 0.0) || any(uv >= 1.0)) return float2(0.0, 0.0);
+    return _UserTex.SampleLevel(cw_linear_clamp_sampler, uv, 0).rg;
+}
+
+// x = depth of the ground (the coast, its relief, rocks, raise/carve brushes, or the user terrain); y = the depth the
+// waves feel (the ground, or an obstacle's top where one stands higher)
 float2 cwFloorDepth2(float2 xz)
 {
     float d = cwFloorBaseDepth(cwShoreU(xz)) + 0.30 * (cwNoise(xz * 0.22) - 0.5) + 0.10 * (cwNoise(xz * 0.9 + 7.0) - 0.5) - cwRock(xz);
-    float dw = d;
+    float3 s = float3(-50.0, 50.0, -50.0);
     [branch] if (_StampArea.w > 0.0)
     {
         float2 uv = (xz - _StampArea.xy) / _StampArea.z + 0.5;
         if (all(uv > 0.0) && all(uv < 1.0))
         {
-            float3 s = tex2Dlod(_StampTex, float4(uv, 0, 0)).rgb;
+            s = _StampTex.SampleLevel(cw_linear_clamp_sampler, uv, 0).rgb;
             d = -max(min(-d, s.g), s.r);
-            dw = min(d, max(-s.b, 0.02)); // an obstacle leaves at least 2 cm of water for the waves (no dry ring round it)
         }
     }
+    // the user terrain replaces the ground on it, and the generated ground is brought to its edge round it
+    float2 ut = cwUserTerrain(xz);
+    d = lerp(d, -ut.x, ut.y);
+    float dw = min(d, max(-s.b, 0.02)); // an obstacle leaves at least 2 cm of water for the waves (no dry ring round it)
     return float2(d, dw);
 }
 inline float cwFloorDepth(float2 xz) { return cwFloorDepth2(xz).x; }
@@ -317,7 +340,8 @@ float3 cwBedTexture(float2 x, float2 dxdx, float2 dxdy, float sc, out float hgt)
     [branch] if (_BedHasHeight > 0.5)
     {
         // its own height (slightly softened, as the caustics and shading want it)
-        hgt = lerp(tex2Dgrad(_BedHeight, uv + oa, dx * 2.0, dy * 2.0).r, tex2Dgrad(_BedHeight, uv + ob, dx * 2.0, dy * 2.0).r, m);
+        hgt = lerp(_BedHeight.SampleGrad(cw_trilinear_repeat_sampler, uv + oa, dx * 2.0, dy * 2.0).r,
+                   _BedHeight.SampleGrad(cw_trilinear_repeat_sampler, uv + ob, dx * 2.0, dy * 2.0).r, m);
     }
     else
     {

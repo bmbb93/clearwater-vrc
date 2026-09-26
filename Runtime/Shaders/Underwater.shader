@@ -31,6 +31,9 @@ Shader "Clearwater/Underwater"
         _RockTex ("Rock heights", 2D) = "black" {}
         _RockArea ("Rock bake area (centre xz, size)", Vector) = (0, 0, 204.8, 0)
         _StampTex ("Stamps: raise, carve, obstacle heights (baked)", 2D) = "black" {}
+        [HideInInspector] _UserTex ("Coast: user terrain heights (baked)", 2D) = "black" {}
+        [HideInInspector] _UserArea ("User terrain area (centre, size, on)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
         _SwashTrack ("Break timing track (generated)", 2D) = "black" {}
         _SwashBreaks ("Breaks: time, strength (generated)", 2D) = "black" {}

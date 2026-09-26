@@ -343,25 +343,43 @@ float4 fragSide(v2f i)
     float3 caus = tex2Dbias(_Caus, float4(cwCausUV(FP.xz, hgt, uSun), 0, 1.0)).rgb;
     float3 Lfloor = cwFloorRadianceUnder(FP.xz, depthHere, hgt, alb, uSun, caus, sunShade);
     float3 under = Lfloor * exp(-SIG_T * s) + cwInscatter(depthHere, s, tr, uSun);
-
-    // something standing in the water (an avatar) in front of the floor? take it from the grab texture
     float2 uvD = i.screenPos.xy / i.screenPos.w;
     float2 uvG = i.grabPos.xy / i.grabPos.w;
+    float gsign = _ProjectionParams.x;
+    #if UNITY_UV_STARTS_AT_TOP
+    gsign = -gsign;
+    #endif
+
+    // The user terrain, drawn in its own material: seen through the surface as it is on screen (shifted by the waves'
+    // slope), in the light that gets down through the water to it, dimmed on the way back up. Where the screen does
+    // not have it (off its edge, or something nearer in the way), its average colour in the same light.
+    float userOn = smoothstep(0.97, 1.0, cwUserTerrain(FP.xz).y);
+    [branch] if (userOn > 0.0)
+    {
+        float3 down = exp(-(SIG_A + 0.6 * SIG_S) * depthHere / max(-cwSunT(uSun).y, 0.3));
+        float2 offF = -slope * 0.06 * saturate(s);
+        float dF = sceneDistance(uvD + offF, rdWorld) - t; // how far past the surface the scene there lies
+        float3 Lu;
+        [branch] if (dF > 0.0 && dF < 2.0 * s + 1.0)
+            Lu = cwInvTonemap(CW_GRAB_LOD(uvG + float2(offF.x, offF.y * gsign)).rgb) * down;
+        else
+            Lu = cwFloorRadianceUnder(FP.xz, depthHere, 0.4, _UserMean.rgb, uSun, caus, 1.0);
+        under = lerp(under, Lu * exp(-SIG_T * s) + cwInscatter(depthHere, s, tr, uSun), userOn);
+    }
+
+    // something standing in the water (an avatar) in front of the floor? take it from the grab texture
     float sceneDist = sceneDistance(uvD, rdWorld);
     // floor distance along the unrefracted ray, to tell the seabed mesh apart from objects above it
     float sv = (-cwFloorDepth(P.xz) - P.y) / wd.y;
     [unroll] for (int q = 0; q < 2; q++) { float2 fxz = P.xz + wd.xz * sv; sv = (-cwFloorDepth(fxz) - P.y) / wd.y; }
     float dObj = sceneDist - t;
     s = min(s, 30.0);
-    if (dObj > 0.0 && dObj < sv - 0.06)
+    // (over the user terrain the floor itself is on screen, only as exact as its bake: things clearly in front of it)
+    if (dObj > 0.0 && dObj < sv - lerp(0.06, 0.3, userOn))
     {
         // refraction offset in screen space, undone where it would pick up something that is not the
         // submerged object (above the water, or the seabed, which is not shaded under the water)
         float2 off = -slope * 0.06 * saturate(dObj);
-        float gsign = _ProjectionParams.x;
-        #if UNITY_UV_STARTS_AT_TOP
-        gsign = -gsign;
-        #endif
         float dOff = sceneDistance(uvD + off, rdWorld) - t;
         if (dOff < 0.0 || dOff > sv - 0.06) off = 0;
         float4 objG = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, uvG + float2(off.x, off.y * gsign));

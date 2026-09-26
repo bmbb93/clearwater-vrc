@@ -47,6 +47,9 @@ Shader "Clearwater/Seabed"
         _RockTex ("Rock heights (baked by Build Scene)", 2D) = "black" {}
         _RockArea ("Rock bake area (centre xz, size)", Vector) = (0, 0, 204.8, 0)
         _StampTex ("Stamps: raise, carve, obstacle heights (baked)", 2D) = "black" {}
+        [HideInInspector] _UserTex ("Coast: user terrain heights (baked)", 2D) = "black" {}
+        [HideInInspector] _UserArea ("User terrain area (centre, size, on)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
         _WaterOrigin ("Water origin (world)", Vector) = (0, 0, 0, 0)
         _GridCenter ("Grid centre (world xz, set by the controller)", Vector) = (0, 0, 0, 0)
@@ -115,6 +118,7 @@ Shader "Clearwater/Seabed"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 float3 sun = cwSun();
                 float2 p = float2(i.wpos.x - _WaterOrigin.x, -(i.wpos.z - _WaterOrigin.z));
+                clip(0.985 - cwUserTerrain(p).y); // (on the user terrain the ground is its own mesh)
                 float2 dpdx = ddx(p), dpdy = ddy(p);
                 float footprint = length(fwidth(i.wpos));
                 float depth = cwFloorDepth(p);
@@ -238,7 +242,7 @@ Shader "Clearwater/Seabed"
             #pragma multi_compile_shadowcaster
 
             struct appdata { float4 vertex : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct v2f { float4 pos : SV_POSITION; UNITY_VERTEX_OUTPUT_STEREO };
+            struct v2f { float4 pos : SV_POSITION; float2 p : TEXCOORD0; UNITY_VERTEX_OUTPUT_STEREO };
 
             v2f vert(appdata v)
             {
@@ -246,10 +250,13 @@ Shader "Clearwater/Seabed"
                 UNITY_SETUP_INSTANCE_ID(v);
                 UNITY_INITIALIZE_OUTPUT(v2f, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
-                o.pos = UnityApplyLinearShadowBias(UnityWorldToClipPos(seabedWorld(v.vertex)));
+                float3 w = seabedWorld(v.vertex);
+                o.pos = UnityApplyLinearShadowBias(UnityWorldToClipPos(w));
+                o.p = float2(w.x - _WaterOrigin.x, -(w.z - _WaterOrigin.z));
                 return o;
             }
-            float4 frag(v2f i) : SV_Target { return 0; }
+            // (on the user terrain the depth is its own mesh's)
+            float4 frag(v2f i) : SV_Target { clip(0.985 - cwUserTerrain(i.p).y); return 0; }
             ENDCG
         }
     }

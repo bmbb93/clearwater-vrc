@@ -1,6 +1,7 @@
 // Clearwater: renders ClearwaterStamp meshes from above into the stamp texture: the highest point of each kind at
 // every texel (BlendOp Max), in water space. Pass = the stamp's mode: 0 obstacle -> B, 1 raise -> R, 2 carve -> G
 // (stored negated so that Max keeps the highest carve surface; the bake flips it back). Cleared to -50 = nothing.
+// Pass 3 = the coast's user terrain: its top in R, 1 in G where it is (cleared to -50, 0).
 // Vertices are placed straight into the stamp area (_StampArea: xy = centre, z = size, in water space).
 Shader "Hidden/Clearwater/StampBake"
 {
@@ -47,6 +48,14 @@ Shader "Hidden/Clearwater/StampBake"
             #pragma vertex vert
             #pragma fragment frag
             float4 frag(v2f i) : SV_Target { return float4(-50, -i.y, -50, 0); }
+            ENDCG
+        }
+        Pass // user terrain
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            float4 frag(v2f i) : SV_Target { return float4(i.y, 1, 0, 0); }
             ENDCG
         }
     }

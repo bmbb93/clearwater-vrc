@@ -10,6 +10,9 @@ Shader "Hidden/Clearwater/FloorBake"
         _CoastTex ("Coast: shore coordinates u, v", 2D) = "black" {}
         _CoastProfile ("Coast: cross-section", 2D) = "black" {}
         _StampTex ("Stamps", 2D) = "black" {}
+        [HideInInspector] _UserTex ("Coast: user terrain heights (baked)", 2D) = "black" {}
+        [HideInInspector] _UserArea ("User terrain area (centre, size, on)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
     }
     SubShader
     {

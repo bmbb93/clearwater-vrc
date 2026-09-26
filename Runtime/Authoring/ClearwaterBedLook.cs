@@ -97,7 +97,7 @@ public class ClearwaterBedLook : ScriptableObject
     }
 
     // a texture that cannot be read on the CPU: its smallest mip, drawn through a small render texture
-    static Vector3 MeanFromGpu(Texture2D t)
+    public static Vector3 MeanFromGpu(Texture2D t)
     {
         var rt = RenderTexture.GetTemporary(8, 8, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
         var prev = RenderTexture.active;

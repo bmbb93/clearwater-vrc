@@ -150,6 +150,26 @@ public class ClearwaterCoastEditor : Editor
         }
         else EditorGUILayout.PropertyField(serializedObject.FindProperty("curve"), GUILayout.Height(60));
 
+        // where the ground's shape comes from
+        EditorGUILayout.Space();
+        var source = serializedObject.FindProperty("terrainSource");
+        EditorGUILayout.PropertyField(source, new GUIContent("Terrain source"));
+        if (source.enumValueIndex == (int)ClearwaterCoast.TerrainSource.User)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("userTerrain"), new GUIContent("User terrain"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("seamWidth"), new GUIContent("Seam width (m)"));
+            EditorGUI.indentLevel--;
+            if (coast.userTerrain == null)
+                EditorGUILayout.HelpBox("Choose the object whose meshes are the ground round the walkable area.", MessageType.Info);
+            else if (ClearwaterUserTerrain.Renderers(coast).Count == 0)
+                EditorGUILayout.HelpBox("The User terrain has no enabled meshes.", MessageType.Warning);
+            else
+                EditorGUILayout.HelpBox("Its meshes are seen in their own materials and walked on with their own colliders. The " +
+                    "waterline is found on them; draw the line so it meets their shore at the walkable area's (green) edge.",
+                    MessageType.None);
+        }
+
         // the bed's look: shows at once (no bake)
         EditorGUILayout.Space();
         var look = serializedObject.FindProperty("bedLook");

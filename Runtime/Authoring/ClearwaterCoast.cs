@@ -62,6 +62,17 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
         new Keyframe(-10f, 0.6f), new Keyframe(-2.4f, 0.6f), new Keyframe(0f, 0f), new Keyframe(1.4f, -0.35f),
         new Keyframe(30f, -1.4f), new Keyframe(48f, -3.45f), new Keyframe(80f, -3.45f));
 
+    public enum TerrainSource { Generated, User }
+    [Header("Terrain")]
+    [Tooltip("Generated: the ground is made from the line and the cross-section. User: round the walkable area the " +
+             "ground is your own meshes (User terrain), seen in their own materials; the waterline is found on them " +
+             "and the generated ground outside is brought to meet their edge.")]
+    public TerrainSource terrainSource = TerrainSource.Generated;
+    [Tooltip("User: the object whose meshes (with their own colliders) are the ground round the walkable area")]
+    public GameObject userTerrain;
+    [Tooltip("User: metres outside the meshes over which the generated ground is brought to meet their edge")]
+    [Min(1f)] public float seamWidth = 20f;
+
     [Header("Bed")]
     [Tooltip("How the bed looks, under the water and up the beach (a Bed Look asset: the package's Pebbles or Sand, or " +
              "your own from Create > Clearwater > Bed Look). None: Pebbles. Shows at once, no bake needed.")]
