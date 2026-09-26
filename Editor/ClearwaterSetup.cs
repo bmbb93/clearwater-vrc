@@ -448,7 +448,7 @@ public static class ClearwaterSetup
     {
         size = Mathf.Max(size, 100f);
         var plane = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/WaterPlane.asset");
-        if (plane == null || !Mathf.Approximately(plane.bounds.extents.x, size * 0.5f))
+        if (plane == null || !Mathf.Approximately(plane.bounds.extents.x, size * 0.5f) || plane.vertexCount < 100) // (or still the old single quad)
             Save(BuildPlane(size), "WaterPlane.asset");
         float far = size * SeabedFarPerSeaSize;
         var grid = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/SeabedGrid.asset");
@@ -501,13 +501,39 @@ public static class ClearwaterSetup
         return mesh;
     }
 
+    const float WaterInner = 120f, WaterStep = 2f, WaterGrowth = 1.08f; // plane: 2 m cells out to 120 m, then 8% larger each
+
+    /// <summary>The water plane: a grid, 2 m cells over the walkable area growing outward to the sea's edge. (Its shading
+    /// is per pixel, but each pixel's view ray comes from the position interpolated across its triangle: over one
+    /// 5 km quad that interpolation lost precision far from the vertices, and on some GPUs, Radeon notably, the water
+    /// shimmered.)</summary>
     static Mesh BuildPlane(float size)
     {
         float s = size * 0.5f;
-        var mesh = new Mesh { name = "WaterPlane" };
-        mesh.vertices = new[] { new Vector3(-s, 0, -s), new Vector3(-s, 0, s), new Vector3(s, 0, s), new Vector3(s, 0, -s) };
-        mesh.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
-        mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+        var half = new List<float>();
+        for (int i = 0; i * WaterStep < Mathf.Min(WaterInner, s); i++) half.Add(i * WaterStep);
+        for (float step = WaterStep, x = half[half.Count - 1]; x < s;) { step *= WaterGrowth; x = Mathf.Min(x + step, s); half.Add(x); }
+        if (half[half.Count - 1] < s) half.Add(s);
+        var ax = new List<float>();
+        for (int i = half.Count - 1; i > 0; i--) ax.Add(-half[i]);
+        ax.AddRange(half);
+        int n = ax.Count;
+        var v = new Vector3[n * n];
+        var nr = new Vector3[n * n];
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++) { v[j * n + i] = new Vector3(ax[i], 0, ax[j]); nr[j * n + i] = Vector3.up; }
+        var idx = new int[(n - 1) * (n - 1) * 6];
+        int o = 0;
+        for (int j = 0; j < n - 1; j++)
+            for (int i = 0; i < n - 1; i++)
+            {
+                int a = j * n + i, b = a + 1, c = a + n, d = c + 1;
+                idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d; // facing up
+            }
+        var mesh = new Mesh { name = "WaterPlane", indexFormat = IndexFormat.UInt32 };
+        mesh.vertices = v;
+        mesh.normals = nr;
+        mesh.triangles = idx;
         mesh.RecalculateBounds();
         return mesh;
     }
