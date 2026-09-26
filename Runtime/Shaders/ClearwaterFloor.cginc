@@ -39,6 +39,10 @@ float4 _CoastTex_TexelSize, _CoastProfile_TexelSize, _CoastArea, _CoastProfileU,
 // texel, R = the highest pool surface there and G = the lowest pool floor (world y). Read texel by texel (no sampler).
 Texture2D _PoolMask;
 float4 _PoolMask_TexelSize, _PoolMaskArea;
+// A pool's own materials: _BodyArea = its footprint (world x, z min, x, z max), _BodyFloor.x = its floor (world y),
+// .w = 1 (0: the sea's materials). Is a world point in its water (or above it)?
+float4 _BodyArea, _BodyFloor;
+bool cwInBody(float3 w) { return all(w.xz >= _BodyArea.xy) && all(w.xz <= _BodyArea.zw) && w.y > _BodyFloor.x; }
 bool cwInPool(float3 wpos)
 {
     [branch] if (_PoolMaskArea.w <= 0.0) return false;
@@ -58,8 +62,13 @@ static const float3 SIG_A = float3(0.40, 0.074, 0.088);
 static const float3 SIG_S = float3(0.028, 0.052, 0.068);
 static const float3 SIG_T = SIG_A + SIG_S;
 
-inline float3 cwSunColor() { return float3(1.0, 0.90, 0.74) * _SunIntensity; }
-inline float3 cwSkyIrr() { return float3(0.62, 0.70, 0.78) * CW_PI * 0.22; }
+inline float3 cwSunColor() { return float3(1.0, 0.90, 0.74) * _SunIntensity * (1.0 - _Indoor); } // (none indoors)
+// the light from the whole sky on a level surface (indoors: from the room, the probe's broadest look upward)
+inline float3 cwSkyIrr()
+{
+    [branch] if (_Indoor > 0.5) return cwRoom(float3(0, 1, 0), 1.0) * CW_PI;
+    return float3(0.62, 0.70, 0.78) * CW_PI * 0.22;
+}
 
 // polynomial smooth min / max: blends two lines over a width k with no kink (k/4 rounding at the crossing)
 float cwSmin(float a, float b, float k) { float h = max(k - abs(a - b), 0.0) / k; return min(a, b) - h * h * k * 0.25; }
@@ -464,7 +473,7 @@ float3 cwFloorRadianceUnder(float2 FP, float depthHere, float hgt, float3 alb, f
     caus *= clamp(1.0 / (1.0 + 0.12 * depthHere * lap), 0.45, 3.0);
     // the net of light needs depth to form: under a few centimetres of water the waves barely focus the sun, so it
     // fades to even light at the water edge (as on the wet sand beside it) instead of ending in a line
-    caus = lerp(1.0, caus, smoothstep(0.01, 0.35, depthHere));
+    caus = lerp(1.0, caus, smoothstep(0.01, 0.35, depthHere) * CW_WAVE); // (calmer water, fainter lines)
     float ao = lerp(0.55, 1.0, smoothstep(0.08, 0.42, hgt));
     float3 Esun = SUN * Ts * exp(-SIG_T * depthHere / (-sunT.y)) * caus * (-sunT.y) * lerp(0.75, 1.0, ao) * sunShade;
     float3 Esky = cwSkyIrr() * exp(-(SIG_A + 0.4 * SIG_S) * depthHere * 1.25) * ao;

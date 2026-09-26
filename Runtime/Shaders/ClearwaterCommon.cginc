@@ -15,6 +15,12 @@ inline float3 cwToJS(float3 v) { return float3(v.x, v.y, -v.z); }
 
 // sun direction (towards the sun), Unity world space -> JS space
 float4 _SunDir;
+
+// A pool's own look (ClearwaterPool; the sea leaves them unset, 0): _Calm = how much calmer than the sea its surface
+// is (1 - its wave strength); _Indoor = 1 indoors: no sunlight, and the room (the nearest reflection probe, times
+// _EnvGain) where the sky would be.
+float _Calm, _Indoor, _EnvGain;
+#define CW_WAVE (1.0 - _Calm)
 inline float3 cwSun() { return normalize(cwToJS(_SunDir.xyz)); }
 
 float cwHash12(float2 p) { float3 p3 = frac(p.xyx * .1031); p3 += dot(p3, p3.yzx + 33.33); return frac((p3.x + p3.y) * p3.z); }
@@ -121,8 +127,8 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
 }
 
 // sky radiance for a JS-space direction (HDR, linear). fwE = fwidth(d.y), for the anti-aliased ridge edge;
-// pass it in when calling from inside a dynamic branch.
-float3 cwSkyFw(float3 d, float3 sun, float fwE)
+// pass it in when calling from inside a dynamic branch. (Indoors the room is there instead: cwSkyFw below.)
+float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
 {
     float e = d.y;
     float mu = dot(d, sun);
@@ -150,7 +156,6 @@ float3 cwSkyFw(float3 d, float3 sun, float fwE)
     c = lerp(c, land, smoothstep(r + w, r - w, e) * step(-0.3, e));
     return c;
 }
-float3 cwSky(float3 d, float3 sun) { return cwSkyFw(d, sun, fwidth(d.y)); }
 
 // flat-surface refraction shift of the caustic pattern on the floor (keeps it registered under the sun)
 float2 cwCausShift(float3 sun, float depth)
@@ -210,5 +215,35 @@ float3 cwInvTonemap(float3 y)
     return min(max(y, 0.0), 4.97 / max(_Exposure, 1e-4));
 #endif
 }
+
+// Indoors, what the water reflects and lets through from above is the room: the nearest reflection probe, box
+// projected from where it is seen (cwEnvPos, world; the water sets it to the point it shades), blurred by rough
+// (0 sharp .. 1 its broadest mip). The probe holds the room as its own shaders show it, not tone mapped: brought back
+// to the radiance these shaders tone map, so the room in the water looks as it does beside it.
+static float3 cwEnvPos;
+float3 cwRoom(float3 d, float rough)
+{
+#if defined(UNITY_CG_INCLUDED)
+    float3 dir = cwToJS(d); // (world)
+    [branch] if (unity_SpecCube0_ProbePosition.w > 0.0 && all(cwEnvPos >= unity_SpecCube0_BoxMin.xyz) && all(cwEnvPos <= unity_SpecCube0_BoxMax.xyz))
+    {
+        float3 nd = normalize(dir);
+        float3 rmax = (unity_SpecCube0_BoxMax.xyz - cwEnvPos) / nd, rmin = (unity_SpecCube0_BoxMin.xyz - cwEnvPos) / nd;
+        float3 r = nd > 0.0 ? rmax : rmin;
+        dir = cwEnvPos - unity_SpecCube0_ProbePosition.xyz + nd * min(min(r.x, r.y), r.z);
+    }
+    float4 s = UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, dir, rough * 6.0);
+    return cwInvTonemap(DecodeHDR(s, unity_SpecCube0_HDR)) * _EnvGain;
+#else
+    return 0.0;
+#endif
+}
+
+float3 cwSkyFw(float3 d, float3 sun, float fwE)
+{
+    [branch] if (_Indoor > 0.5) return cwRoom(d, 0.0);
+    return cwSkyOutdoor(d, sun, fwE);
+}
+float3 cwSky(float3 d, float3 sun) { return cwSkyFw(d, sun, fwidth(d.y)); }
 
 #endif

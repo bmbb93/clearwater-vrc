@@ -29,6 +29,11 @@ Shader "Clearwater/AvatarCaustics"
         [HideInInspector] _UserArea ("User terrain area (centre, size, on)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
         [HideInInspector] _PoolMask ("Pools: their surfaces and floors, cut out of the sea (baked)", 2D) = "black" {}
+        [HideInInspector] _BodyArea ("Pool: its footprint (world x, z min, x, z max; set by its bake)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _BodyFloor ("Pool: its floor (world y), 1 (0 = the sea)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _Calm ("Pool: 1 - its wave strength (0 = the sea)", Float) = 0
+        [HideInInspector] _Indoor ("Pool: indoors (no sun; the room's reflection probe for the sky)", Float) = 0
+        [HideInInspector] _EnvGain ("Pool indoors: the room's brightness in it", Float) = 1
         [HideInInspector] _PoolMaskArea ("Its area (world x, z corner, size, 1 = any pools)", Vector) = (0, 0, 0, 0)
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
     }
@@ -81,6 +86,9 @@ Shader "Clearwater/AvatarCaustics"
                 float3 p = cwToJS(i.wpos - _WaterOrigin.xyz); // water space: y = 0 on the mean surface
                 float depth = -p.y;
                 clip(depth - 0.02);
+                // a pool's: only in it (a projector draws on the whole of anything its box touches: a wall, the pool a
+                // storey down)
+                [branch] if (_BodyFloor.w > 0.0) clip(cwInBody(i.wpos) ? 1.0 : -1.0);
                 clip(cwInPool(i.wpos) ? -1.0 : 1.0); // (the sea's: not in a pool's basin, which has its own)
                 float3 sun = cwSun(), sunT = cwSunT(sun), n = normalize(cwToJS(i.wn));
                 // follow the refracted sun ray on to the floor below, and read the floor's caustics there. The floor is
@@ -91,7 +99,7 @@ Shader "Clearwater/AvatarCaustics"
                 float3 caus = tex2Dbias(_Caus, float4(uv, 0, 1.0)).rgb;
                 // lit side only; the lines only form a little below the surface
                 float facing = saturate(dot(n, -sunT));
-                float w = _Strength * facing * smoothstep(0.03, 0.5, depth);
+                float w = _Strength * facing * smoothstep(0.03, 0.5, depth) * CW_WAVE * (1.0 - _Indoor); // (a pool's: calmer; none indoors)
                 float3 m = lerp(1.0, caus, w);
                 return float4(saturate(0.5 * m), 1.0);
             }

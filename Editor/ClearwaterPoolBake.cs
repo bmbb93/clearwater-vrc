@@ -116,8 +116,9 @@ public static class ClearwaterPoolBake
         {
             if (m == null) continue;
             Floor(m, d, dry, origin);
-            if (m.HasProperty("_WaveScale")) m.SetFloat("_WaveScale", pool.waveStrength);
-            if (m.HasProperty("_Indoor")) m.SetFloat("_Indoor", pool.indoor ? 1f : 0f);
+            m.SetFloat("_Calm", 1f - pool.waveStrength);
+            m.SetFloat("_Indoor", pool.indoor ? 1f : 0f);
+            m.SetFloat("_EnvGain", 1f);
             // (seen from below and fogged only by a camera in it)
             Rect a = pool.Area;
             m.SetVector("_BodyArea", new Vector4(a.xMin, a.yMin, a.xMax, a.yMax));
@@ -146,7 +147,7 @@ public static class ClearwaterPoolBake
         fr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         fr.receiveShadows = false;
         fr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-        fr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        fr.reflectionProbeUsage = pool.indoor ? UnityEngine.Rendering.ReflectionProbeUsage.BlendProbes : UnityEngine.Rendering.ReflectionProbeUsage.Off;
         fr.enabled = false;
 
         // caustics on the basin and on the avatars in it, straight down over the pool

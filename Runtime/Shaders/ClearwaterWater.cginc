@@ -186,11 +186,12 @@ float4 fragSide(v2f i)
         R = tex2D(_Rip, ruv);
         CwShore shi = cwShoreSw(xz, cwFloorDepth2(xz).y, swPix); // waves feel obstacles too
         // the thin run-up sheet does not carry the open-water swell
-        hsum = (A.x + WB * SC * B.x) * (1.0 - 0.75 * shi.swash) + R.x + shi.eta;
+        hsum = (A.x + WB * SC * B.x) * CW_WAVE * (1.0 - 0.75 * shi.swash) + R.x + shi.eta;
         t = (hsum - uCam.y) / wd.y;
     }
     t = max(t, 0.0);
     float3 P = uCam + wd * t;
+    cwEnvPos = i.origin + cwToJS(P); // (indoors the room is reflected from here)
     // (the sea: none in a pool's basin, whose own water is there)
     [branch] if (_PoolMaskArea.w > 0.0) clip(cwInPool(i.origin + cwToJS(P)) ? -1.0 : 1.0);
     // Anything standing out of the water between the raised plane and the surface (an avatar's waist, a post) is
@@ -211,7 +212,7 @@ float4 fragSide(v2f i)
 
     A = texBS(_Surf, P.xz / uL);
     B = texBS(_Surf, mulM(P.xz) / (uL * SC) + 0.37);
-    float calm = 1.0 - 0.75 * shore.swash;
+    float calm = (1.0 - 0.75 * shore.swash) * CW_WAVE; // (a pool's calmer surface too)
     float2 slope = (A.yz + WB * mulMt(B.yz)) * calm + R.yz + float2(etaX - shore.eta, shore.eta - etaU) / SE;
     float4 Cm = tex2D(_Surf, mulM2(P.xz) / (uL * 0.13) + 0.71);
     slope += 0.13 * exp(-t * 0.18) * mulM2t(Cm.yz) * calm;
@@ -228,7 +229,7 @@ float4 fragSide(v2f i)
                           cwNoise(fq + float2(0, 0.15)) - cwNoise(fq - float2(0, 0.15))) / 0.3;
         slope += shore.swash * 0.035 * g * float2(5.5, 2.2) / 5.5;
     }
-    float var = max(A.w - dot(A.yz, A.yz), 0.0) + WB * WB * max(B.w - dot(B.yz, B.yz), 0.0);
+    float var = (max(A.w - dot(A.yz, A.yz), 0.0) + WB * WB * max(B.w - dot(B.yz, B.yz), 0.0)) * CW_WAVE * CW_WAVE;
     float3 n = normalize(float3(-slope.x, 1.0, -slope.y));
     float dist = t;
     float3 v = -wd;

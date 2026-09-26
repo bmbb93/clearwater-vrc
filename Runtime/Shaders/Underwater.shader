@@ -35,6 +35,9 @@ Shader "Clearwater/Underwater"
         [HideInInspector] _UserArea ("User terrain area (centre, size, on)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
         [HideInInspector] _PoolMask ("Pools: their surfaces and floors, cut out of the sea (baked)", 2D) = "black" {}
+        [HideInInspector] _Calm ("Pool: 1 - its wave strength (0 = the sea)", Float) = 0
+        [HideInInspector] _Indoor ("Pool: indoors (no sun; the room's reflection probe for the sky)", Float) = 0
+        [HideInInspector] _EnvGain ("Pool indoors: the room's brightness in it", Float) = 1
         [HideInInspector] _PoolMaskArea ("Its area (world x, z corner, size, 1 = any pools)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _BodyArea ("Pool: its footprint (world x, z min, x, z max; set by its bake)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _BodyFloor ("Pool: its floor (world y), 1 (0 = the sea)", Vector) = (0, 0, 0, 0)
@@ -105,6 +108,7 @@ Shader "Clearwater/Underwater"
             float4 frag(v2f i) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+                cwEnvPos = _WorldSpaceCameraPos; // (indoors the room is seen from the camera)
                 float3 sun = cwSun();
                 float camY = _WorldSpaceCameraPos.y - unity_ObjectToWorld._m13;
                 float3 rdWorld = normalize(i.wpos - _WorldSpaceCameraPos);

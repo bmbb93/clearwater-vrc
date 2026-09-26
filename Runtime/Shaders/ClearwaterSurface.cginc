@@ -28,19 +28,18 @@ float cwSurfaceHeight(float2 xz)
     float4 B = tex2Dlod(_Surf, float4(mulM(xz) / (_PatchSize * SC) + 0.37, 0, 0));
     float4 R = tex2Dlod(_Rip, float4((xz - _RipCenter.xy) / _RipSize + 0.5, 0, 0));
     CwShore s = cwShore(xz, cwFloorDepth2(xz).y);
-    return (A.x + WB * SC * B.x) * (1.0 - 0.75 * s.swash) + R.x + s.eta;
+    return (A.x + WB * SC * B.x) * CW_WAVE * (1.0 - 0.75 * s.swash) + R.x + s.eta;
 }
 
 bool cwCameraNearSurface(float waterY) { return abs(_WorldSpaceCameraPos.y - waterY) < CW_SURFACE_BAND; }
 
-// Is this camera in this water (seen from below, fogged)? A pool (_BodyFloor.w = 1): only in its footprint (_BodyArea:
-// world x, z min, x, z max) and above its floor (_BodyFloor.x, world y) - not a camera on the storey under it. The
-// sea (w = 0): anywhere but in a pool (the pool mask) - not a camera in a pool below the sea's level.
-float4 _BodyArea, _BodyFloor;
+// Is this camera in this water (seen from below, fogged)? A pool: only in its footprint and above its floor
+// (cwInBody) - not a camera on the storey under it. The sea: anywhere but in a pool (the pool mask) - not a camera
+// in a pool below the sea's level.
 bool cwCamInBody()
 {
     float3 c = _WorldSpaceCameraPos;
-    [branch] if (_BodyFloor.w > 0.0) return all(c.xz >= _BodyArea.xy) && all(c.xz <= _BodyArea.zw) && c.y > _BodyFloor.x;
+    [branch] if (_BodyFloor.w > 0.0) return cwInBody(c);
     return !cwInPool(c);
 }
 
