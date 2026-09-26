@@ -97,6 +97,18 @@ public class ClearwaterController : UdonSharpBehaviour
             underwaterMaterial.SetFloat("_SwashHeight", waterMaterial.GetFloat("_SwashHeight"));
             underwaterMaterial.SetFloat("_SwashRunup", waterMaterial.GetFloat("_SwashRunup"));
         }
+        CopyClouds(waterMaterial);
+        CopyClouds(seabedMaterial);
+    }
+
+    // the water and the seabed reflect and refract the sky: give them its clouds
+    void CopyClouds(Material m)
+    {
+        if (m == null || skyMaterial == null) return;
+        m.SetFloat("_CloudCover", skyMaterial.GetFloat("_CloudCover"));
+        m.SetFloat("_CloudSize", skyMaterial.GetFloat("_CloudSize"));
+        m.SetFloat("_CloudSpeed", skyMaterial.GetFloat("_CloudSpeed"));
+        m.SetFloat("_CloudDir", skyMaterial.GetFloat("_CloudDir"));
     }
 
     public override void OnPlayerJoined(VRCPlayerApi player) { RefreshPlayers(); }

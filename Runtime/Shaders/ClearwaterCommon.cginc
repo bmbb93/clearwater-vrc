@@ -30,6 +30,82 @@ float cwRidge(float a) // periodic headland silhouette, elevation in radians (~1
     return 0.040 + 0.016 * sin(a * 2.0 + 0.7) + 0.011 * sin(a * 5.0 + 2.1) + 0.006 * sin(a * 11.0 + 0.3) + 0.003 * sin(a * 23.0 + 1.7);
 }
 
+// Clouds (optional): a layer of fair-weather cumulus 1.5 km up, drifting with the wind and slowly changing shape.
+// Set on the sky material; the water and the seabed get copies (they reflect and refract the same sky).
+float _CloudCover; // 0..1, how much of the sky they cover (0: none)
+float _CloudSize;  // m across a typical cloud
+float _CloudSpeed; // m/s the layer drifts
+float _CloudDir;   // degrees, the way it drifts: clockwise from world +z
+
+#define CW_CLOUD_H 1500.0
+
+// where along d (JS space, d.y > 0) the ray meets the layer, in cloud sizes (drifted and warped: the shapes
+// change as they go); fp = how many cloud sizes a pixel spans there (fwE = fwidth(d.y))
+float2 cwCloudUV(float3 d, float fwE, out float fp)
+{
+    float y = d.y + 0.06;                          // (the layer flattened toward the horizon: never infinitely far)
+    float s = 1.0 / max(_CloudSize, 50.0);
+    float2 p = d.xz * (CW_CLOUD_H / y) * s;
+    fp = fwE * CW_CLOUD_H * (length(d.xz) + y) / (y * y) * s;
+    float a = radians(_CloudDir);
+    float t = _Time.y;
+    float2 q = p - float2(sin(a), -cos(a)) * (_CloudSpeed * s * t);
+    // a slow warp of its own, so they grow, shrink and part rather than slide past like a picture
+    float tw = t * 0.012;
+    q += 0.45 * float2(cwNoise(q * 0.7 + float2(tw, 3.1)), cwNoise(q * 0.7 + float2(5.7, -tw))) - 0.225;
+    return q;
+}
+
+// the clouds' two broadest octaves (as in cwFbm2): enough to tell which side of a cloud faces the sun
+inline float cwCloudCoarse(float2 q) { return 0.5 * cwNoise(q) + 0.25 * cwNoise(q * 2.03 + 17.1); }
+
+// density 0..1 of the layer at q, a pixel spanning fp there (far off, the detail averages out to haze);
+// coarse = its two broadest octaves there
+float cwCloudDensity(float2 q, float fp, out float coarse)
+{
+    float far = smoothstep(0.15, 0.6, fp);
+    coarse = cwCloudCoarse(q);
+    // the finer octaves turned off the lattice's axes, so its squares don't show along the edges
+    float2 p = mul(float2x2(0.80, -0.60, 0.60, 0.80), q) * 4.12 + 3.3;
+    float2 pd = mul(float2x2(0.28, 0.96, -0.96, 0.28), q) * 17.3 + 7.7;
+    float n = coarse + 0.125 * cwNoise(p) + 0.0625 * cwNoise(mul(float2x2(0.80, -0.60, 0.60, 0.80), p) * 2.03 + 11.9)
+            + 0.05 * (cwNoise(pd) - 0.5) * (1.0 - smoothstep(0.01, 0.04, fp)); // (crisp edges)
+    n = lerp(n, 0.47, far);
+    float thr = lerp(0.74, 0.30, saturate(_CloudCover));
+    return smoothstep(thr, thr + 0.12 + 0.3 * far, n);
+}
+
+// how much of the sun gets through the clouds seen along d (for the sun's disc)
+float cwCloudSunT(float3 d)
+{
+    if (_CloudCover <= 0.0 || d.y <= 0.0) return 1.0;
+    float fp, coarse; float2 q = cwCloudUV(d, 0.0, fp);
+    return 1.0 - 0.97 * cwCloudDensity(q, 0.0, coarse);
+}
+
+// the sky c seen along d with the clouds in front of it (e = d.y, mu = the cosine to the sun, hor = horizon colour)
+float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float fwE)
+{
+    [branch] if (_CloudCover > 0.0 && d.y > 0.0)
+    {
+        float fp, coarse; float2 q = cwCloudUV(d, fwE, fp);
+        float dens = cwCloudDensity(q, fp, coarse);
+        [branch] if (dens > 0.0)
+        {
+            // lit from the sun's side, shaded where the cloud thickens toward the sun
+            float2 toSun = normalize(sun.xz + 1e-5) * 0.12;
+            float lit = saturate(0.55 + 3.5 * (coarse - cwCloudCoarse(q + toSun)));
+            lit = lerp(lit, 0.6, smoothstep(0.15, 0.6, fp));
+            float3 col = lerp(float3(0.46, 0.52, 0.61), float3(1.30, 1.24, 1.12), lit) * lerp(0.75, 1.0, saturate(sun.y * 3.0));
+            // thin edges round the sun glow (light scattered forward through them)
+            col += float3(1.0, 0.86, 0.66) * 2.5 * pow(max(mu, 0.0), 12.0) * (1.0 - dens);
+            col = lerp(hor, col, smoothstep(0.0, 0.25, d.y)); // far ones fade into the haze
+            c = lerp(c, col, dens * smoothstep(0.0, 0.04, d.y));
+        }
+    }
+    return c;
+}
+
 // sky radiance for a JS-space direction (HDR, linear). fwE = fwidth(d.y), for the anti-aliased ridge edge;
 // pass it in when calling from inside a dynamic branch.
 float3 cwSkyFw(float3 d, float3 sun, float fwE)
@@ -39,6 +115,7 @@ float3 cwSkyFw(float3 d, float3 sun, float fwE)
     float3 zen = float3(0.11, 0.27, 0.62), hor = float3(0.66, 0.78, 0.90);
     float3 c = lerp(hor, zen, pow(saturate(e), 0.42));
     c += float3(1.0, 0.86, 0.66) * (0.22 * pow(max(mu, 0.), 6.) + 0.30 * pow(max(mu, 0.), 64.) + 1.6 * pow(max(mu, 0.), 2400.));
+    c = cwCloudsOver(c, d, sun, mu, hor, fwE);
     // distant headland: pine canopy over pale limestone, softened by ~2 km of air
     float a = atan2(d.z, d.x);
     float r = cwRidge(a) + 0.0045 * (cwNoise(float2(a * 260.0, 0.0)) - 0.5) + 0.002 * (cwNoise(float2(a * 900.0, 3.0)) - 0.5);

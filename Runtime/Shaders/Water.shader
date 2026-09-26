@@ -21,6 +21,10 @@ Shader "Clearwater/Water"
         [Header(Look)]
         _SunDir ("Sun direction (world, towards sun)", Vector) = (0.054, 0.515, 0.855, 0)
         _SunIntensity ("Sun intensity", Float) = 6
+        [HideInInspector] _CloudCover ("Clouds: cover (copied from the sky)", Range(0, 1)) = 0
+        [HideInInspector] _CloudSize ("Clouds: size (m)", Float) = 900
+        [HideInInspector] _CloudSpeed ("Clouds: drift (m/s)", Float) = 8
+        [HideInInspector] _CloudDir ("Clouds: drift direction (deg)", Float) = 60
         [Toggle(_CW_TONEMAP)] _Tonemap ("Tone map in shader (turn off when using post-process tone mapping)", Float) = 1
         _Exposure ("Exposure", Float) = 0.63
         _SeaHalfSize ("Sea half size (m, set by the coast bake): the edge fades into the haze", Float) = 2500

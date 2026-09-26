@@ -6,6 +6,11 @@ Shader "Clearwater/Skybox"
     {
         _SunDir ("Sun direction (world, towards sun)", Vector) = (0.054, 0.515, 0.855, 0)
         _SunIntensity ("Sun intensity", Float) = 6
+        [Header(Clouds (the water and the seabed get copies of these))]
+        _CloudCover ("Cover (0 = no clouds)", Range(0, 1)) = 0
+        _CloudSize ("Size (m across a cloud)", Float) = 900
+        _CloudSpeed ("Drift speed (m/s, 0 = still)", Float) = 8
+        _CloudDir ("Drift direction (degrees clockwise from +Z)", Range(0, 360)) = 60
         [Toggle(_CW_TONEMAP)] _Tonemap ("Tone map in shader", Float) = 1
         _Exposure ("Exposure", Float) = 0.63
     }
@@ -46,7 +51,8 @@ Shader "Clearwater/Skybox"
                 float3 rd = normalize(cwToJS(i.dir));
                 float3 sun = cwSun();
                 float3 c = cwSky(rd, sun);
-                c += float3(1.0, 0.90, 0.74) * _SunIntensity * 18.0 * smoothstep(0.99996, 0.999985, dot(rd, sun));
+                float disc = smoothstep(0.99996, 0.999985, dot(rd, sun));
+                [branch] if (disc > 0.0) c += float3(1.0, 0.90, 0.74) * _SunIntensity * 18.0 * disc * cwCloudSunT(rd);
                 // below the horizon: the far water's haze colour, so the plane's far edge blends away
                 float muh = max(dot(normalize(float3(rd.x, 0.0, rd.z) + 1e-5), sun), 0.0);
                 float3 hazeC = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(muh, 6.0) + 0.3 * pow(muh, 64.0));
@@ -57,4 +63,5 @@ Shader "Clearwater/Skybox"
         }
     }
     Fallback Off
+    CustomEditor "ClearwaterSkyGUI"
 }

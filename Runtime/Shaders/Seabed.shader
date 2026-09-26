@@ -15,6 +15,10 @@ Shader "Clearwater/Seabed"
         _RipCenter ("Ripple window centre (xz, water space)", Vector) = (0, 0, 0, 0)
         _SunDir ("Sun direction (world, towards sun)", Vector) = (0.054, 0.515, 0.855, 0)
         _SunIntensity ("Sun intensity", Float) = 6
+        [HideInInspector] _CloudCover ("Clouds: cover (copied from the sky)", Range(0, 1)) = 0
+        [HideInInspector] _CloudSize ("Clouds: size (m)", Float) = 900
+        [HideInInspector] _CloudSpeed ("Clouds: drift (m/s)", Float) = 8
+        [HideInInspector] _CloudDir ("Clouds: drift direction (deg)", Float) = 60
         [Toggle(_CW_TONEMAP)] _Tonemap ("Tone map in shader", Float) = 1
         _Exposure ("Exposure", Float) = 0.63
         _CoastTex ("Coast: shore coordinates u, v (baked)", 2D) = "black" {}

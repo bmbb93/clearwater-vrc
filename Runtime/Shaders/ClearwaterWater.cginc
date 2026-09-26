@@ -188,6 +188,10 @@ float4 fragSide(v2f i)
     }
     t = max(t, 0.0);
     float3 P = uCam + wd * t;
+    // Anything standing out of the water between the raised plane and the surface (an avatar's waist, a post) is
+    // in front of the water here: the depth buffer let the plane over it, so let it show through.
+    float sceneFront = sceneDistance(i.screenPos.xy / i.screenPos.w, rdWorld);
+    [branch] if (!below && _ShoreWaves > 0.5) clip(sceneFront - t + 0.01);
     // no water over the beach
     float2 fd = cwFloorDepth2(P.xz); // ground, and what the waves feel (obstacles included)
     float floorP = fd.x;
@@ -248,7 +252,8 @@ float4 fragSide(v2f i)
         [branch] if (window)
         {
             through = cwSkyFw(ta, uSun, fwRd) * 1.1;
-            through += SUN * 18.0 * smoothstep(0.9990, 0.99995, dot(ta, uSun)) * (1.0 - cwFresnel(uSun.y, CW_IOR));
+            float disc = smoothstep(0.9990, 0.99995, dot(ta, uSun));
+            [branch] if (disc > 0.0) through += SUN * 18.0 * disc * (1.0 - cwFresnel(uSun.y, CW_IOR)) * cwCloudSunT(ta);
         }
 
         // Things above the water (a head, a raised arm) seen through the window: the refracted ray into
@@ -474,7 +479,8 @@ float4 fragSide(v2f i)
     {
         float3 skyc = cwSkyFw(rd, uSun, fwRd);
         float mu = dot(rd, uSun);
-        skyc += SUN * 18.0 * smoothstep(0.99996, 0.999985, mu);
+        float disc = smoothstep(0.99996, 0.999985, mu);
+        [branch] if (disc > 0.0) skyc += SUN * 18.0 * disc * cwCloudSunT(rd);
         col = lerp(col, skyc, hz);
     }
 
