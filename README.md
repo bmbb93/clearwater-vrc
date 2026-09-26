@@ -60,7 +60,7 @@ ALCOM / VCC にこのパッケージのリポジトリを追加し、ワール�
 | Demo_Cove | `Open Cove (a mesh as the ground)` | メッシュで作った砂の入り江。外側の地面を「Match the user terrain」で同じ砂にしています | 自分の地形を使う |
 | Demo_Harbor | `Open Harbor (a quay and a pier)` | 垂直な岸壁、階段護岸、スロープ、杭で立つ桟橋。杭には Obstacle を付けています | 自分の地形を使う、物を置く |
 | Demo_Pool | `Open Pool (still water only)` | 海のない 25 m プール。深さは 0.5 m で、ジャンプすればプールサイドに上がれます。Pool を使わず、線を `Closed` にして囲み、打ち寄せる波をオフにしています | プールを置く（最初の段落） |
-| Demo_Resort | `Open Resort (the sea and two pools)` | 海辺の建物に、1 階の屋内プールと 2 階のテラスのプール | プールを置く |
+| Demo_Resort | `Open Resort (the sea and two pools)` | 海辺の建物に、1 階の屋内プールと 2 階のテラスのプール。テラスへは、海に向かって右手の外壁沿いのスロープで上がれます。どちらのプールも深さ 0.7 m で、ジャンプすれば縁に上がれます | プールを置く |
 | Demo_Terrain | `Open Terrain (a Unity Terrain)` | Unity の Terrain で作った入り江・岬・砂州 | 自分の地形を使う |
 
 デモは、必ずメニューの `Open ...` から開いてください。Bake の結果はプロジェクトに 1 組しかなく、別のシーンを Bake すると上書きされます。メニューから開くとそのデモを Bake し直しますが、Project ウィンドウからシーンを直接開くと、直前に Bake したシーンの結果で表示が崩れます。

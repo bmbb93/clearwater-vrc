@@ -146,8 +146,8 @@ public static class ClearwaterDemoScenes
     }
 
     // a resort by the sea (the default beach): a building on the land with an indoor pool on its ground
-    // floor (its floor below the sea's level and the land's: the sea's ground and water are cut round it) in a hall
-    // open towards the sea, and an outdoor pool on the terrace upstairs, over the hall; lit indoors, with a reflection
+    // floor (its floor below the land's: the sea's ground and water are cut round it) in a hall open towards the sea,
+    // and an outdoor pool on the terrace upstairs, over the hall, with a ramp up to it; lit indoors, with a reflection
     // probe
     static void BuildResort()
     {
@@ -176,9 +176,22 @@ public static class ClearwaterDemoScenes
         Wall(c00, c10, ground, floor2); Wall(c10, c11, ground, floor2); Wall(c01, c00, ground, floor2);
         Wall(c11, c01, ground, floor1); Wall(c11, c01, ceiling, floor2);
         Child(building, "Walls", Quads("ResortWalls", walls, 1f), wall, Vector3.zero);
-        // the pools: each at its water's height, its basin under it
-        Pool("Pool (ground floor)", at + new Vector3(pool1.center.x, floor1 - 0.1f, pool1.center.y), pool1.size, 1.4f, true, tiles, "ResortBasin1");
-        Pool("Pool (terrace)", at + new Vector3(pool2.center.x, floor2 - 0.1f, pool2.center.y), pool2.size, 1.2f, false, tiles, "ResortBasin2");
+        // a ramp up to the terrace outside the +x wall (on the right facing the sea): from the ground by the sea side
+        // (about 14 degrees) to a landing level with the terrace, a parapet 1 m high along its outer edge and its end
+        const float rx0 = 15f, rx1 = 17.5f, rzBottom = 11f, rzTop = -7f, rzEnd = -11f, foot = 0.45f, below = 0.4f, rail = 1f;
+        var ramp = new List<Vector3[]>
+        {
+            new[] { new Vector3(rx0, floor2, rzTop), new Vector3(rx0, foot, rzBottom), new Vector3(rx1, foot, rzBottom), new Vector3(rx1, floor2, rzTop) },
+            Rect(rx0, rzEnd, rx1, rzTop, floor2),
+        };
+        void BothFaces(Vector3[] q) { ramp.Add(q); ramp.Add(new[] { q[1], q[0], q[3], q[2] }); }
+        BothFaces(new[] { new Vector3(rx1, below, rzBottom), new Vector3(rx1, below, rzTop), new Vector3(rx1, floor2 + rail, rzTop), new Vector3(rx1, foot + rail, rzBottom) });
+        BothFaces(new[] { new Vector3(rx1, below, rzTop), new Vector3(rx1, below, rzEnd), new Vector3(rx1, floor2 + rail, rzEnd), new Vector3(rx1, floor2 + rail, rzTop) });
+        BothFaces(new[] { new Vector3(rx1, below, rzEnd), new Vector3(rx0, below, rzEnd), new Vector3(rx0, floor2 + rail, rzEnd), new Vector3(rx1, floor2 + rail, rzEnd) });
+        Child(building, "Ramp", Quads("ResortRamp", ramp, 1f), stone, Vector3.zero);
+        // the pools: each at its water's height, its basin under it (0.7 m deep: a jump climbs the 0.8 m out)
+        Pool("Pool (ground floor)", at + new Vector3(pool1.center.x, floor1 - 0.1f, pool1.center.y), pool1.size, 0.7f, true, tiles, "ResortBasin1");
+        Pool("Pool (terrace)", at + new Vector3(pool2.center.x, floor2 - 0.1f, pool2.center.y), pool2.size, 0.7f, false, tiles, "ResortBasin2");
         // the hall's lights and its reflection probe
         foreach (float x in new[] { -8f, 6f })
         {
