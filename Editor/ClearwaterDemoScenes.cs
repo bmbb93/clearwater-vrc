@@ -82,6 +82,9 @@ public static class ClearwaterDemoScenes
         rock.name = "Rock"; rock.transform.SetParent(root.transform, false);
         rock.transform.localPosition = new Vector3(-40, -1.2f, 14); rock.transform.localScale = new Vector3(9, 4, 7);
         rock.GetComponent<MeshRenderer>().sharedMaterial = Mat("Rock", new Color(0.45f, 0.44f, 0.42f), RockTex(), 0.1f, Vector2.one * 2);
+        // (its collider the mesh itself: a sphere collider on a stretched sphere is a ball as wide as the widest axis)
+        Object.DestroyImmediate(rock.GetComponent<SphereCollider>());
+        rock.AddComponent<MeshCollider>();
         MeetShore(coast, shore);
         Finish(coast, root, true);
         // the generated ground past the mesh in the same sand (Match the user terrain)
