@@ -204,7 +204,10 @@ float3 cwInvTonemap(float3 y)
     float3 x = (-B - sqrt(max(B * B - 4.0 * A * Cc, 0.0))) / (2.0 * A);
     return x / max(_Exposure, 1e-4);
 #else
-    return y;
+    // Already linear HDR (tone mapping in post-processing). Capped where the in-shader curve tops out (its inverse
+    // at 0.985), so the water in front of it dims the sun and the glow round it as it does in the default mode;
+    // uncapped, seen from under the water they spread into a wide white blur.
+    return min(max(y, 0.0), 4.97 / max(_Exposure, 1e-4));
 #endif
 }
 
