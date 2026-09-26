@@ -206,6 +206,11 @@ float4 fragSide(v2f i)
     float2 slope = (A.yz + WB * mulMt(B.yz)) * calm + R.yz + float2(etaX - shore.eta, shore.eta - etaU) / SE;
     float4 Cm = tex2D(_Surf, mulM2(P.xz) / (uL * 0.13) + 0.71);
     slope += 0.13 * exp(-t * 0.18) * mulM2t(Cm.yz) * calm;
+    // Ripples a hand's breadth long, seen from below: the window into the air bends every one of them into its
+    // edge and the sky inside (on real water it is torn into small bright shapes); from above they are lost in
+    // the reflection's blur, so it is left as it was.
+    float4 Rp = tex2D(_Surf, mulM(P.xz) / (uL * 0.045) + 0.53);
+    slope += (below ? 0.5 * exp(-t * 0.2) : 0.0) * mulMt(Rp.yz) * calm;
     // the sheet's own small ripples, stretched along the flow up and down the slope
     [branch] if (shore.swash > 0.0)
     {
@@ -218,22 +223,33 @@ float4 fragSide(v2f i)
     float3 n = normalize(float3(-slope.x, 1.0, -slope.y));
     float dist = t;
     float3 v = -wd;
+    // seen from below: k = cos^2 of the angle into the air (negative: total internal reflection), and how much it
+    // varies across the pixel (taken here, outside any branch)
+    float cosU = max(dot(wd, n), 0.02);
+    float kU = 1.0 - CW_IOR * CW_IOR * (1.0 - cosU * cosU);
+    float kFw = fwidth(kU);
 
     if (below)
     {
         // ---- seen from under the water: Snell's window, total internal reflection outside it ----
+        // The light let through falls steeply to nothing at the window's edge (the critical angle), following the
+        // Fresnel curve rather than switched on and off, and averaged over the pixel's spread so the edge stays sharp
+        // without flickering (a hard switch left ragged patches of sky scattered round the window). Blurring it by
+        // the slopes smaller than a pixel as well made the edge a soft haze: on real water it is crisp.
         float3 nd = -n;
-        float nvb = max(dot(nd, v), 0.02);
-        float Fb = cwFresnel(nvb, 1.0 / CW_IOR);
-        float3 ta = refract(wd, nd, CW_IOR);
-        bool window = dot(ta, ta) > 0.5 && ta.y > 0.0;
+        float sigK = 0.5 * kFw + 0.002;
+        float Tb = (4.0 * cwTransmitK(kU) + cwTransmitK(kU - 1.732 * sigK) + cwTransmitK(kU + 1.732 * sigK)) / 6.0;
+        float Fb = 1.0 - Tb;
+        // the way into the air (at the edge and past it, along the horizon)
+        float3 ta = normalize(CW_IOR * wd - (CW_IOR * cosU - sqrt(max(kU, 0.0))) * n);
+        ta.y = max(ta.y, 0.0); ta = normalize(ta);
+        bool window = Tb > 0.001;
         float3 through = 0;
-        if (window)
+        [branch] if (window)
         {
             through = cwSkyFw(ta, uSun, fwRd) * 1.1;
             through += SUN * 18.0 * smoothstep(0.9990, 0.99995, dot(ta, uSun)) * (1.0 - cwFresnel(uSun.y, CW_IOR));
         }
-        else Fb = 1.0;
 
         // Things above the water (a head, a raised arm) seen through the window: the refracted ray into
         // the air, traced in screen space; anything off screen, under the water or sky leaves the sky.

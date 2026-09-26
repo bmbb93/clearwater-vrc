@@ -78,6 +78,14 @@ float cwFresnel(float ci, float n)
     return 0.5 * (rs * rs + rp * rp);
 }
 
+// share of the light let through from the water into the air, k = the squared cosine of its angle in the air
+// (k <= 0: totally reflected)
+float cwTransmitK(float k)
+{
+    if (k <= 0.0) return 0.0;
+    return 1.0 - cwFresnel(sqrt(1.0 - (1.0 - k) / (CW_IOR * CW_IOR)), 1.0 / CW_IOR);
+}
+
 // The demo's tone curve (exposure, ACES fit, slight desaturation, cool shadows). Output is display-referred;
 // Unity's linear->sRGB framebuffer encode stands in for the demo's pow(1/2.2).
 float _Exposure;
