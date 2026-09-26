@@ -154,9 +154,11 @@ Shader "Clearwater/Seabed"
                 float2 dpdx = ddx(p), dpdy = ddy(p);
                 float footprint = length(fwidth(i.wpos));
                 float depth = cwFloorDepth(p);
+                float shadow = SHADOW_ATTENUATION(i); // (the sun's shadows: avatars' and whatever stands here)
                 // Seen from above the water, submerged ground is always covered by the water surface, which traces
                 // the floor itself — skip it. The margin keeps the waterline (waves, ripples) fully shaded.
-                // Alpha 0 marks these pixels for the water, so it never mistakes them for a submerged object.
+                // Alpha 0 marks these pixels for the water, so it never mistakes them for a submerged object; their red
+                // is the sun's shadow here, for the water to darken the floor it traces with (an avatar's in the shallows).
                 // (a camera at the waterline decides per pixel: the part of its view that starts under the water
                 // sees the ground directly, with the underwater fog over it)
                 bool under = cwPixelUnder(normalize(i.wpos - _WorldSpaceCameraPos), _WaterOrigin.xyz);
@@ -171,7 +173,7 @@ Shader "Clearwater/Seabed"
                         float3 hz = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(mh, 6.0) + 0.3 * pow(mh, 64.0));
                         return float4(cwTonemap(hz * 0.95), 1.0);
                     }
-                    return float4(0, 0, 0, 0);
+                    return float4(shadow, 0, 0, 0);
                 }
                 float hgt, rockM;
                 float3 alb = cwFloorAlbedo(p, dpdx, dpdy, hgt, rockM);
@@ -184,8 +186,8 @@ Shader "Clearwater/Seabed"
                 {
                     // explicit gradients (we are inside a branch); x2 = one mip softer, the demo's LOD bias of 1
                     float3 caus = tex2Dgrad(_Caus, cwCausUV(p, hgt, sun), dpdx * (2.0 / _PatchSize), dpdy * (2.0 / _PatchSize)).rgb;
-                    float sunShade = 1.0;
-                    [branch] if (rockM > 0.0) sunShade = lerp(1.0, cwUnderSunShade(cwFloorNormal(p, rockM), sun), rockM);
+                    float sunShade = shadow;
+                    [branch] if (rockM > 0.0) sunShade *= lerp(1.0, cwUnderSunShade(cwFloorNormal(p, rockM), sun), rockM);
                     L = cwFloorRadianceUnder(p, depth, hgt, cwAlgae(alb, rockM), sun, caus, sunShade);
                 }
                 else
@@ -204,7 +206,6 @@ Shader "Clearwater/Seabed"
                     float film = cwWetFilm(p, -depth);
                     float3 dry = alb * lerp(0.72, 1.0, smoothstep(0.0, 0.3, -depth));
                     float3 albW = dry * (1.0 - 0.5 * film);
-                    float shadow = SHADOW_ATTENUATION(i);
                     L = albW / CW_PI * (cwSunColor() * max(dot(n, sun), 0.0) * shadow * ao + cwSkyIrr() * 1.3 * ao);
                     // the dry ground's own sheen (the bed look's smoothness; none on the rock, and the swash's film
                     // has its own)
@@ -217,7 +218,7 @@ Shader "Clearwater/Seabed"
                         // caustics, its absorption), so the water can hand over from this render to its own floor
                         // without a seam
                         float3 caus = tex2Dgrad(_Caus, cwCausUV(p, hgt, sun), dpdx * (2.0 / _PatchSize), dpdy * (2.0 / _PatchSize)).rgb;
-                        float3 Lu = cwFloorRadianceUnder(p, depth, hgt, cwAlgae(alb, rockM), sun, caus, 1.0);
+                        float3 Lu = cwFloorRadianceUnder(p, depth, hgt, cwAlgae(alb, rockM), sun, caus, shadow);
                         L = lerp(L, Lu, smoothstep(0.03, 0.15, depth));
                     }
                     // water standing here now: under it, the water surface draws the reflections and the foam

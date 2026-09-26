@@ -84,6 +84,19 @@ float sceneDistance(float2 uvD, float3 rdWorld)
 #define CW_GRAB_LOD(uv) tex2Dlod(_CWGrabWater, float4(uv, 0, 0))
 #endif
 
+// The sun's shadow on the floor at FP (water space round origin: the floor the water traces): the seabed mesh
+// drawn under the water leaves it on screen for the water, in the red of the pixels it marks with alpha 0. Read
+// where FP is on screen; 1 (lit) where the screen shows something else there (an avatar, the user terrain: in its
+// own material, with its own shadows) or FP is off screen.
+float cwFloorShadow(float3 FP, float3 origin)
+{
+    float4 c = UnityWorldToClipPos(origin + cwToJS(FP));
+    [branch] if (c.w <= 0.0 || abs(c.x) >= c.w || abs(c.y) >= c.w) return 1.0;
+    float4 g = ComputeGrabScreenPos(c);
+    float4 px = CW_GRAB_LOD(g.xy / g.w);
+    return px.a < 0.5 ? px.r : 1.0;
+}
+
 // Screen-space trace from a point Pw on the surface (world) along dirW, starting D metres out: what this
 // camera saw in that direction (depth texture), found by settling the distance along the ray (2 passes).
 // S = the point found; hit = 1 when it is on screen, not sky, and lies on the ray (not something nearer
@@ -344,8 +357,8 @@ float4 fragSide(v2f i)
     float hgt, rockM;
     float2 dFPdx = ddx(FP.xz), dFPdy = ddy(FP.xz);
     float3 alb = cwAlgae(cwFloorAlbedo(FP.xz, dFPdx, dFPdy, hgt, rockM), rockM);
-    float sunShade = 1.0;
-    [branch] if (rockM > 0.0) sunShade = lerp(1.0, cwUnderSunShade(cwFloorNormal(FP.xz, rockM), uSun), rockM);
+    float sunShade = cwFloorShadow(FP, i.origin);
+    [branch] if (rockM > 0.0) sunShade *= lerp(1.0, cwUnderSunShade(cwFloorNormal(FP.xz, rockM), uSun), rockM);
     float3 caus = tex2Dbias(_Caus, float4(cwCausUV(FP.xz, hgt, uSun), 0, 1.0)).rgb;
     float3 Lfloor = cwFloorRadianceUnder(FP.xz, depthHere, hgt, alb, uSun, caus, sunShade);
     float3 under = Lfloor * exp(-SIG_T * s) + cwInscatter(depthHere, s, tr, uSun);
@@ -366,8 +379,9 @@ float4 fragSide(v2f i)
         float2 offF = -slope * 0.06 * saturate(s);
         float dF = sceneDistance(uvD + offF, rdWorld) - t; // how far past the surface the scene there lies
         float3 Lu;
-        [branch] if (dF > 0.0 && dF < 2.0 * s + 1.0)
-            Lu = cwInvTonemap(CW_GRAB_LOD(uvG + float2(offF.x, offF.y * gsign)).rgb) * down;
+        float4 gU = CW_GRAB_LOD(uvG + float2(offF.x, offF.y * gsign));
+        [branch] if (dF > 0.0 && dF < 2.0 * s + 1.0 && gU.a >= 0.5) // (not the seabed's marked pixels at its edge)
+            Lu = cwInvTonemap(gU.rgb) * down;
         else
             Lu = cwFloorRadianceUnder(FP.xz, depthHere, 0.4, _UserMean.rgb, uSun, caus, 1.0);
         under = lerp(under, Lu * exp(-SIG_T * s) + cwInscatter(depthHere, s, tr, uSun), userOn);
@@ -419,7 +433,7 @@ float4 fragSide(v2f i)
     // ---- shoreline whitewater ----
     // (the grab read uses implicit derivatives, so it has to happen outside the branch or the compiler
     // flattens the branch and every pixel pays for the foam)
-    float3 behindGrab = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, i.grabPos.xy / i.grabPos.w).rgb;
+    float4 behindGrab = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, i.grabPos.xy / i.grabPos.w);
     // (worked out here, late: carried through the whole shader its values cost ~2 ms/eye in register pressure)
     float boreBand = 0.0;
     [branch] if (_ShoreWaves > 0.5) boreBand = cwBoreBand(cwShoreUV(P.xz));
@@ -451,9 +465,11 @@ float4 fragSide(v2f i)
         // beach beside it; the water only adds its surface (reflection, glints) and a little absorption. Deeper, over
         // 5-15 cm, the water's own floor trace with its caustics takes over.
         {
-            float3 floorThin = cwInvTonemap(behindGrab) * exp(-SIG_T * max(thickSand, 0.0) * 2.0);
+            float3 floorThin = cwInvTonemap(behindGrab.rgb) * exp(-SIG_T * max(thickSand, 0.0) * 2.0);
             float3 colThin = F * refl + (1.0 - F) * floorThin + spec;
-            col = lerp(colThin, col, smoothstep(0.05, 0.15, thickSand));
+            // (not where the grab has the seabed's marked pixels: ground left under more than 25 cm of still water,
+            // thin here only in a trough, which the water's own trace draws)
+            col = lerp(colThin, col, behindGrab.a < 0.5 ? 1.0 : smoothstep(0.05, 0.15, thickSand));
         }
         float2 eq = float2(suv.y, -(suv.x + run * shore.swash)) * 3.0;
         float rag = saturate(cwFbm2(eq) * 1.4 - 0.35) * 0.03 + cwNoise(eq * 6.0) * 0.008;
@@ -483,9 +499,10 @@ float4 fragSide(v2f i)
         // thin foam lets the water through; dense foam is brighter, its thin edges darker
         col = lerp(col, cwFoamLit(foam, g, n, uSun, v), saturate(foam * 1.15) * 0.9);
         // the last few millimetres of the sheet fade into the wet beach behind it, no hard clip line
-        float3 behind = cwInvTonemap(behindGrab);
-        // (only at the edge over sand: rock standing out of the water is cut by the depth buffer instead)
-        col = lerp(behind, col, smoothstep(0.0, 0.05, thickEdge) * 0.9 + 0.1 * saturate(thickEdge * 100.0));
+        float3 behind = cwInvTonemap(behindGrab.rgb);
+        // (only at the edge over sand: rock standing out of the water is cut by the depth buffer instead; and not
+        // the seabed's marked pixels)
+        col = lerp(behind, col, behindGrab.a < 0.5 ? 1.0 : smoothstep(0.0, 0.05, thickEdge) * 0.9 + 0.1 * saturate(thickEdge * 100.0));
     }
 
     // distant haze over the water
