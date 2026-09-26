@@ -50,6 +50,9 @@ v2f vertSide(appdata v)
     o.pos = UnityWorldToClipPos(o.wpos);
     if (!cwCameraNearSurface(o.origin.y) && (_WorldSpaceCameraPos.y < o.origin.y) != (CW_WATER_BELOW != 0))
         o.pos = float4(-2, -2, -2, 1); // the other side's pass
+    // a camera under the surface but not in this water (under a pool, a storey down; in a pool, for the sea) sees
+    // neither side: it is not under this water
+    if (_WorldSpaceCameraPos.y < o.origin.y && !cwCamInBody()) o.pos = float4(-2, -2, -2, 1);
     o.grabPos = ComputeGrabScreenPos(o.pos);
     o.screenPos = ComputeScreenPos(o.pos);
     return o;

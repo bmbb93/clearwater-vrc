@@ -36,6 +36,8 @@ Shader "Clearwater/Underwater"
         [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
         [HideInInspector] _PoolMask ("Pools: their surfaces and floors, cut out of the sea (baked)", 2D) = "black" {}
         [HideInInspector] _PoolMaskArea ("Its area (world x, z corner, size, 1 = any pools)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _BodyArea ("Pool: its footprint (world x, z min, x, z max; set by its bake)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _BodyFloor ("Pool: its floor (world y), 1 (0 = the sea)", Vector) = (0, 0, 0, 0)
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
         _SwashTrack ("Break timing track (generated)", 2D) = "black" {}
         _SwashBreaks ("Breaks: time, strength (generated)", 2D) = "black" {}
@@ -93,6 +95,8 @@ Shader "Clearwater/Underwater"
                 o.pos = UnityWorldToClipPos(o.wpos);
                 // (near the surface the fragments pick their own pixels: a camera at the waterline)
                 if (_WorldSpaceCameraPos.y - waterY >= CW_SURFACE_BAND) o.pos = float4(-2, -2, -2, 1);
+                // (nor for a camera not in this water: under a pool, a storey down; in a pool, for the sea's fog)
+                if (!cwCamInBody()) o.pos = float4(-2, -2, -2, 1);
                 o.grabPos = ComputeGrabScreenPos(o.pos);
                 o.screenPos = ComputeScreenPos(o.pos);
                 return o;

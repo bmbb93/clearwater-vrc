@@ -33,6 +33,7 @@ public static class ClearwaterPoolBake
         var pools = All();
         foreach (var p in pools) BakeOne(ctl, p, pools);
         ApplyMask(ctl, pools);
+        Register(ctl, pools);
     }
 
     /// <summary>Bakes one pool (and the pool mask; the sea's walkable ground is cut round it on the coast's bake).</summary>
@@ -43,6 +44,7 @@ public static class ClearwaterPoolBake
         var pools = All();
         BakeOne(ctl, pool, pools);
         ApplyMask(ctl, pools);
+        Register(ctl, pools);
         EditorSceneManager.MarkSceneDirty(pool.gameObject.scene);
         AssetDatabase.SaveAssets();
     }
@@ -116,6 +118,10 @@ public static class ClearwaterPoolBake
             Floor(m, d, dry, origin);
             if (m.HasProperty("_WaveScale")) m.SetFloat("_WaveScale", pool.waveStrength);
             if (m.HasProperty("_Indoor")) m.SetFloat("_Indoor", pool.indoor ? 1f : 0f);
+            // (seen from below and fogged only by a camera in it)
+            Rect a = pool.Area;
+            m.SetVector("_BodyArea", new Vector4(a.xMin, a.yMin, a.xMax, a.yMax));
+            m.SetVector("_BodyFloor", new Vector4(origin.y + deepest - 0.3f, 0, 0, 1));
             EditorUtility.SetDirty(m);
         }
         if (fogMat != null && fogMat.HasProperty("_MaxDistance")) fogMat.SetFloat("_MaxDistance", pool.fogDistance);
@@ -273,13 +279,50 @@ public static class ClearwaterPoolBake
             tex = ClearwaterSetup.Save(tex, "Pools/PoolMask.asset");
             at = new Vector4(corner.x, corner.y, size, 1);
         }
-        foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial, ctl.avatarCausticsMaterial, ctl.userBeachMaterial })
+        foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial, ctl.avatarCausticsMaterial, ctl.userBeachMaterial, ctl.underwaterMaterial })
         {
             if (m == null) continue;
             m.SetTexture("_PoolMask", tex);
             m.SetVector("_PoolMaskArea", at);
             EditorUtility.SetDirty(m);
         }
+    }
+
+    /// <summary>Hands the pools to the controller (each one's water, footprint, floor, materials and fog box), which
+    /// works out which water the viewer is in: its fog, its ripples, the touches and taps on it.</summary>
+    static void Register(ClearwaterController ctl, List<ClearwaterPool> pools)
+    {
+        var baked = new List<ClearwaterPool>();
+        foreach (var p in pools)
+        {
+            var w = p.transform.Find(WaterName);
+            if (w != null && w.gameObject.activeSelf && w.GetComponent<MeshRenderer>() != null) baked.Add(p);
+        }
+        int n = baked.Count;
+        Undo.RecordObject(ctl, "Pools");
+        ctl.pools = new Transform[n];
+        ctl.poolAreas = new Vector4[n];
+        ctl.poolFloors = new float[n];
+        ctl.poolWaterMaterials = new Material[n];
+        ctl.poolUnderwaterMaterials = new Material[n];
+        ctl.poolCausticsMaterials = new Material[n];
+        ctl.poolUnderwaterVolumes = new Renderer[n];
+        for (int i = 0; i < n; i++)
+        {
+            var p = baked[i];
+            var w = p.transform.Find(WaterName);
+            Rect a = p.Area;
+            ctl.pools[i] = w;
+            ctl.poolAreas[i] = new Vector4(a.xMin, a.yMin, a.xMax, a.yMax);
+            ctl.poolFloors[i] = p.transform.position.y + p.depth;
+            ctl.poolWaterMaterials[i] = w.GetComponent<MeshRenderer>().sharedMaterial;
+            var fog = w.Find(FogName);
+            ctl.poolUnderwaterVolumes[i] = fog != null ? fog.GetComponent<Renderer>() : null;
+            ctl.poolUnderwaterMaterials[i] = fog != null ? fog.GetComponent<Renderer>().sharedMaterial : null;
+            var caus = w.Find(CausticsName);
+            ctl.poolCausticsMaterials[i] = caus != null ? caus.GetComponent<Projector>().material : null;
+        }
+        EditorUtility.SetDirty(ctl);
     }
 
     /// <summary>A pool's footprint (world x, z; its water's extent) and the heights between which it is the pool's:

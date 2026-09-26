@@ -61,6 +61,8 @@ Shader "Clearwater/Water"
         [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
         [HideInInspector] _PoolMask ("Pools: their surfaces and floors, cut out of the sea (baked)", 2D) = "black" {}
         [HideInInspector] _PoolMaskArea ("Its area (world x, z corner, size, 1 = any pools)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _BodyArea ("Pool: its footprint (world x, z min, x, z max; set by its bake)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _BodyFloor ("Pool: its floor (world y), 1 (0 = the sea)", Vector) = (0, 0, 0, 0)
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
 
         [Header(Shoreline waves)]

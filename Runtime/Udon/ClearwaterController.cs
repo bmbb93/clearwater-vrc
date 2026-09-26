@@ -10,8 +10,10 @@ using VRC.Udon.Common.Interfaces;
 /// Drives the Clearwater water: keeps the local ripple simulation window under the viewer, turns players'
 /// feet and hands touching the water into ripples, lets anyone tap the water (Use / click) for everyone,
 /// and copies the sun light's direction into the water, caustics and sky materials.
-/// Positions handed to the shaders are in "water space": relative to the water object, with z negated
-/// (the original demo's axes, see ClearwaterCommon.cginc).
+/// Besides the sea there may be pools (ClearwaterPool), each its own water at its own height: the viewer is at one
+/// water at a time (a pool when over or in it, else the sea), which gets the ripples; each camera's fog is its water's.
+/// Positions handed to the shaders are in "water space": relative to the water object (the sea's, or the pool's the
+/// viewer is at), with z negated (the original demo's axes, see ClearwaterCommon.cginc).
 /// </summary>
 [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
 public class ClearwaterController : UdonSharpBehaviour
@@ -38,6 +40,18 @@ public class ClearwaterController : UdonSharpBehaviour
     [Header("Underwater")]
     [Tooltip("Inside-out box with the underwater fog; shown only while the local head is below the surface")]
     public Renderer underwaterVolume;
+
+    [Header("Pools (set by their bake)")]
+    [Tooltip("Each pool's water (at its surface)")]
+    public Transform[] pools;
+    [Tooltip("Each pool's footprint (world x, z min, x, z max)")]
+    public Vector4[] poolAreas;
+    [Tooltip("Each pool's floor at its deepest (world y)")]
+    public float[] poolFloors;
+    public Material[] poolWaterMaterials;
+    public Material[] poolUnderwaterMaterials;
+    public Material[] poolCausticsMaterials;
+    public Renderer[] poolUnderwaterVolumes;
 
     [Header("Ripple window (must match the ripple CRTs)")]
     public int rippleResolution = 512;
@@ -77,6 +91,10 @@ public class ClearwaterController : UdonSharpBehaviour
     public float swashLoop = 90f;
     float _submerged;
 
+    int _body = -1;       // the water the viewer is at: -1 the sea, else a pool (the ripples are on it)
+    int _poolCount;
+    bool[] _poolFog;
+    const float PoolAbove = 3f; // m over a pool's surface (and round it) within which the viewer is at the pool
     const int MaxQueue = 32;
     const int MaxPlayers = 96;
     const int BoneCount = 7;
@@ -97,6 +115,8 @@ public class ClearwaterController : UdonSharpBehaviour
 
     void Start()
     {
+        _poolCount = pools != null ? pools.Length : 0;
+        _poolFog = new bool[_poolCount];
         RefreshPlayers();
         if (!shoreWaves && shoreAudio != null) shoreAudio.Stop(); // still water: no surf
         if (underwaterMaterial != null && waterMaterial != null)
@@ -107,6 +127,8 @@ public class ClearwaterController : UdonSharpBehaviour
         }
         CopyClouds(waterMaterial);
         CopyClouds(seabedMaterial);
+        for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
+        SetRipCenters(new Vector4(1e5f, 1e5f, 0, 0)); // (the ripples are put on the viewer's water in Update)
     }
 
     // the water and the seabed reflect and refract the sky: give them its clouds
@@ -130,10 +152,40 @@ public class ClearwaterController : UdonSharpBehaviour
         for (int i = 0; i < _wasTouching.Length; i++) _wasTouching[i] = false;
     }
 
+    // water space of the water the viewer is at
     Vector2 ToWater(Vector3 p)
     {
-        Vector3 o = water.position;
+        Vector3 o = Origin(_body);
         return new Vector2(p.x - o.x, -(p.z - o.z));
+    }
+
+    Vector3 Origin(int body) { return body < 0 ? water.position : pools[body].position; }
+
+    // the pool whose water p is in or over: in its footprint (widened by margin), from a little under its floor to
+    // above over its surface; -1: none (the sea's)
+    int PoolAt(Vector3 p, float above, float margin)
+    {
+        for (int i = 0; i < _poolCount; i++)
+        {
+            Vector4 a = poolAreas[i];
+            if (p.x < a.x - margin || p.x > a.z + margin || p.z < a.y - margin || p.z > a.w + margin) continue;
+            if (p.y < poolFloors[i] - 0.3f || p.y > pools[i].position.y + above) continue;
+            return i;
+        }
+        return -1;
+    }
+
+    // the ripples on one water only: the others get a centre far away (none of the window on them)
+    void SetRipCenters(Vector4 far)
+    {
+        waterMaterial.SetVector("_RipCenter", far);
+        if (underwaterMaterial != null) underwaterMaterial.SetVector("_RipCenter", far);
+        if (seabedMaterial != null) seabedMaterial.SetVector("_RipCenter", far);
+        for (int i = 0; i < _poolCount; i++)
+        {
+            if (poolWaterMaterials[i] != null) poolWaterMaterials[i].SetVector("_RipCenter", far);
+            if (poolUnderwaterMaterials[i] != null) poolUnderwaterMaterials[i].SetVector("_RipCenter", far);
+        }
     }
 
     void Update()
@@ -149,15 +201,31 @@ public class ClearwaterController : UdonSharpBehaviour
             if (underwaterMaterial != null) underwaterMaterial.SetVector("_SunDir", sd);
             if (avatarCausticsMaterial != null) avatarCausticsMaterial.SetVector("_SunDir", sd);
             if (userBeachMaterial != null) userBeachMaterial.SetVector("_SunDir", sd);
+            for (int i = 0; i < _poolCount; i++)
+            {
+                if (poolWaterMaterials[i] != null) poolWaterMaterials[i].SetVector("_SunDir", sd);
+                if (poolUnderwaterMaterials[i] != null) poolUnderwaterMaterials[i].SetVector("_SunDir", sd);
+                if (poolCausticsMaterials[i] != null) poolCausticsMaterials[i].SetVector("_SunDir", sd);
+            }
         }
 
         VRCPlayerApi local = Networking.LocalPlayer;
         if (!Utilities.IsValid(local)) return;
 
-        // keep the ripple window centred a little ahead of the viewer's gaze, snapped to whole texels
+        // the water the viewer is at: a pool when over it or in it (or beside it), else the sea. Moving to another
+        // water, the window jumps to it (the old ripples slide out of it) and the drops waiting for the old one go
         VRCPlayerApi.TrackingData head = local.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
+        int body = PoolAt(head.position, PoolAbove, rippleSize * 0.3f);
+        if (body != _body)
+        {
+            _body = body;
+            _queueCount = 0;
+            SetRipCenters(new Vector4(1e5f, 1e5f, 0, 0));
+        }
+
+        // keep the ripple window centred a little ahead of the viewer's gaze, snapped to whole texels
         Vector3 f = head.rotation * Vector3.forward;
-        float above = Mathf.Max(head.position.y - water.position.y, 0.2f);
+        float above = Mathf.Max(head.position.y - Origin(_body).y, 0.2f);
         float look = above / Mathf.Max(-f.y, 0.2f) * 0.9f;
         Vector2 fxz = new Vector2(f.x, -f.z);
         if (fxz.sqrMagnitude > 1e-6f) fxz.Normalize();
@@ -167,11 +235,19 @@ public class ClearwaterController : UdonSharpBehaviour
         _center += new Vector2(dxT * tx, dzT * tx);
         rippleMaterial.SetVector("_Shift", new Vector4(dxT / rippleResolution, dzT / rippleResolution, 0, 0));
         Vector4 rc = new Vector4(_center.x, _center.y, 0, 0);
-        waterMaterial.SetVector("_RipCenter", rc);
-        if (underwaterMaterial != null) underwaterMaterial.SetVector("_RipCenter", rc);
+        if (_body < 0)
+        {
+            waterMaterial.SetVector("_RipCenter", rc);
+            if (underwaterMaterial != null) underwaterMaterial.SetVector("_RipCenter", rc);
+            if (seabedMaterial != null) seabedMaterial.SetVector("_RipCenter", rc);
+        }
+        else
+        {
+            if (poolWaterMaterials[_body] != null) poolWaterMaterials[_body].SetVector("_RipCenter", rc);
+            if (poolUnderwaterMaterials[_body] != null) poolUnderwaterMaterials[_body].SetVector("_RipCenter", rc);
+        }
         if (seabedMaterial != null)
         {
-            seabedMaterial.SetVector("_RipCenter", rc);
             // the ground grid follows the viewer, on its own 25 cm lattice so nothing swims
             Vector3 hp = head.position;
             seabedMaterial.SetVector("_GridCenter", new Vector4(Mathf.Round(hp.x * 4f) * 0.25f, 0, Mathf.Round(hp.z * 4f) * 0.25f, 0));
@@ -183,16 +259,25 @@ public class ClearwaterController : UdonSharpBehaviour
             avatarCausticsProjector.position = new Vector3(head.position.x, pp.y, head.position.z);
         }
 
-        bool under = head.position.y < water.position.y;
+        int headPool = PoolAt(head.position, SurfaceBand, 0f);
+        bool under = head.position.y < Origin(headPool).y;
         UpdateAudio(head.position, under);
-        if (underwaterVolume != null)
+        // A water's fog box is needed while any camera of ours is under it or at its waterline: the head, the screen
+        // view (it can differ from the head, e.g. third person) or the photo camera. Each camera may be at another
+        // water (a pool's, or the sea's); the fog shaders pick their pixels per camera (and only for one in their
+        // water), so a dry head and a diving photo camera both look right.
+        for (int i = 0; i < _poolCount; i++) _poolFog[i] = false;
+        bool seaFog = false;
+        if (headPool >= 0) _poolFog[headPool] = true; else seaFog = head.position.y < water.position.y + SurfaceBand;
+        VRCCameraSettings cam = VRCCameraSettings.ScreenCamera;
+        if (Utilities.IsValid(cam) && cam.Active && FogFor(cam.Position)) seaFog = true;
+        cam = VRCCameraSettings.PhotoCamera;
+        if (Utilities.IsValid(cam) && cam.Active && FogFor(cam.Position)) seaFog = true;
+        if (underwaterVolume != null && underwaterVolume.enabled != seaFog) underwaterVolume.enabled = seaFog;
+        for (int i = 0; i < _poolCount; i++)
         {
-            // the fog box is needed while any camera of ours is under water or at the waterline: the head, the
-            // screen view (it can differ from the head, e.g. third person) or the photo camera; its shader picks
-            // its pixels per camera, so a dry head and a diving photo camera both look right
-            bool fog = head.position.y < water.position.y + SurfaceBand ||
-                       CameraUnder(VRCCameraSettings.ScreenCamera) || CameraUnder(VRCCameraSettings.PhotoCamera);
-            if (underwaterVolume.enabled != fog) underwaterVolume.enabled = fog;
+            Renderer v = poolUnderwaterVolumes[i];
+            if (v != null && v.enabled != _poolFog[i]) v.enabled = _poolFog[i];
         }
 
         GatherBodyTouches();
@@ -203,9 +288,12 @@ public class ClearwaterController : UdonSharpBehaviour
         rippleMaterial.SetVector("_Drop3", PopDrop());
     }
 
-    bool CameraUnder(VRCCameraSettings cam)
+    // a camera at c needs its water's fog: marks a pool's; true when it is the sea's
+    bool FogFor(Vector3 c)
     {
-        return Utilities.IsValid(cam) && cam.Active && cam.Position.y < water.position.y + SurfaceBand;
+        int b = PoolAt(c, SurfaceBand, 0f);
+        if (b >= 0) { _poolFog[b] = true; return false; }
+        return c.y < water.position.y + SurfaceBand;
     }
 
     // Nearest point of the waterline to p (in plan), counting a quiet shore as further away (distance over its wave
@@ -273,7 +361,6 @@ public class ClearwaterController : UdonSharpBehaviour
 
     void GatherBodyTouches()
     {
-        float y0 = water.position.y;
         for (int p = 0; p < _playerCount; p++)
         {
             VRCPlayerApi pl = _players[p];
@@ -283,13 +370,15 @@ public class ClearwaterController : UdonSharpBehaviour
                 int slot = p * BoneCount + b;
                 Vector3 pos = pl.GetBonePosition(Bone(b));
                 if (pos == Vector3.zero) continue; // no humanoid avatar loaded
-                // a body part is "at the surface" when it is within touchHeight of it, above or below
-                bool touching = Mathf.Abs(pos.y - y0) < touchHeight;
+                // a body part is "at the surface" when it is within touchHeight of it, above or below: of the pool
+                // it is in, or the sea's (its ripples show when it is the water the viewer is at)
+                int body = PoolAt(pos, touchHeight, 0f);
+                bool touching = Mathf.Abs(pos.y - Origin(body).y) < touchHeight;
                 if (touching)
                 {
                     Vector3 d = pos - _lastTouch[slot]; d.y = 0;
-                    if (!_wasTouching[slot]) { Enqueue(pos, tapRadius * 0.8f, stepStrength); _lastTouch[slot] = pos; }
-                    else if (d.magnitude > stepSpacing) { Enqueue(pos, tapRadius * 0.7f, stepStrength * 0.8f); _lastTouch[slot] = pos; }
+                    if (!_wasTouching[slot]) { Enqueue(pos, tapRadius * 0.8f, stepStrength, body); _lastTouch[slot] = pos; }
+                    else if (d.magnitude > stepSpacing) { Enqueue(pos, tapRadius * 0.7f, stepStrength * 0.8f, body); _lastTouch[slot] = pos; }
                 }
                 _wasTouching[slot] = touching;
             }
@@ -322,7 +411,16 @@ public class ClearwaterController : UdonSharpBehaviour
             td = local.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
         Vector3 dir = td.rotation * Vector3.forward;
         if (dir.y > -0.01f) return;
+        // the nearest water the ray comes down on: a pool's surface in its footprint, or the sea's
         float t = (water.position.y - td.position.y) / dir.y;
+        for (int i = 0; i < _poolCount; i++)
+        {
+            float tp = (pools[i].position.y - td.position.y) / dir.y;
+            if (tp < 0 || (t >= 0 && tp >= t)) continue;
+            Vector3 q = td.position + dir * tp;
+            Vector4 a = poolAreas[i];
+            if (q.x >= a.x && q.x <= a.z && q.z >= a.y && q.z <= a.w) t = tp;
+        }
         if (t < 0 || t > maxTapDistance) return;
         SendCustomNetworkEvent(NetworkEventTarget.All, nameof(Tap), td.position + dir * t);
     }
@@ -330,12 +428,13 @@ public class ClearwaterController : UdonSharpBehaviour
     [NetworkCallable(8)]
     public void Tap(Vector3 worldPos)
     {
-        Enqueue(worldPos, tapRadius, tapStrength);
+        Enqueue(worldPos, tapRadius, tapStrength, PoolAt(worldPos, 0.05f, 0f));
     }
 
-    void Enqueue(Vector3 worldPos, float radius, float strength)
+    // a drop on a water (-1 the sea, else a pool): only the water the viewer is at has the ripples
+    void Enqueue(Vector3 worldPos, float radius, float strength, int body)
     {
-        if (_queueCount >= MaxQueue) return;
+        if (body != _body || _queueCount >= MaxQueue) return;
         Vector2 w = ToWater(worldPos);
         _queue[_queueCount++] = new Vector4(w.x, w.y, radius, strength);
     }

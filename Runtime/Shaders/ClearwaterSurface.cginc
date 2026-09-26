@@ -33,6 +33,17 @@ float cwSurfaceHeight(float2 xz)
 
 bool cwCameraNearSurface(float waterY) { return abs(_WorldSpaceCameraPos.y - waterY) < CW_SURFACE_BAND; }
 
+// Is this camera in this water (seen from below, fogged)? A pool (_BodyFloor.w = 1): only in its footprint (_BodyArea:
+// world x, z min, x, z max) and above its floor (_BodyFloor.x, world y) - not a camera on the storey under it. The
+// sea (w = 0): anywhere but in a pool (the pool mask) - not a camera in a pool below the sea's level.
+float4 _BodyArea, _BodyFloor;
+bool cwCamInBody()
+{
+    float3 c = _WorldSpaceCameraPos;
+    [branch] if (_BodyFloor.w > 0.0) return all(c.xz >= _BodyArea.xy) && all(c.xz <= _BodyArea.zw) && c.y > _BodyFloor.x;
+    return !cwInPool(c);
+}
+
 // where the ray of this pixel (world direction) leaves the camera: on its near clip plane
 float3 cwNearPoint(float3 rdWorld)
 {
