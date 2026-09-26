@@ -43,6 +43,7 @@ public static class ClearwaterCoastBake
         // the user terrain: its heights, and the waterline found on it in place of the line through the walkable area
         var user = ClearwaterUserTerrain.Bake(ctl, coast);
         if (user != null) user.tex = ClearwaterSetup.Save(user.tex, "UserTerrain.asset");
+        ClearwaterUserTerrain.UpdateProjector(ctl, coast, user);
         if (user != null && !coast.closed)
         {
             var js = new List<Vector2>();

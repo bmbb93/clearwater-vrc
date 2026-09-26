@@ -167,6 +167,46 @@ public static class ClearwaterUserTerrain
         return new Vector4(c.x, c.y, c.z, 1);
     }
 
+    // ---------------------------------------------------------------- the caustics on it
+
+    const string ProjectorName = "User Terrain Caustics";
+    const float ProjectorAbove = 30f; // m above the surface; its box reaches 10 m below
+
+    /// <summary>The caustics on the user terrain: a projector over its whole area, straight down, on its meshes'
+    /// layers (anything else on them under the water there gets them too), with the avatars' caustics material (it
+    /// places the pattern from world positions, so it lines up with the floor's everywhere). Removed when there is no
+    /// user terrain.</summary>
+    public static void UpdateProjector(ClearwaterController ctl, ClearwaterCoast coast, Data d)
+    {
+        var t = ctl.water.Find(ProjectorName);
+        if (d == null || ctl.avatarCausticsMaterial == null)
+        {
+            if (t != null) Undo.DestroyObjectImmediate(t.gameObject);
+            return;
+        }
+        if (t == null)
+        {
+            var go = new GameObject(ProjectorName);
+            Undo.RegisterCreatedObjectUndo(go, "User terrain caustics");
+            t = go.transform;
+            t.SetParent(ctl.water, false);
+        }
+        t.localPosition = new Vector3(d.area.x, ProjectorAbove, -d.area.y);
+        t.localRotation = Quaternion.Euler(90, 0, 0);
+        var proj = t.GetComponent<Projector>();
+        if (proj == null) proj = Undo.AddComponent<Projector>(t.gameObject);
+        proj.orthographic = true;
+        proj.orthographicSize = d.area.z * 0.5f;
+        proj.aspectRatio = 1;
+        proj.nearClipPlane = 0.1f;
+        proj.farClipPlane = ProjectorAbove + 10f;
+        proj.material = ctl.avatarCausticsMaterial;
+        int mask = 0;
+        foreach (var r in Renderers(coast)) mask |= 1 << r.gameObject.layer;
+        proj.ignoreLayers = ~mask;
+        EditorUtility.SetDirty(proj);
+    }
+
     // ---------------------------------------------------------------- the waterline on it
 
     /// <summary>Where the mesh's top crosses the still water: polylines in water space, the sea on their right
