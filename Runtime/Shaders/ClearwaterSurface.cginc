@@ -43,21 +43,23 @@ float2 cwSurfaceSlope(float2 xz)
 }
 
 // Where to read the sun's straight shadow for the light reaching the floor at xz, depth under the still water (water
-// space xz): that light came in through the surface at S, bent there by the waves' slope (found from the flat
-// surface's refraction, then bettered with the slope where that lands); above the water its path is the straight
-// line to the sun, which comes down to the floor's depth here. So the shadow lies nearer under what casts it than a
-// straight one would, and its edge ripples with the waves as the caustics do.
+// space xz): xz itself, moved as far as the waves' slope moves the light's way in through the surface (from where a
+// flat surface lets it in: found from the flat refraction, then bettered with the slope where that lands), so the
+// shadow's edge ripples with the waves as the caustics do. Not moved by the refraction itself: that would put the
+// shadow of what stands out of the water nearer under it, as it is, but that of what is under the water (an
+// avatar's legs) off its feet by as much - and the screen's shadow has no heights to tell the two apart.
 float2 cwShadowReadXZ(float2 xz, float depth, float3 sun)
 {
     float3 d = cwSunT(sun);
-    float2 S = xz - d.xz * depth / (-d.y);
+    float2 flat = xz - d.xz * depth / (-d.y);
+    float2 S = flat;
     [unroll] for (int k = 0; k < 2; k++)
     {
         float2 sl = cwSurfaceSlope(S);
         d = refract(-sun, normalize(float3(-sl.x, 1.0, -sl.y)), 1.0 / CW_IOR);
         S = xz - d.xz * depth / max(-d.y, 0.2);
     }
-    return S - sun.xz * depth / max(sun.y, 0.1);
+    return xz + (S - flat);
 }
 
 bool cwCameraNearSurface(float waterY) { return abs(_WorldSpaceCameraPos.y - waterY) < CW_SURFACE_BAND; }

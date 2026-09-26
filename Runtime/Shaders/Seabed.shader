@@ -176,7 +176,8 @@ Shader "Clearwater/Seabed"
                 // Seen from above the water, submerged ground is always covered by the water surface, which traces
                 // the floor itself — skip it. The margin keeps the waterline (waves, ripples) fully shaded.
                 // Alpha 0 marks these pixels for the water, so it never mistakes them for a submerged object; their red
-                // is the sun's shadow here, for the water to darken the floor it traces with (an avatar's in the shallows).
+                // is the sun's shadow here, for the water to darken the floor it traces with (an avatar's in the shallows;
+                // shallower, the alpha carries it: see the end).
                 // (a camera at the waterline decides per pixel: the part of its view that starts under the water
                 // sees the ground directly, with the underwater fog over it)
                 bool under = cwPixelUnder(normalize(i.wpos - _WorldSpaceCameraPos), _WaterOrigin.xyz);
@@ -288,7 +289,12 @@ Shader "Clearwater/Seabed"
                     L = lerp(L, hazeC * 0.95, hazeW);
                     spec *= 1.0 - hazeW;
                 }
-                return float4(cwTonemap(max(L, 0.0)) + spec, 1.0);
+                // (ground the water can cover, up to the run-up's reach, which the water draws over from this or from its
+                // own trace: its alpha carries the sun's shadow here too, 0.5 to 1, for the trace; the marked pixels above
+                // are 0, anything else 1. The water tells them apart at 0.25 and 0.4, well clear of an 8-bit screen's
+                // rounding)
+                float reach = _SwashHeight * _SwashRunup * 1.1 + 0.05;
+                return float4(cwTonemap(max(L, 0.0)) + spec, (!under && depth > -reach) ? 0.5 + 0.5 * shadow : 1.0);
             }
             ENDCG
         }

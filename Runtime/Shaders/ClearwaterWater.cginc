@@ -85,10 +85,10 @@ float sceneDistance(float2 uvD, float3 rdWorld)
 #endif
 
 // The sun's shadow on the floor at FP (water space round origin: the floor the water traces, depth under the still
-// water): the seabed mesh drawn under the water leaves its straight shadow on screen for the water, in the red of
-// the pixels it marks with alpha 0, read where the light's path calls for (cwShadowReadXZ). 1 (lit) where the
-// screen shows something else there (an avatar, the user terrain: in its own material, with its own shadows) or it
-// is off screen.
+// water): the seabed mesh drawn under the water leaves its straight shadow on screen for the water - in the red of
+// the pixels it marks with alpha 0, and where it draws the ground under thin water itself, in its alpha from 0.5 to
+// 1 - read where the waves call for (cwShadowReadXZ). 1 (lit) where the screen shows something else there (alpha 1:
+// an avatar, the user terrain in its own material, with its own shadows) or it is off screen.
 float cwFloorShadow(float3 FP, float depth, float3 sun, float3 origin)
 {
     float2 Q = cwShadowReadXZ(FP.xz, depth, sun);
@@ -96,7 +96,7 @@ float cwFloorShadow(float3 FP, float depth, float3 sun, float3 origin)
     [branch] if (c.w <= 0.0 || abs(c.x) >= c.w || abs(c.y) >= c.w) return 1.0;
     float4 g = ComputeGrabScreenPos(c);
     float4 px = CW_GRAB_LOD(g.xy / g.w);
-    return px.a < 0.5 ? px.r : 1.0;
+    return px.a < 0.25 ? px.r : px.a < 0.4 ? 1.0 : saturate((px.a - 0.5) / 0.5);
 }
 
 // Screen-space trace from a point Pw on the surface (world) along dirW, starting D metres out: what this
@@ -382,7 +382,7 @@ float4 fragSide(v2f i)
         float dF = sceneDistance(uvD + offF, rdWorld) - t; // how far past the surface the scene there lies
         float3 Lu;
         float4 gU = CW_GRAB_LOD(uvG + float2(offF.x, offF.y * gsign));
-        [branch] if (dF > 0.0 && dF < 2.0 * s + 1.0 && gU.a >= 0.5) // (not the seabed's marked pixels at its edge)
+        [branch] if (dF > 0.0 && dF < 2.0 * s + 1.0 && gU.a >= 0.25) // (not the seabed's marked pixels at its edge)
             Lu = cwInvTonemap(gU.rgb) * down;
         else
             Lu = cwFloorRadianceUnder(FP.xz, depthHere, 0.4, _UserMean.rgb, uSun, caus, 1.0);
@@ -405,9 +405,9 @@ float4 fragSide(v2f i)
         float dOff = sceneDistance(uvD + off, rdWorld) - t;
         if (dOff < 0.0 || dOff > sv - 0.06) off = 0;
         float4 objG = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, uvG + float2(off.x, off.y * gsign));
-        if (objG.a < 0.5) objG = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, uvG);
+        if (objG.a < 0.25) objG = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, uvG);
         // alpha 0 = skipped seabed (its coarse mesh can sit in front of the traced floor at rock edges)
-        if (objG.a >= 0.5)
+        if (objG.a >= 0.25)
         {
             under = cwInvTonemap(objG.rgb) * exp(-SIG_T * dObj) + cwInscatter(depthHere, dObj, tr, uSun);
             s = dObj;
@@ -471,7 +471,7 @@ float4 fragSide(v2f i)
             float3 colThin = F * refl + (1.0 - F) * floorThin + spec;
             // (not where the grab has the seabed's marked pixels: ground left under more than 25 cm of still water,
             // thin here only in a trough, which the water's own trace draws)
-            col = lerp(colThin, col, behindGrab.a < 0.5 ? 1.0 : smoothstep(0.05, 0.15, thickSand));
+            col = lerp(colThin, col, behindGrab.a < 0.25 ? 1.0 : smoothstep(0.05, 0.15, thickSand));
         }
         float2 eq = float2(suv.y, -(suv.x + run * shore.swash)) * 3.0;
         float rag = saturate(cwFbm2(eq) * 1.4 - 0.35) * 0.03 + cwNoise(eq * 6.0) * 0.008;
@@ -504,7 +504,7 @@ float4 fragSide(v2f i)
         float3 behind = cwInvTonemap(behindGrab.rgb);
         // (only at the edge over sand: rock standing out of the water is cut by the depth buffer instead; and not
         // the seabed's marked pixels)
-        col = lerp(behind, col, behindGrab.a < 0.5 ? 1.0 : smoothstep(0.0, 0.05, thickEdge) * 0.9 + 0.1 * saturate(thickEdge * 100.0));
+        col = lerp(behind, col, behindGrab.a < 0.25 ? 1.0 : smoothstep(0.0, 0.05, thickEdge) * 0.9 + 0.1 * saturate(thickEdge * 100.0));
     }
 
     // distant haze over the water
