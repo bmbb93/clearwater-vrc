@@ -13,6 +13,9 @@ Shader "Clearwater/Underwater"
         _Exposure ("Exposure", Float) = 0.63
         _Depth ("Caustics depth (m)", Float) = 1.6
         _MaxDistance ("Max fog distance (m)", Float) = 200
+        _FogDensity ("Fog density: how thick the water looks from under it (1 = as its colour from above; less = clearer)", Range(0.2, 1)) = 0.2
+        _FogSaturation ("Fog saturation: how deep the colour the water fades to (1 = as its colour from above)", Range(0, 1)) = 0.7
+        _FogBrightness ("Fog brightness: how light that colour", Range(0.5, 2)) = 1
 
         [Header(The water surface for a camera at the waterline (set by Build Scene the coast bake and the controller))]
         _Surf ("Surface (FFT CRT)", 2D) = "black" {}
@@ -71,7 +74,7 @@ Shader "Clearwater/Underwater"
             #include "UnityCG.cginc"
             #include "ClearwaterSurface.cginc"
 
-            float _MaxDistance;
+            float _MaxDistance, _FogDensity, _FogSaturation, _FogBrightness;
             UNITY_DECLARE_SCREENSPACE_TEXTURE(_CWGrabUnder);
             UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
 
@@ -124,7 +127,11 @@ Shader "Clearwater/Underwater"
 
                 float3 scene = cwInvTonemap(UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabUnder, i.grabPos.xy / i.grabPos.w).rgb);
                 float meanDepth = max(-(camY + rd.y * dist * 0.5), 0.0);
-                float3 col = scene * exp(-SIG_T * dist) + cwInscatter(meanDepth, dist, rd, sun);
+                float fd = dist * _FogDensity; // (the water along the path, as if it were that much less of it)
+                float3 fog = cwInscatter(meanDepth, fd, rd, sun);
+                // the colour the water fades to, paler and lighter as set (what is seen through it keeps its own)
+                fog = lerp(dot(fog, float3(0.2126, 0.7152, 0.0722)), fog, _FogSaturation) * _FogBrightness;
+                float3 col = scene * exp(-SIG_T * fd) + fog;
                 return float4(cwTonemap(max(col, 0.0)), 1.0);
             }
             ENDCG
