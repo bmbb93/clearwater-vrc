@@ -17,7 +17,7 @@ Bed のうち水より上で、波や濡れが届く部分。
 _Avoid_: 砂浜（砂とは限らない）、陸
 
 **Bed look（底の見た目）**:
-Generated terrain の Bed の色と凹凸を決める設定一式（アセット）。色と高さのテクスチャ、その大きさ、Bed effects からなる。小石（Pebbles）と砂（Sand）もプリセットの Bed look。水の下も浜も同じ Bed look を使う。
+Generated terrain の Bed の色と凹凸とつやを決める設定一式（アセット）。色と高さのテクスチャ、その大きさ、Bed effects、つや（Smoothness）からなる。User terrain から作って、その外側を同じ見た目にもできる。小石（Pebbles）と砂（Sand）もプリセットの Bed look。水の下も浜も同じ Bed look を使う。
 _Avoid_: 底質、マテリアル、テクスチャ（テクスチャは Bed look の材料の一つ）
 
 **Bed effects（重ねる効果）**:
@@ -25,7 +25,7 @@ Bed look の上に重ねる表現。隙間の砂（Sand fill）、波紋（Rippl
 _Avoid_: オーバーレイ、フィルター
 
 **Seam（境目）**:
-Walkable area の端で User terrain と Generated terrain が接する帯。Generated terrain の高さをメッシュの縁に合わせてなじませる。
+User terrain の縁のすぐ外側で、User terrain と Generated terrain が接する帯。Generated terrain の高さを User terrain の縁に合わせてなじませる。
 _Avoid_: 継ぎ目、ブレンド領域
 
 **Caustics（光の模様）**:
@@ -45,7 +45,7 @@ Coast の線と Cross-section から作る地形。
 _Avoid_: 計算地形、デフォルト地形
 
 **User terrain（ユーザー地形）**:
-Walkable area のまわりで、ユーザーが用意したメッシュを Bed の形と見た目として使う地形。見た目はメッシュ自身のマテリアルのまま水越しに見え、Waterline はメッシュが水の高さと交わる線から求まる。その外側は Generated terrain につながる。
+Walkable area のまわりで、ユーザーが用意したメッシュや Unity の Terrain を Bed の形と見た目として使う地形。見た目は自身のマテリアルのまま水越しに見え、Waterline はそれが水の高さと交わる線から求まる。その外側は Seam を挟んで Generated terrain につながる。
 _Avoid_: カスタム地形、自作メッシュ
 
 ## 海岸と波

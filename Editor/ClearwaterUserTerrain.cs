@@ -396,16 +396,43 @@ public static class ClearwaterUserTerrain
 
     /// <summary>The coast line (water space) with the part through the walkable area replaced by the waterline found
     /// on the user terrain, joined to it at both ends; within the bake's point budget.</summary>
-    public static List<Vector2> Splice(List<Vector2> line, Data d, Vector2 centre, float half, int budget, out string note)
+    public static List<Vector2> Splice(List<Vector2> line, Data d, Vector2 centre, float half, int budget, out string note,
+                                       out List<Vector2> noteAt)
     {
         note = null;
+        noteAt = new List<Vector2>();
         bool Inside(Vector2 p) => Mathf.Abs(p.x - centre.x) <= half && Mathf.Abs(p.y - centre.y) <= half;
+        // (a segment near the walkable area in metre steps, so a long straight one crossing it has points in it)
+        var fine = new List<Vector2>();
+        for (int i = 0; i < line.Count; i++)
+        {
+            fine.Add(line[i]);
+            if (i + 1 >= line.Count) break;
+            Vector2 a = line[i], b = line[i + 1];
+            if (Mathf.Max(a.x, b.x) < centre.x - half || Mathf.Min(a.x, b.x) > centre.x + half ||
+                Mathf.Max(a.y, b.y) < centre.y - half || Mathf.Min(a.y, b.y) > centre.y + half) continue;
+            int steps = Mathf.Min(Mathf.CeilToInt(Vector2.Distance(a, b)), 20000);
+            for (int s = 1; s < steps; s++)
+            {
+                var p = Vector2.Lerp(a, b, s / (float)steps);
+                if (Inside(p)) fine.Add(p); // (only there: they are replaced, so the line outside keeps its points)
+            }
+        }
+        line = fine;
         int i1 = -1, i2 = -1;
         for (int i = 0; i < line.Count; i++) if (Inside(line[i])) { if (i1 < 0) i1 = i; i2 = i; }
         var lines = Waterlines(d);
         if (lines.Count == 0) { note = "no waterline found on the user terrain (is it above and below the water?)"; return line; }
         if (i1 < 0) { note = "the coast line does not pass through the walkable area: the waterline found there is not joined to it"; return line; }
-        Vector2 e1 = line[i1], e2 = line[i2];
+        // where the line comes into the walkable area and leaves it (its edge crossed between two points)
+        Vector2 Crossing(Vector2 outside, Vector2 inside)
+        {
+            float lo = 0f, hi = 1f;
+            for (int it = 0; it < 30; it++) { float mid = 0.5f * (lo + hi); if (Inside(Vector2.Lerp(outside, inside, mid))) hi = mid; else lo = mid; }
+            return Vector2.Lerp(outside, inside, hi);
+        }
+        Vector2 e1 = i1 > 0 ? Crossing(line[i1 - 1], line[i1]) : line[i1];
+        Vector2 e2 = i2 < line.Count - 1 ? Crossing(line[i2 + 1], line[i2]) : line[i2];
         List<Vector2> best = null; float bestScore = float.MaxValue;
         foreach (var l in lines)
         {
@@ -413,7 +440,13 @@ public static class ClearwaterUserTerrain
             if (score < bestScore) { bestScore = score; best = l; }
         }
         float gap = Mathf.Max(Vector2.Distance(best[0], e1), Vector2.Distance(best[best.Count - 1], e2));
-        if (gap > 5f) note = $"the coast line meets the waterline on the user terrain {gap:0} m from where it should: draw it to meet the mesh's shore at the walkable area's edge";
+        if (gap > 5f)
+        {
+            note = $"the coast line meets the waterline on the user terrain {gap:0} m from where it should: draw it to meet " +
+                   "the mesh's shore at the walkable area's (green) edge (marked: where the line crosses the edge, and " +
+                   "where the waterline on the mesh reaches it)";
+            noteAt.Add(e1); noteAt.Add(e2); noteAt.Add(best[0]); noteAt.Add(best[best.Count - 1]);
+        }
         var outer = line.Count - (i2 - i1 + 1);
         List<Vector2> inner = best;
         for (float tol = 0.05f; ; tol *= 1.6f)
@@ -426,6 +459,115 @@ public static class ClearwaterUserTerrain
         result.AddRange(inner);
         for (int i = i2 + 1; i < line.Count; i++) result.Add(line[i]);
         return result;
+    }
+
+    // ---------------------------------------------------------------- checks
+
+    const float SeamSteep = 0.2f; // the seam's slope (its rise over its width) past which it is flagged (about 11°)
+    const float MarkApart = 15f;  // m: flagged places nearer each other than this are marked once
+    const int MaxMarks = 8;
+
+    /// <summary>What the bake can tell is wrong with the user terrain: parts of the walkable area it leaves uncovered
+    /// (nothing to stand on: with a user terrain the generated ground has no collider), a user terrain reaching past
+    /// the baked square (past it the generated ground is drawn through it), and where the seam has to climb or drop
+    /// steeply to meet the generated ground (a bank or a ditch round the mesh). floorBake: the shaders' floor as set
+    /// up for this bake (its user terrain is switched off here, for the generated ground's own heights). Each with
+    /// the places to mark (world).</summary>
+    public static List<(string text, List<Vector3> at)> Check(Data d, ClearwaterCoast coast, Material floorBake, Vector3 origin)
+    {
+        var notes = new List<(string, List<Vector3>)>();
+        int res = d.res;
+        float texel = d.area.z / res, half = Mathf.Max(coast.groundHalfSize, 1f), seam = Mathf.Max(coast.seamWidth, 1f);
+        Vector3 World(Vector2 p, float h) => new Vector3(p.x + origin.x, origin.y + h, -p.y + origin.z);
+
+        // the walkable area, a metre in from its edge (the walls), covered?
+        var holes = new List<(Vector2, float)>();
+        var holeCells = new HashSet<long>();
+        int bare = 0;
+        for (int j = 0; j < res; j++)
+            for (int i = 0; i < res; i++)
+            {
+                Vector2 p = d.Pos(i, j);
+                if (Mathf.Abs(p.x - d.area.x) > half - 1f || Mathf.Abs(p.y - d.area.y) > half - 1f || d.on[j * res + i]) continue;
+                bare++;
+                if (holeCells.Add(Cell(p, 5f))) holes.Add((p, 0f));
+            }
+        float bareArea = bare * texel * texel;
+        if (bareArea > 1f)
+            notes.Add(($"{bareArea:0} m² of the walkable area is not covered by the user terrain (marked): there is nothing " +
+                       "to stand on there, as the generated ground has no collider with a user terrain. Cover it, or make the " +
+                       "walkable area (Ground Half Size) smaller", Marks(holes, p => World(p, 0f))));
+
+        // reaching the baked square's edge?
+        var over = new List<(Vector2, float)>();
+        for (int k = 0; k < res; k++)
+            foreach (int q in new[] { k, (res - 1) * res + k, k * res, k * res + res - 1 })
+                if (d.on[q]) over.Add((d.Pos(q % res, q / res), 0f));
+        if (over.Count > 0)
+            notes.Add(("the user terrain reaches past the baked square, the walkable area and the seam round it (marked): " +
+                       "past it the generated ground is drawn through it. Make it smaller, or the walkable area (Ground Half " +
+                       "Size) or the seam bigger", Marks(over, p => World(p, d.At(p)))));
+
+        // the seam: the mesh's edge against the generated ground a seam's width out
+        int n = Mathf.Clamp(Mathf.CeilToInt(d.area.z), 64, 1024);
+        float step = d.area.z / (n - 1);
+        float x0 = d.area.x - d.area.z * 0.5f, z0 = -d.area.y - d.area.z * 0.5f; // (Unity x, z from the water origin)
+        Vector4 userArea = floorBake.GetVector("_UserArea");
+        floorBake.SetVector("_UserArea", Vector4.zero);
+        floorBake.SetVector("_BakeGrid", new Vector4(x0, z0, step, n));
+        var gen = ClearwaterCoastBake.BlitRead(floorBake, n, n);
+        floorBake.SetVector("_UserArea", userArea);
+        float Generated(Vector2 p)
+        {
+            float fi = Mathf.Clamp((p.x - x0) / step, 0f, n - 1.001f), fj = Mathf.Clamp((-p.y - z0) / step, 0f, n - 1.001f);
+            int i = (int)fi, j = (int)fj; float ti = fi - i, tj = fj - j;
+            float a = Mathf.Lerp(gen[j * n + i].r, gen[j * n + i + 1].r, ti), b = Mathf.Lerp(gen[(j + 1) * n + i].r, gen[(j + 1) * n + i + 1].r, ti);
+            return -Mathf.Lerp(a, b, tj); // (depth -> height)
+        }
+        var steep = new List<(Vector2, float)>();
+        var seen = new HashSet<long>();
+        float worst = 0f;
+        for (int j = 1; j < res - 1; j++)
+            for (int i = 1; i < res - 1; i++)
+            {
+                int k = j * res + i;
+                if (!d.on[k]) continue;
+                Vector2 outward = Vector2.zero;
+                for (int dj = -1; dj <= 1; dj++)
+                    for (int di = -1; di <= 1; di++)
+                        if (!d.on[k + dj * res + di]) outward += new Vector2(di, dj);
+                if (outward == Vector2.zero) continue;
+                Vector2 p = d.Pos(i, j);
+                if (!seen.Add(Cell(p, 2f))) continue; // (every 2 m along the edge)
+                float rise = Generated(p + outward.normalized * seam) - d.h[k];
+                if (Mathf.Abs(rise) / seam <= SeamSteep) continue;
+                steep.Add((p, Mathf.Abs(rise)));
+                worst = Mathf.Max(worst, Mathf.Abs(rise));
+            }
+        if (steep.Count > 0)
+            notes.Add(($"the seam round the user terrain climbs or drops up to {worst:0.0} m over its {seam:0} m (marked): a bank " +
+                       "or a ditch round the mesh. Widen the seam (Seam Width), or carry the mesh on until its edge is near " +
+                       "the generated ground's height there (the line and the cross-section shape it)",
+                       Marks(steep, p => World(p, d.At(p)))));
+        return notes;
+    }
+
+    static long Cell(Vector2 p, float size) => ((long)Mathf.FloorToInt(p.x / size) << 32) ^ (uint)Mathf.FloorToInt(p.y / size);
+
+    // the worst places first, one per MarkApart, at most MaxMarks
+    static List<Vector3> Marks(List<(Vector2 p, float how)> places, System.Func<Vector2, Vector3> world)
+    {
+        places.Sort((a, b) => b.how.CompareTo(a.how));
+        var picked = new List<Vector2>();
+        foreach (var (p, _) in places)
+        {
+            bool near = false;
+            foreach (var q in picked) if ((q - p).sqrMagnitude < MarkApart * MarkApart) { near = true; break; }
+            if (near) continue;
+            picked.Add(p);
+            if (picked.Count >= MaxMarks) break;
+        }
+        return picked.ConvertAll(p => world(p));
     }
 
     // Douglas-Peucker

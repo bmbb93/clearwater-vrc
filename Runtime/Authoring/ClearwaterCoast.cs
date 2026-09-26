@@ -102,6 +102,10 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
 
     [HideInInspector] public string bakedHash; // what the last bake was made from (the inspector flags changes)
 
+    /// <summary>Something the last bake found wrong with the user terrain, and where (world) it is.</summary>
+    [System.Serializable] public struct BakeNote { public string text; public Vector3[] at; }
+    [HideInInspector] public BakeNote[] bakeNotes; // (the inspector and the Scene view show them until the next bake)
+
     void OnDrawGizmos()
     {
         // the line, also when the object is not selected

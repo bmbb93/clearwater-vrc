@@ -276,8 +276,10 @@ float2 cwFloorDepth2(float2 xz)
         }
     }
     // the user terrain replaces the ground on it, and the generated ground is brought to its edge round it
+    // (the seam's weight starts at 0.96 by the mesh, so the shaders can tell the mesh from it: brought back to 1, so
+    // the ground meets the mesh's edge with no step)
     float2 ut = cwUserTerrain(xz);
-    d = lerp(d, -ut.x, ut.y);
+    d = lerp(d, -ut.x, saturate(ut.y * (1.0 / 0.96)));
     float dw = min(d, max(-s.b, 0.02)); // an obstacle leaves at least 2 cm of water for the waves (no dry ring round it)
     return float2(d, dw);
 }

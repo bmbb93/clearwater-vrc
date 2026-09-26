@@ -103,6 +103,9 @@ public class ClearwaterCoastEditor : Editor
     static readonly Color GroundColor = new Color(0.5f, 1f, 0.5f, 0.6f);
     static readonly Color SeaAreaColor = new Color(0.4f, 0.7f, 1f, 0.5f);
     static readonly Color HandleColor = new Color(1f, 0.55f, 0.2f);
+    static readonly Color NoteColor = new Color(1f, 0.3f, 0.25f);
+    static GUIStyle _noteLabel;
+    static GUIStyle NoteLabel => _noteLabel ??= new GUIStyle(EditorStyles.boldLabel) { normal = { textColor = NoteColor } };
 
     public override void OnInspectorGUI()
     {
@@ -276,6 +279,23 @@ public class ClearwaterCoastEditor : Editor
 
         bool stale = coast.bakedHash != ClearwaterCoastBake.Hash(coast);
         if (stale) EditorGUILayout.HelpBox("The coast has changed since it was last baked.", MessageType.Warning);
+        // what the last bake found wrong with the user terrain (numbered as marked in the Scene view)
+        if (coast.bakeNotes != null && coast.terrainSource == ClearwaterCoast.TerrainSource.User)
+            for (int k = 0; k < coast.bakeNotes.Length; k++)
+            {
+                var note = coast.bakeNotes[k];
+                bool marked = note.at != null && note.at.Length > 0;
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.HelpBox((marked ? $"{k + 1}. " : "") + "User terrain: " + note.text + ".", MessageType.Warning);
+                    if (marked && GUILayout.Button("Show", GUILayout.Width(48), GUILayout.Height(38)))
+                    {
+                        var b = new Bounds(note.at[0], Vector3.one * 10f);
+                        foreach (var p in note.at) b.Encapsulate(p);
+                        SceneView.lastActiveSceneView?.Frame(b, false);
+                    }
+                }
+            }
         if (GUILayout.Button(stale ? "Bake" : "Bake again", GUILayout.Height(28)))
             ClearwaterCoastBake.Bake(coast);
     }
@@ -360,6 +380,22 @@ public class ClearwaterCoastEditor : Editor
             float sea = Mathf.Max(coast.seaSize, coast.areaSize);
             Handles.DrawWireCube(new Vector3(ctl.water.position.x, tf.position.y, ctl.water.position.z), new Vector3(sea, 0, sea));
         }
+
+        // what the last bake found wrong with the user terrain: numbered red rings where it is (the inspector says what)
+        if (coast.bakeNotes != null && Event.current.type == EventType.Repaint)
+            for (int k = 0; k < coast.bakeNotes.Length; k++)
+            {
+                var at = coast.bakeNotes[k].at;
+                if (at == null) continue;
+                Handles.color = NoteColor;
+                foreach (var p in at)
+                {
+                    float r = HandleUtility.GetHandleSize(p) * 0.25f;
+                    Handles.DrawWireDisc(p, Vector3.up, r);
+                    Handles.DrawWireDisc(p, Vector3.up, r * 0.6f);
+                    Handles.Label(p + Vector3.up * r, (k + 1).ToString(), NoteLabel);
+                }
+            }
 
         // the swell: three arrows off the shore nearest the object, the way it travels
         if (coast.shoreWaves && n > 1)

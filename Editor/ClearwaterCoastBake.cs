@@ -43,13 +43,14 @@ public static class ClearwaterCoastBake
         // the user terrain: its heights, and the waterline found on it in place of the line through the walkable area
         var user = ClearwaterUserTerrain.Bake(ctl, coast);
         if (user != null) user.tex = ClearwaterSetup.Save(user.tex, "UserTerrain.asset");
+        var notes = new List<(string text, List<Vector3> at)>(); // (what is wrong with the user terrain, and where)
         if (user != null && !coast.closed)
         {
             var js = new List<Vector2>();
             foreach (var w in world) js.Add(ToWater(w));
             js = ClearwaterUserTerrain.Splice(js, user, new Vector2(user.area.x, user.area.y), Mathf.Max(coast.groundHalfSize, 1f),
-                                              MaxShorePoints, out string note);
-            if (note != null) Debug.LogWarning("[Clearwater] User terrain: " + note + ".");
+                                              MaxShorePoints, out string note, out var noteAt);
+            if (note != null) notes.Add((note, noteAt.ConvertAll(p => new Vector3(p.x + origin.x, origin.y, -p.y + origin.z))));
             world.Clear();
             foreach (var p in js) world.Add(new Vector3(p.x + origin.x, origin.y, -p.y + origin.z));
         }
@@ -127,6 +128,7 @@ public static class ClearwaterCoastBake
 
         // walkable ground around the coast object, with invisible walls at its edge
         BakeGround(ctl, coast, floorBake, user == null);
+        if (user != null) notes.AddRange(ClearwaterUserTerrain.Check(user, coast, floorBake, origin));
         Object.DestroyImmediate(floorBake);
 
         // the sea's extent
@@ -161,6 +163,8 @@ public static class ClearwaterCoastBake
         ctl.shoreWaves = coast.shoreWaves;
         EditorUtility.SetDirty(ctl);
 
+        coast.bakeNotes = notes.ConvertAll(n => new ClearwaterCoast.BakeNote { text = n.text, at = n.at.ToArray() }).ToArray();
+        foreach (var n in notes) Debug.LogWarning("[Clearwater] User terrain: " + n.text + ".", coast);
         coast.bakedHash = Hash(coast);
         EditorUtility.SetDirty(coast);
         EditorSceneManager.MarkSceneDirty(coast.gameObject.scene);
@@ -212,12 +216,15 @@ public static class ClearwaterCoastBake
     {
         string saved = coast.bakedHash;
         var look = coast.bedLook; // (the bed's look needs no bake: it goes straight onto the materials)
+        var notes = coast.bakeNotes; // (what the bake found)
         coast.bakedHash = "";
         coast.bedLook = null;
+        coast.bakeNotes = null;
         var sb = new System.Text.StringBuilder(JsonUtility.ToJson(coast));
         sb.Append(coast.transform.position).Append(coast.transform.rotation).Append(coast.transform.lossyScale);
         coast.bakedHash = saved;
         coast.bedLook = look;
+        coast.bakeNotes = notes;
         foreach (var s in Object.FindObjectsOfType<ClearwaterStamp>())
         {
             sb.Append((int)s.mode).Append(s.receiveCaustics);
