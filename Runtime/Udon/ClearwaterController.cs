@@ -248,9 +248,9 @@ public class ClearwaterController : UdonSharpBehaviour
         }
         if (seabedMaterial != null)
         {
-            // the ground grid follows the viewer, on its own 25 cm lattice so nothing swims
+            // the ground grid follows the viewer, on its own 50 cm lattice so nothing swims
             Vector3 hp = head.position;
-            seabedMaterial.SetVector("_GridCenter", new Vector4(Mathf.Round(hp.x * 4f) * 0.25f, 0, Mathf.Round(hp.z * 4f) * 0.25f, 0));
+            seabedMaterial.SetVector("_GridCenter", new Vector4(Mathf.Round(hp.x * 2f) * 0.5f, 0, Mathf.Round(hp.z * 2f) * 0.5f, 0));
         }
 
         if (avatarCausticsProjector != null)

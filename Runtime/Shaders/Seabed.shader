@@ -104,21 +104,24 @@ Shader "Clearwater/Seabed"
             #pragma shader_feature_local _CW_TONEMAP
             #include "AutoLight.cginc"
 
-            // The sun's straight shadow at a world point, read from the screen's (1 off screen, or with no shadows)
-            float cwScreenShadowAt(float3 w)
+            // The sun's straight shadow at a world point, read from the screen's: off screen, at its edge (the shadow
+            // carried on out past it); own (this pixel's) behind the camera, or with no shadows
+            float cwScreenShadowAt(float3 w, float own)
             {
             #if defined(SHADOWS_SCREEN) && !defined(UNITY_NO_SCREENSPACE_SHADOWS)
                 float4 c = UnityWorldToClipPos(w);
-                [branch] if (c.w <= 0.0 || abs(c.x) >= c.w || abs(c.y) >= c.w) return 1.0;
+                [branch] if (c.w <= 0.0) return own;
+                c.xy = clamp(c.xy, -0.995 * c.w, 0.995 * c.w);
                 float4 s = ComputeScreenPos(c);
                 float2 uv = s.xy / s.w;
             #if defined(UNITY_STEREO_INSTANCING_ENABLED) || defined(UNITY_STEREO_MULTIVIEW_ENABLED)
-                return UNITY_SAMPLE_TEX2DARRAY_LOD(_ShadowMapTexture, float3(uv, unity_StereoEyeIndex), 0).r;
+                float at = UNITY_SAMPLE_TEX2DARRAY_LOD(_ShadowMapTexture, float3(uv, unity_StereoEyeIndex), 0).r;
             #else
-                return tex2Dlod(_ShadowMapTexture, float4(uv, 0, 0)).r;
+                float at = tex2Dlod(_ShadowMapTexture, float4(uv, 0, 0)).r;
             #endif
+                return at;
             #else
-                return 1.0;
+                return own;
             #endif
             }
 
@@ -177,7 +180,8 @@ Shader "Clearwater/Seabed"
                 // the floor itself — skip it. The margin keeps the waterline (waves, ripples) fully shaded.
                 // Alpha 0 marks these pixels for the water, so it never mistakes them for a submerged object; their red
                 // is the sun's shadow here, for the water to darken the floor it traces with (an avatar's in the shallows;
-                // shallower, the alpha carries it: see the end).
+                // shallower, the alpha carries it: see the end), their green 1 tells them from pixels nothing was drawn
+                // on (a VR eye's masked-off corners are black, alpha 0 too).
                 // (a camera at the waterline decides per pixel: the part of its view that starts under the water
                 // sees the ground directly, with the underwater fog over it)
                 bool under = cwPixelUnder(normalize(i.wpos - _WorldSpaceCameraPos), _WaterOrigin.xyz);
@@ -192,7 +196,7 @@ Shader "Clearwater/Seabed"
                         float3 hz = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(mh, 6.0) + 0.3 * pow(mh, 64.0));
                         return float4(cwTonemap(hz * 0.95), 1.0);
                     }
-                    return float4(shadow, 0, 0, 0);
+                    return float4(shadow, 1, 0, 0);
                 }
                 float hgt, rockM;
                 float3 alb = cwFloorAlbedo(p, dpdx, dpdy, hgt, rockM);
@@ -207,7 +211,7 @@ Shader "Clearwater/Seabed"
                     float3 caus = tex2Dgrad(_Caus, cwCausUV(p, hgt, sun), dpdx * (2.0 / _PatchSize), dpdy * (2.0 / _PatchSize)).rgb;
                     // (the shadow where the light's path through the waves calls for, as the water reads it for its floor)
                     float2 q = cwShadowReadXZ(p, depth, sun);
-                    float sunShade = cwScreenShadowAt(_WaterOrigin.xyz + cwToJS(float3(q.x, -depth, q.y)));
+                    float sunShade = cwScreenShadowAt(_WaterOrigin.xyz + cwToJS(float3(q.x, -depth, q.y)), shadow);
                     [branch] if (rockM > 0.0) sunShade *= lerp(1.0, cwUnderSunShade(cwFloorNormal(p, rockM), sun), rockM);
                     L = cwFloorRadianceUnder(p, depth, hgt, cwAlgae(alb, rockM), sun, caus, sunShade);
                 }
@@ -317,6 +321,15 @@ Shader "Clearwater/Seabed"
                 UNITY_SETUP_INSTANCE_ID(v);
                 UNITY_INITIALIZE_OUTPUT(v2f, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+                // Only the camera's depth texture needs it (the water reads the ground there): a light's shadow map
+                // (drawn with the light's bias, which the depth texture is not) gets no ground - it would shade only
+                // itself, which its own shading does - so its vertices collapse there before their floor is worked out
+                // (~0.2 ms/eye)
+                [branch] if (any(unity_LightShadowBias != 0.0))
+                {
+                    o.pos = float4(0.0, 0.0, 0.0, 1.0);
+                    return o;
+                }
                 float3 w = seabedWorld(v.vertex);
                 o.pos = UnityApplyLinearShadowBias(UnityWorldToClipPos(w));
                 o.p = float2(w.x - _WaterOrigin.x, -(w.z - _WaterOrigin.z));

@@ -45,7 +45,8 @@ public static class ClearwaterSetup
     // The coast itself is a ClearwaterCoast in the scene (drawn there, baked by ClearwaterCoastBake); a new scene
     // gets a straight one: the waterline along x at this z, the sea towards +z, the "gentle beach" section.
     const float DefaultWaterlineZ = -35.9f;
-    const float SeabedInner = 20f, SeabedStep = 0.25f;       // rendered ground: 25 cm cells out to 20 m (rock outlines),
+    const float SeabedInner = 20f, SeabedStep = 0.5f;        // rendered ground: 50 cm cells out to 20 m (its shading is
+                                                             // per pixel: 25 cm cost ~0.2 ms/eye for no visible change),
     const float SeabedFarPerSeaSize = 0.6f, SeabedGrowth = 1.08f; // then 8% larger each step out to the horizon
     static readonly Vector3 SpawnPos = new Vector3(0, 0.8f, -41f); // on the beach, facing the water and the sun
 

@@ -84,19 +84,36 @@ float sceneDistance(float2 uvD, float3 rdWorld)
 #define CW_GRAB_LOD(uv) tex2Dlod(_CWGrabWater, float4(uv, 0, 0))
 #endif
 
+// the shadow a grab pixel carries: 0 (shadowed) to 1, or -1 where none is known
+float cwShadowOf(float4 px)
+{
+    // (alpha 0 and green 0: nothing drawn there, such as a VR eye's masked-off corners)
+    return px.a < 0.25 ? (px.g > 0.5 ? px.r : -1.0) : px.a < 0.4 ? 1.0 : saturate((px.a - 0.5) / 0.5);
+}
+
 // The sun's shadow on the floor at FP (water space round origin: the floor the water traces, depth under the still
 // water): the seabed mesh drawn under the water leaves its straight shadow on screen for the water - in the red of
 // the pixels it marks with alpha 0, and where it draws the ground under thin water itself, in its alpha from 0.5 to
 // 1 - read where the waves call for (cwShadowReadXZ). 1 (lit) where the screen shows something else there (alpha 1:
-// an avatar, the user terrain in its own material, with its own shadows) or it is off screen.
-float cwFloorShadow(float3 FP, float depth, float3 sun, float3 origin)
+// an avatar, the user terrain in its own material, with its own shadows).
+// Where that is off screen (looking down, the refracted floor lies nearer than the pixel: the screen's last rows
+// have theirs below its edge) it is read at the screen's edge, the shadow carried on out past it as it reaches
+// it. (Not the ground straight behind this pixel: that lies elsewhere, and eased into it showed two shadows.) On
+// nothing drawn (a VR eye's masked-off corners), that ground's stands in after all (uvOwn: this pixel in the grab).
+float cwFloorShadow(float3 FP, float depth, float3 sun, float3 origin, float2 uvOwn)
 {
     float2 Q = cwShadowReadXZ(FP.xz, depth, sun);
     float4 c = UnityWorldToClipPos(origin + cwToJS(float3(Q.x, FP.y, Q.y)));
-    [branch] if (c.w <= 0.0 || abs(c.x) >= c.w || abs(c.y) >= c.w) return 1.0;
-    float4 g = ComputeGrabScreenPos(c);
-    float4 px = CW_GRAB_LOD(g.xy / g.w);
-    return px.a < 0.25 ? px.r : px.a < 0.4 ? 1.0 : saturate((px.a - 0.5) / 0.5);
+    float atQ = -1.0;
+    [branch] if (c.w > 0.0)
+    {
+        c.xy = clamp(c.xy, -0.995 * c.w, 0.995 * c.w);
+        float4 g = ComputeGrabScreenPos(c);
+        atQ = cwShadowOf(CW_GRAB_LOD(g.xy / g.w));
+    }
+    [branch] if (atQ >= 0.0) return atQ;
+    float own = cwShadowOf(CW_GRAB_LOD(uvOwn)); // (behind the camera, or nothing drawn there)
+    return own < 0.0 ? 1.0 : own;
 }
 
 // Screen-space trace from a point Pw on the surface (world) along dirW, starting D metres out: what this
@@ -192,6 +209,7 @@ float4 fragSide(v2f i)
     float2 xz; float4 A, B, R;
     const float SC = 0.41, WB = 0.10;
     float hsum = 0.0;
+    CwShore shi = (CwShore)0;
     [unroll] for (int it = 0; it < 3; it++)
     {
         xz = uCam.xz + wd.xz * t;
@@ -199,7 +217,9 @@ float4 fragSide(v2f i)
         B = tex2D(_Surf, mulM(xz) / (uL * SC) + 0.37);
         float2 ruv = (xz - ripC) / _RipSize + 0.5;
         R = tex2D(_Rip, ruv);
-        CwShore shi = cwShoreSw(xz, cwFloorDepth2(xz).y, swPix); // waves feel obstacles too
+        // the shore waves where the ray first meets the surface (their costliest part, worked out once: they change
+        // little over the few centimetres the intersection then moves); waves feel obstacles too
+        if (it == 0) shi = cwShoreSw(xz, cwFloorDepth2(xz).y, swPix);
         // the thin run-up sheet does not carry the open-water swell
         hsum = (A.x + WB * SC * B.x) * CW_WAVE * (1.0 - 0.75 * shi.swash) + R.x + shi.eta;
         t = (hsum - uCam.y) / wd.y;
@@ -219,16 +239,19 @@ float4 fragSide(v2f i)
     // cut the water away over dry sand only; rock standing out of it hides the water through the depth
     // buffer (its mesh is drawn first), which always agrees with the rock you actually see
     clip(floorP + cwRock(P.xz) + P.y);
-    // shore waves here, and their slope from two nearby samples (+u is seaward = -z in JS space)
+    // shore waves here, and their slope from two nearby samples (+u is seaward = -z in JS space), which feel the
+    // ground under P: 6 cm away it is within millimetres, and working it out again cost ~0.2 ms/eye. (Not from the
+    // neighbouring pixels: ddx/ddy of eta broke up into 2x2 blocks wherever the surface point jumps between them.)
     CwShore shore = cwShoreSw(P.xz, fd.y, swPix);
     const float SE = 0.06;
-    float etaU = cwShoreSw(P.xz - float2(0, SE), cwFloorDepth2(P.xz - float2(0, SE)).y, swPix).eta;
-    float etaX = cwShoreSw(P.xz + float2(SE, 0), cwFloorDepth2(P.xz + float2(SE, 0)).y, swPix).eta;
+    float etaU = cwShoreSw(P.xz - float2(0, SE), fd.y, swPix).eta;
+    float etaX = cwShoreSw(P.xz + float2(SE, 0), fd.y, swPix).eta;
+    float2 shoreSlope = float2(etaX - shore.eta, shore.eta - etaU) / SE;
 
     A = texBS(_Surf, P.xz / uL);
     B = texBS(_Surf, mulM(P.xz) / (uL * SC) + 0.37);
     float calm = (1.0 - 0.75 * shore.swash) * CW_WAVE; // (a pool's calmer surface too)
-    float2 slope = (A.yz + WB * mulMt(B.yz)) * calm + R.yz + float2(etaX - shore.eta, shore.eta - etaU) / SE;
+    float2 slope = (A.yz + WB * mulMt(B.yz)) * calm + R.yz + shoreSlope;
     float4 Cm = tex2D(_Surf, mulM2(P.xz) / (uL * 0.13) + 0.71);
     slope += 0.13 * exp(-t * 0.18) * mulM2t(Cm.yz) * calm;
     // Ripples a hand's breadth long, seen from below: the window into the air bends every one of them into its
@@ -359,7 +382,7 @@ float4 fragSide(v2f i)
     float hgt, rockM;
     float2 dFPdx = ddx(FP.xz), dFPdy = ddy(FP.xz);
     float3 alb = cwAlgae(cwFloorAlbedo(FP.xz, dFPdx, dFPdy, hgt, rockM), rockM);
-    float sunShade = cwFloorShadow(FP, depthHere, uSun, i.origin);
+    float sunShade = cwFloorShadow(FP, depthHere, uSun, i.origin, i.grabPos.xy / i.grabPos.w);
     [branch] if (rockM > 0.0) sunShade *= lerp(1.0, cwUnderSunShade(cwFloorNormal(FP.xz, rockM), uSun), rockM);
     float3 caus = tex2Dbias(_Caus, float4(cwCausUV(FP.xz, hgt, uSun), 0, 1.0)).rgb;
     float3 Lfloor = cwFloorRadianceUnder(FP.xz, depthHere, hgt, alb, uSun, caus, sunShade);
@@ -391,9 +414,9 @@ float4 fragSide(v2f i)
 
     // something standing in the water (an avatar) in front of the floor? take it from the grab texture
     float sceneDist = sceneDistance(uvD, rdWorld);
-    // floor distance along the unrefracted ray, to tell the seabed mesh apart from objects above it
+    // floor distance along the unrefracted ray, to tell the seabed mesh apart from objects above it (from the floor
+    // under P: a closer trace changed next to nothing, and cost ~0.3 ms/eye)
     float sv = (-cwFloorDepth(P.xz) - P.y) / wd.y;
-    [unroll] for (int q = 0; q < 2; q++) { float2 fxz = P.xz + wd.xz * sv; sv = (-cwFloorDepth(fxz) - P.y) / wd.y; }
     float dObj = sceneDist - t;
     s = min(s, 30.0);
     // (over the user terrain the floor itself is on screen, only as exact as its bake: things clearly in front of it)
