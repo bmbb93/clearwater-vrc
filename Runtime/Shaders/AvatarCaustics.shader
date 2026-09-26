@@ -79,13 +79,15 @@ Shader "Clearwater/AvatarCaustics"
                 float3 p = cwToJS(i.wpos - _WaterOrigin.xyz); // water space: y = 0 on the mean surface
                 float depth = -p.y;
                 clip(depth - 0.02);
-                float3 sun = cwSun(), sunT = cwSunT(sun);
-                // follow the refracted sun ray on to the floor below, and read the floor's caustics there
-                float below = max(cwFloorDepth(p.xz) - depth, 0.0);
+                float3 sun = cwSun(), sunT = cwSunT(sun), n = normalize(cwToJS(i.wn));
+                // follow the refracted sun ray on to the floor below, and read the floor's caustics there. The floor is
+                // looked for a metre out along an upright surface's normal: under a quay wall's face lies the quay's top,
+                // not the floor its rays come down to (every height of the wall would read the same place: streaks)
+                float below = max(cwFloorDepth(p.xz + n.xz) - depth, 0.0);
                 float2 uv = (p.xz + cwCausShift(sun, below) - cwCausShift(sun, _Depth)) / _PatchSize;
                 float3 caus = tex2Dbias(_Caus, float4(uv, 0, 1.0)).rgb;
                 // lit side only; the lines only form a little below the surface
-                float facing = saturate(dot(normalize(cwToJS(i.wn)), -sunT));
+                float facing = saturate(dot(n, -sunT));
                 float w = _Strength * facing * smoothstep(0.03, 0.5, depth);
                 float3 m = lerp(1.0, caus, w);
                 return float4(saturate(0.5 * m), 1.0);

@@ -42,6 +42,8 @@ public class ClearwaterBedLook : ScriptableObject
     [Range(0f, 1f)] public float patchiness = 0.3f;
     [Tooltip("The Pebbles look's muted, darkened grade")]
     [Range(0f, 1f)] public float mutedGrade = 0f;
+    [Tooltip("The dry ground's sheen, as the Standard shader's Smoothness (0 = matte): to match a glossy user terrain")]
+    [Range(0f, 1f)] public float smoothness = 0f;
 
     static readonly float[] Lum = { 0.3f, 0.55f, 0.15f };
 
@@ -65,6 +67,7 @@ public class ClearwaterBedLook : ScriptableObject
         m.SetFloat("_BedBright", brightness);
         m.SetFloat("_BedVar", patchiness);
         m.SetFloat("_BedGrade", mutedGrade);
+        m.SetFloat("_BedGloss", smoothness);
         // (the plain tone the underwater mirror shows where it cannot see the bed: far, dim and blurred, so darker than
         // the look's mean, as the original Pebbles tone was)
         m.SetVector("_BedMean", MeanColour() * 0.6f);

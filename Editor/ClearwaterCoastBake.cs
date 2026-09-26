@@ -224,12 +224,7 @@ public static class ClearwaterCoastBake
             foreach (var mf in s.GetComponentsInChildren<MeshFilter>())
                 sb.Append(mf.sharedMesh != null ? mf.sharedMesh.name : "-").Append(mf.transform.localToWorldMatrix);
         }
-        if (coast.terrainSource == ClearwaterCoast.TerrainSource.User)
-            foreach (var r in ClearwaterUserTerrain.Renderers(coast))
-            {
-                var mesh = r.GetComponent<MeshFilter>().sharedMesh;
-                sb.Append(mesh.name).Append(mesh.vertexCount).Append(r.transform.localToWorldMatrix);
-            }
+        if (coast.terrainSource == ClearwaterCoast.TerrainSource.User) ClearwaterUserTerrain.HashInto(coast, sb);
         return Hash128.Compute(sb.ToString()).ToString();
     }
 

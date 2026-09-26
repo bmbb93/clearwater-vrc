@@ -3,7 +3,8 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// The coast's user terrain (Terrain source = User): the user's own meshes as the ground round the walkable area.
+/// The coast's user terrain (Terrain source = User): the user's own meshes and Unity terrains as the ground round the
+/// walkable area.
 /// Baked from above into heights the shaders shape the water, the waves and the seabed with (the mesh itself stays
 /// what is seen: ADR 0001), with the seam round it where the generated terrain is brought to its edge; and the
 /// waterline found on it (where its top crosses the still water) spliced into the coast line in place of the part
@@ -44,14 +45,55 @@ public static class ClearwaterUserTerrain
         return list;
     }
 
+    /// <summary>The Unity terrains that make the user terrain (enabled Terrain components under the User terrain).</summary>
+    public static List<Terrain> Terrains(ClearwaterCoast coast)
+    {
+        var list = new List<Terrain>();
+        if (coast == null || coast.userTerrain == null) return list;
+        foreach (var t in coast.userTerrain.GetComponentsInChildren<Terrain>(false))
+            if (t.enabled && t.terrainData != null) list.Add(t);
+        return list;
+    }
+
+    /// <summary>How many meshes and terrains make the user terrain.</summary>
+    public static int Count(ClearwaterCoast coast) => Renderers(coast).Count + Terrains(coast).Count;
+
+    /// <summary>The layers the user terrain's meshes and terrains are on.</summary>
+    public static int Layers(ClearwaterCoast coast)
+    {
+        int mask = 0;
+        foreach (var r in Renderers(coast)) mask |= 1 << r.gameObject.layer;
+        foreach (var t in Terrains(coast)) mask |= 1 << t.gameObject.layer;
+        return mask;
+    }
+
+    /// <summary>What the user terrain is made of, to tell when it needs baking again.</summary>
+    public static void HashInto(ClearwaterCoast coast, System.Text.StringBuilder sb)
+    {
+        foreach (var r in Renderers(coast))
+        {
+            var mesh = r.GetComponent<MeshFilter>().sharedMesh;
+            sb.Append(mesh.name).Append(mesh.vertexCount).Append(r.transform.localToWorldMatrix);
+        }
+        foreach (var t in Terrains(coast))
+        {
+            var td = t.terrainData;
+            sb.Append(td.name).Append(td.size).Append(td.heightmapResolution).Append(t.transform.position);
+            for (int j = 0; j < 16; j++)
+                for (int i = 0; i < 16; i++)
+                    sb.Append(td.GetInterpolatedHeight(i / 15f, j / 15f).ToString("F3"));
+        }
+    }
+
     /// <summary>Bakes the user terrain round the walkable area (null when the coast has none).</summary>
     public static Data Bake(ClearwaterController ctl, ClearwaterCoast coast)
     {
         if (coast.terrainSource != ClearwaterCoast.TerrainSource.User) return null;
         var renderers = Renderers(coast);
-        if (renderers.Count == 0)
+        var terrains = Terrains(coast);
+        if (renderers.Count + terrains.Count == 0)
         {
-            Debug.LogWarning("[Clearwater] Terrain source is User, but the User terrain has no meshes: the generated terrain is used.");
+            Debug.LogWarning("[Clearwater] Terrain source is User, but the User terrain has no meshes or terrains: the generated terrain is used.");
             return null;
         }
         Vector3 origin = ctl.water.position;
@@ -90,6 +132,22 @@ public static class ClearwaterUserTerrain
         int n = res * res;
         d.h = new float[n]; d.on = new bool[n];
         for (int k = 0; k < n; k++) { d.on[k] = px[k].g > 0.5f; d.h[k] = px[k].r; }
+        // Unity terrains: their heights read straight from their data (the highest of all where they overlap)
+        foreach (var t in terrains)
+        {
+            Vector3 tp = t.transform.position, ts = t.terrainData.size;
+            for (int j = 0; j < res; j++)
+                for (int i = 0; i < res; i++)
+                {
+                    Vector2 js = d.Pos(i, j);
+                    float nx = (js.x + origin.x - tp.x) / ts.x, nz = (-js.y + origin.z - tp.z) / ts.z;
+                    if (nx < 0f || nx > 1f || nz < 0f || nz > 1f) continue;
+                    int k = j * res + i;
+                    float h = tp.y + t.terrainData.GetInterpolatedHeight(nx, nz) - origin.y;
+                    d.h[k] = d.on[k] ? Mathf.Max(d.h[k], h) : h;
+                    d.on[k] = true;
+                }
+        }
 
         // past its edge: the nearest edge's height, and a weight falling to 0 across the seam (chamfer distance)
         var dist = new float[n];
@@ -143,14 +201,37 @@ public static class ClearwaterUserTerrain
         slopes.Sort();
         d.slope = slopes.Count > 0 ? Mathf.Clamp(slopes[slopes.Count / 2], 0.02f, 1f) : 0f;
 
-        d.mean = MeanColour(renderers);
+        d.mean = MeanColour(renderers, terrains);
         return d;
     }
 
-    // the meshes' average colour: each material's colour times its main texture's mean, by the area each covers
-    static Vector4 MeanColour(List<MeshRenderer> renderers)
+    // the average colour: each mesh material's colour times its main texture's mean, each terrain layer's texture mean
+    // by how much of the terrain it paints, by the area each covers
+    static Vector4 MeanColour(List<MeshRenderer> renderers, List<Terrain> terrains)
     {
         Vector3 acc = Vector3.zero; float wsum = 0;
+        foreach (var t in terrains)
+        {
+            var td = t.terrainData;
+            var layers = td.terrainLayers;
+            if (layers == null || layers.Length == 0) continue;
+            float area = td.size.x * td.size.z;
+            var share = new float[layers.Length];
+            var maps = td.GetAlphamaps(0, 0, td.alphamapWidth, td.alphamapHeight);
+            for (int y = 0; y < td.alphamapHeight; y += 4)
+                for (int x = 0; x < td.alphamapWidth; x += 4)
+                    for (int l = 0; l < layers.Length && l < maps.GetLength(2); l++) share[l] += maps[y, x, l];
+            float total = 0; foreach (var s in share) total += s;
+            for (int l = 0; l < layers.Length; l++)
+            {
+                if (layers[l] == null || total <= 0) continue;
+                Vector3 m = layers[l].diffuseTexture != null ? ClearwaterBedLook.MeanFromGpu(layers[l].diffuseTexture) : Vector3.one * 0.5f;
+                Vector4 rm = layers[l].diffuseRemapMax;
+                m = Vector3.Scale(m, new Vector3(rm.x, rm.y, rm.z));
+                float w = area * share[l] / total;
+                acc += m * w; wsum += w;
+            }
+        }
         foreach (var r in renderers)
         {
             float w = Mathf.Max(r.bounds.size.x * r.bounds.size.z, 1e-3f) / Mathf.Max(r.sharedMaterials.Length, 1);
@@ -180,8 +261,7 @@ public static class ClearwaterUserTerrain
     /// settings). Removed when there is no user terrain.</summary>
     public static void UpdateProjectors(ClearwaterController ctl, ClearwaterCoast coast, Data d)
     {
-        int mask = 0;
-        foreach (var r in Renderers(coast)) mask |= 1 << r.gameObject.layer;
+        int mask = Layers(coast);
         Material beach = null;
         if (d != null && ctl.seabedMaterial != null)
         {

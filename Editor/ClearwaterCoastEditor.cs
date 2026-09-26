@@ -162,11 +162,12 @@ public class ClearwaterCoastEditor : Editor
             EditorGUI.indentLevel--;
             if (coast.userTerrain == null)
                 EditorGUILayout.HelpBox("Choose the object whose meshes are the ground round the walkable area.", MessageType.Info);
-            else if (ClearwaterUserTerrain.Renderers(coast).Count == 0)
-                EditorGUILayout.HelpBox("The User terrain has no enabled meshes.", MessageType.Warning);
+            else if (ClearwaterUserTerrain.Count(coast) == 0)
+                EditorGUILayout.HelpBox("The User terrain has no enabled meshes or terrains.", MessageType.Warning);
             else
-                EditorGUILayout.HelpBox("Its meshes are seen in their own materials and walked on with their own colliders. The " +
-                    "waterline is found on them; draw the line so it meets their shore at the walkable area's (green) edge.",
+                EditorGUILayout.HelpBox("Its meshes and Unity terrains are seen in their own materials and walked on with their " +
+                    "own colliders. The waterline is found on them; draw the line so it meets their shore at the walkable " +
+                    "area's (green) edge.",
                     MessageType.None);
         }
 
@@ -181,6 +182,14 @@ public class ClearwaterCoastEditor : Editor
             if (GUILayout.Button("Sand", GUILayout.Width(48))) look.objectReferenceValue = ClearwaterBedLooks.Sand;
         }
         bool lookChanged = EditorGUI.EndChangeCheck();
+        bool lookFromUser = false;
+        if (source.enumValueIndex == (int)ClearwaterCoast.TerrainSource.User && coast.userTerrain != null)
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(" ", GUILayout.Width(EditorGUIUtility.labelWidth - 4));
+                lookFromUser = GUILayout.Button(new GUIContent("Match the user terrain",
+                    "Make a look from the user terrain's texture, colour and tile size, so the ground past it looks the same"));
+            }
 
         EditorGUILayout.Space();
         EditorGUILayout.PropertyField(serializedObject.FindProperty("seaSize"), new GUIContent("Sea size (m)"));
@@ -188,6 +197,7 @@ public class ClearwaterCoastEditor : Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty(p));
         serializedObject.ApplyModifiedProperties();
         if (lookChanged) ClearwaterBedLooks.Apply(coast);
+        if (lookFromUser) { ClearwaterBedLooks.FromUserTerrain(coast); GUIUtility.ExitGUI(); }
         if (_applyPreset >= 0) { ApplyPreset(coast, _applyPreset); _applyPreset = -1; GUIUtility.ExitGUI(); }
         if (_resetLine) { _resetLine = false; ResetLine(coast); _selected = -1; GUIUtility.ExitGUI(); }
         FarClipCheck(coast);

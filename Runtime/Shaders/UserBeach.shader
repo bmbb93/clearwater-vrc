@@ -151,10 +151,13 @@ Shader "Clearwater/UserBeach"
                 float nh = saturate(dot(nf, h)), a2 = 0.02;
                 float c2 = max(nh * nh, 1e-4);
                 float glint = exp(-(1.0 - c2) / c2 / a2) / (CW_PI * a2 * c2 * c2) * fr * saturate(dot(nf, sun)) * 0.25;
-                float sparkle = smoothstep(0.3, 0.65, 0.5 + 0.35 * (cwNoise(b.p * 26.0) - 0.5));
+                // (the spots and the stranded foam are patterns laid out across the ground seen from above: on an upright
+                // face, a quay wall's, they would be drawn out into streaks down it, so they fade out there)
+                float flat = smoothstep(0.45, 0.75, n.y);
+                float sparkle = lerp(0.5, smoothstep(0.3, 0.65, 0.5 + 0.35 * (cwNoise(b.p * 26.0) - 0.5)), flat);
                 float3 sheen = b.film * dryNow * (fr * cwSkyFw(reflect(-v, nf), sun, 0.002) * lerp(0.8, 1.0, sparkle) + cwSunColor() * min(glint, 60.0) * sparkle);
                 // the run-up's foam, stranded where the water left it at the top of the run-up, soaking away
-                float fc = 0.45 * pow(b.film, 1.3) * cwFoamAlong(suv.y, _SwashClock) * smoothstep(0.05, 0.02, wetNow);
+                float fc = 0.45 * pow(b.film, 1.3) * cwFoamAlong(suv.y, _SwashClock) * smoothstep(0.05, 0.02, wetNow) * flat;
                 float runTop = _SwashHeight * _SwashRunup * cwSwashAmpVar(suv.y) / max(_SwashSlope, 0.02);
                 float foam = cwRunupFoam(suv, fc, runTop, 1.0, footprint);
                 float a = saturate(foam * 1.15) * 0.9;

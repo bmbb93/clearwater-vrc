@@ -23,6 +23,7 @@ Shader "Clearwater/Seabed"
         [HideInInspector] _BedVar ("Bed look: patchiness", Float) = 1
         [HideInInspector] _BedGrade ("Bed look: muted grade", Float) = 1
         [HideInInspector] _BedBright ("Bed look: brightness", Float) = 1
+        [HideInInspector] _BedGloss ("Bed look: smoothness of the dry ground (as the Standard shader's)", Float) = 0
         [HideInInspector] _BedMean ("Bed look: average colour", Vector) = (0.085, 0.085, 0.075, 1)
         _PatchSize ("Wave patch size (m)", Float) = 4.6
         _Depth ("Caustics depth (m)", Float) = 1.6
@@ -102,6 +103,30 @@ Shader "Clearwater/Seabed"
             struct appdata { float4 vertex : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
             struct v2f { float4 pos : SV_POSITION; float3 wpos : TEXCOORD0; UNITY_VERTEX_OUTPUT_STEREO };
 
+            float _BedGloss;
+            float4 _LightColor0;
+
+            // The specular of Unity's Standard shader (a dielectric, as its BRDF1): the reflection probe's sky blurred
+            // by the roughness, and the scene's sun light. For a bed look matching the user terrain, so the ground
+            // past the user's meshes has their sheen; it adds to the tone-mapped colour, as the Standard shader's
+            // output is not tone mapped by the shaders either. (world-space n, v)
+            float3 cwStandardSpecular(float3 n, float3 v, float smoothness)
+            {
+                float pr = 1.0 - smoothness, r = max(pr * pr, 0.002);
+                float nv = saturate(dot(n, v));
+                float3 rd = reflect(-v, n);
+                float mip = pr * (1.7 - 0.7 * pr) * 6.0; // (UNITY_SPECCUBE_LOD_STEPS)
+                float3 env = DecodeHDR(UNITY_SAMPLE_TEXCUBE_LOD(unity_SpecCube0, rd, mip), unity_SpecCube0_HDR);
+                float grazing = saturate(smoothness + 0.04);
+                float3 ind = env / (r * r + 1.0) * lerp(0.04, grazing, pow(1.0 - nv, 5.0));
+                float3 l = normalize(_WorldSpaceLightPos0.xyz), h = normalize(l + v);
+                float nl = saturate(dot(n, l)), nh = saturate(dot(n, h)), lh = saturate(dot(l, h));
+                float vis = 0.5 / (nl * (nv * (1.0 - r) + r) + nv * (nl * (1.0 - r) + r) + 1e-5);
+                float a2 = r * r, d = (nh * a2 - nh) * nh + 1.0;
+                float spec = max(0.0, vis * a2 / (d * d + 1e-7) * nl);
+                return ind + spec * _LightColor0.rgb * (0.04 + 0.96 * pow(1.0 - lh, 5.0));
+            }
+
             v2f vert(appdata v)
             {
                 v2f o;
@@ -143,7 +168,7 @@ Shader "Clearwater/Seabed"
                 }
                 float hgt, rockM;
                 float3 alb = cwFloorAlbedo(p, dpdx, dpdy, hgt, rockM);
-                float3 L;
+                float3 L, spec = 0.0;
                 // Seen from above, sand under less than 25 cm of water is shaded like the beach (wet, the swash's film
                 // and foam, the caustics growing in with depth) and the water draws its floor from this: sand in and
                 // out of the water is one surface, with no change of look at the still-water line. Deeper, and from
@@ -173,6 +198,11 @@ Shader "Clearwater/Seabed"
                     float3 dry = alb * lerp(0.72, 1.0, smoothstep(0.0, 0.3, -depth));
                     float3 albW = dry * (1.0 - 0.5 * film);
                     L = albW / CW_PI * (cwSunColor() * max(dot(n, sun), 0.0) * ao + cwSkyIrr() * 1.3 * ao);
+                    // the dry ground's own sheen (the bed look's smoothness; none on the rock, and the swash's film
+                    // has its own)
+                    [branch] if (_BedGloss > 0.0 && !under)
+                        spec = cwStandardSpecular(cwToJS(n), normalize(_WorldSpaceCameraPos - i.wpos), _BedGloss)
+                             * (1.0 - rockM) * (1.0 - film) * smoothstep(0.03, 0.0, depth);
                     [branch] if (depth > 0.0)
                     {
                         // under the water line it becomes, by 15 cm, exactly the floor the water traces itself (its
@@ -225,9 +255,11 @@ Shader "Clearwater/Seabed"
                     float dist = length(vd);
                     float muh = max(dot(normalize(float3(vd.x, 0.0, vd.z) + 1e-5), sun), 0.0);
                     float3 hazeC = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(muh, 6.0) + 0.3 * pow(muh, 64.0));
-                    L = lerp(L, hazeC * 0.95, (1.0 - exp(-dist * 0.004)) * 0.8);
+                    float hazeW = (1.0 - exp(-dist * 0.004)) * 0.8;
+                    L = lerp(L, hazeC * 0.95, hazeW);
+                    spec *= 1.0 - hazeW;
                 }
-                return float4(cwTonemap(max(L, 0.0)), 1.0);
+                return float4(cwTonemap(max(L, 0.0)) + spec, 1.0);
             }
             ENDCG
         }
