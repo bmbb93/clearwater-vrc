@@ -23,6 +23,12 @@ float _SwashSlope; // rise per metre of the beach face over the swash zone (bake
 float _ShoreWaves; // 1 = waves roll in, break and run up the beach; 0 = still water at the shore (a lake, a pond)
 float _FoamRelief; // m: how high the densest foam stands (its density is its height, lit through the normal)
 float _FoamLift;   // m: how far the whitewater stands up out of the water (the run-up's front lip, the breaking roller)
+// How much of the swell each stretch of shore gets (baked by the coast from the swell's direction: a bay's head only
+// what comes in through its mouth, a wall the waves run along next to nothing), as a height factor over the shore's
+// length v. _ShoreExposureV: x = v of the first sample, y = the samples' span (m), z = 1 for a closed line, w = 1 once
+// baked (before that every shore is open).
+sampler2D _ShoreExposure;
+float4 _ShoreExposure_TexelSize, _ShoreExposureV;
 
 #define CW_G 9.81
 
@@ -41,7 +47,15 @@ float2 cwSwashState(float t)
 
 // along the beach (v = distance along the shore), crests arrive a little early or late and vary in strength
 inline float cwSwashJitter(float v) { return 0.8 * (cwNoise(float2(v * 0.045, 3.7)) - 0.5) + 0.3 * (cwNoise(float2(v * 0.19, 9.1)) - 0.5) + 0.18 * (cwNoise(float2(v * 0.7, 15.3)) - 0.5); }
-inline float cwSwashAmpVar(float v) { return lerp(0.75, 1.1, cwNoise(float2(v * 0.03, 21.0))); }
+float cwShoreExposure(float v)
+{
+    if (_ShoreExposureV.w < 0.5) return 1.0;
+    float x = (v - _ShoreExposureV.x) / max(_ShoreExposureV.y, 1e-3);
+    x = _ShoreExposureV.z > 0.5 ? frac(x) : saturate(x);
+    return tex2Dlod(_ShoreExposure, float4(x * (1.0 - _ShoreExposure_TexelSize.x) + 0.5 * _ShoreExposure_TexelSize.x, 0.5, 0, 0)).r;
+}
+// the waves' height here: how exposed the shore is, and some variation along it
+inline float cwSwashAmpVar(float v) { return lerp(0.75, 1.1, cwNoise(float2(v * 0.03, 21.0))) * cwShoreExposure(v); }
 
 // ---- the swash: ballistic run-up (the shoreline motion of swash theory, and what timestacks of real beaches show)
 // Each broken wave throws a sheet up the beach face at the bore's speed U = sqrt(2 g R) (R = the height it will reach
@@ -117,7 +131,8 @@ CwSwash cwSwashAt(float t, float v)
     CwSwash o;
     o.level = CW_SWASH_REST; o.surge = 0.0; o.amp = 0.0;
     float sb = max(_SwashSlope, 0.02);
-    float Hr = _SwashHeight * _SwashRunup * cwSwashAmpVar(v);
+    float ex = cwShoreExposure(v);
+    float Hr = _SwashHeight * _SwashRunup * lerp(0.75, 1.1, cwNoise(float2(v * 0.03, 21.0))) * ex;
     float L = max(_SwashLoop, 1.0), n = max(_SwashCount, 1.0);
     float tt = t + cwSwashJitter(v);
     tt -= floor(tt / L) * L;
@@ -127,7 +142,7 @@ CwSwash cwSwashAt(float t, float v)
     [loop] for (int i = 0; i < CW_BORES; i++)
         if (cwSwashWave(i, tt, k, L, n, Hr, sb, z, up, amp, white))
         {
-            if (z > o.level) { o.surge = up; o.amp = amp; }
+            if (z > o.level) { o.surge = up; o.amp = amp * ex; } // (a sheltered shore's small waves: a small lip)
             o.level = cwSmax(o.level, z, 0.01);
         }
     o.run = o.level / sb;
@@ -152,7 +167,8 @@ float cwSwashFilm(float t, float v, float y)
 {
     if (y <= CW_SWASH_REST) return 1.0;
     float sb = max(_SwashSlope, 0.02);
-    float Hr = _SwashHeight * _SwashRunup * cwSwashAmpVar(v);
+    float ex = cwShoreExposure(v);
+    float Hr = _SwashHeight * _SwashRunup * lerp(0.75, 1.1, cwNoise(float2(v * 0.03, 21.0))) * ex;
     float L = max(_SwashLoop, 1.0), n = max(_SwashCount, 1.0);
     float tt = t + cwSwashJitter(v);
     tt -= floor(tt / L) * L;
@@ -265,7 +281,9 @@ CwShore cwShoreSw(float2 xz, float floorDepth, CwSwash sw)
 float cwBoreBand(float2 suv)
 {
     float sb = max(_SwashSlope, 0.02);
-    float Hr = _SwashHeight * _SwashRunup * cwSwashAmpVar(suv.y);
+    float ex = cwShoreExposure(suv.y);
+    [branch] if (ex < 0.02) return 0.0; // (no waves reach this shore)
+    float Hr = _SwashHeight * _SwashRunup * lerp(0.75, 1.1, cwNoise(float2(suv.y * 0.03, 21.0))) * ex;
     float L = max(_SwashLoop, 1.0), n = max(_SwashCount, 1.0);
     float tt = _SwashClock + cwSwashJitter(suv.y);
     tt -= floor(tt / L) * L;
@@ -287,7 +305,8 @@ float cwBoreBand(float2 suv)
             else if (c > c2) { c2 = c; z2 = z; w2 = white; }
         }
     // a bore's band shows while it is under the water on top; once it leads, the water's edge is its front
-    return max(c1 * smoothstep(0.0, 0.06, level - z1), c2 * smoothstep(0.0, 0.06, level - z2));
+    // (as white as the waves here are big)
+    return max(c1 * smoothstep(0.0, 0.06, level - z1), c2 * smoothstep(0.0, 0.06, level - z2)) * saturate(ex * 1.4);
 }
 
 // the same for a single point, the swash worked out for it

@@ -417,7 +417,7 @@ float4 fragSide(v2f i)
         // depth, so the lace runs on from the sand into the water)
         float cover = edgeGate * 0.45 * exp(-thick / 0.08) * smoothstep(0.075, 0.04, thick) + shore.swash * 0.35 * surge * exp(-thick / 0.07);
         // (gone by 7.5 cm of water: past 8 cm this branch only runs in the sheet zone, and the foam must not end in a line)
-        cover *= cwFoamAlong(suv.y, _SwashClock);
+        cover *= cwFoamAlong(suv.y, _SwashClock) * smoothstep(0.05, 0.6, cwShoreExposure(suv.y)); // (no lace where no waves come)
         cover += 0.5 * saturate(shore.lift / max(_FoamLift, 1e-3)) * shore.swash; // the lip is whitewater
         // A real water edge is no clean curve: it frays into fingers and a rim of bubbles. The sheet ends where its
         // thickness, less a lace pattern riding with the water, runs out (up to 3 cm of water, ~12 cm up the slope),

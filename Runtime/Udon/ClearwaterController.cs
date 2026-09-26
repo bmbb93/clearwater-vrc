@@ -58,6 +58,9 @@ public class ClearwaterController : UdonSharpBehaviour
     public AudioSource underwaterAudio;
     [Tooltip("The waterline (world), set by the coast bake; the shore source stays on it, at the point nearest the listener")]
     public Vector3[] shorePoints = { new Vector3(-100, 0.2f, -35.9f), new Vector3(100, 0.2f, -35.9f) };
+    [Tooltip("How big the waves are at each of the points, 0..1 (set by the coast bake from the swell's direction): the surf " +
+             "sounds from the nearest shore that has it, as loud as it is there")]
+    public float[] shoreExposure;
     [Tooltip("The points form a loop (set by the coast bake)")]
     public bool shoreClosed;
     [Tooltip("Waves break at the shore, with the surf sound (set by the coast bake); off: still water, no surf")]
@@ -199,10 +202,13 @@ public class ClearwaterController : UdonSharpBehaviour
         return Utilities.IsValid(cam) && cam.Active && cam.Position.y < water.position.y + SurfaceBand;
     }
 
-    // Nearest point of the waterline to p (in plan). Udon is slow, so each frame only the segments around the last
-    // nearest one are checked, with a full search every 60 frames to catch jumps (teleports, respawns).
+    // Nearest point of the waterline to p (in plan), counting a quiet shore as further away (distance over its wave
+    // height: in a sheltered cove the surf is heard from the open beach). Udon is slow, so each frame only the segments
+    // around the last nearest one are checked, with a full search every 60 frames to catch jumps (teleports,
+    // respawns). _shoreLoud = the wave height there.
     int _shoreSeg;
     int _shoreFrame;
+    float _shoreLoud = 1f;
     Vector3 NearestOnShore(Vector3 p)
     {
         int n = shorePoints.Length;
@@ -211,6 +217,7 @@ public class ClearwaterController : UdonSharpBehaviour
         if (++_shoreFrame >= 60 || segs <= 5) { _shoreFrame = 0; from = 0; to = segs - 1; }
         float best = float.MaxValue;
         Vector3 bestP = shorePoints[0];
+        bool weighted = shoreExposure != null && shoreExposure.Length == n;
         for (int k = from; k <= to; k++)
         {
             int s = shoreClosed ? (k % segs + segs) % segs : Mathf.Clamp(k, 0, segs - 1);
@@ -220,7 +227,9 @@ public class ClearwaterController : UdonSharpBehaviour
             float t = Mathf.Clamp01(((p.x - a.x) * ab.x + (p.z - a.z) * ab.z) / Mathf.Max(ab.x * ab.x + ab.z * ab.z, 1e-6f));
             Vector3 q = a + ab * t;
             float d = (p.x - q.x) * (p.x - q.x) + (p.z - q.z) * (p.z - q.z);
-            if (d < best) { best = d; bestP = q; _shoreSeg = s; }
+            float e = weighted ? Mathf.Lerp(shoreExposure[s], shoreExposure[(s + 1) % n], t) : 1f;
+            d /= Mathf.Max(e * e, 0.0025f);
+            if (d < best) { best = d; bestP = q; _shoreSeg = s; _shoreLoud = e; }
         }
         return bestP;
     }
@@ -237,7 +246,7 @@ public class ClearwaterController : UdonSharpBehaviour
 
         // quick crossfade into / out of the muffled underwater loop
         _submerged = Mathf.MoveTowards(_submerged, under ? 1f : 0f, Time.deltaTime * 5f);
-        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? shoreLevel * (1f - _submerged) : 0f;
+        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? shoreLevel * _shoreLoud * (1f - _submerged) : 0f;
         if (bedAudio != null) bedAudio.volume = bedLevel * (1f - _submerged);
         if (underwaterAudio != null) underwaterAudio.volume = underwaterLevel * _submerged;
     }

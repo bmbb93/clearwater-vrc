@@ -20,6 +20,14 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     [Tooltip("Waves roll in over the shallows, break and run up the beach, with the surf sound along the waterline. " +
              "Off: still water at the shore (a lake or a pond); the open water keeps its small waves.")]
     public bool shoreWaves = true;
+    [Tooltip("The swell comes in from one direction: each stretch of shore gets the waves as far as it is open that way " +
+             "(a bay's head only what comes in through its mouth, a wall the waves run along next to nothing). " +
+             "Auto: square onto the shore nearest this object.")]
+    public bool waveDirectionAuto = true;
+    [Tooltip("Where the swell comes from (degrees clockwise from world +Z), when not Auto")]
+    [Range(0f, 360f)] public float waveFrom = 0f;
+    [Tooltip("Spread of the swell's directions (degrees): wider lets more of it round into bays and onto side shores")]
+    [Range(5f, 60f)] public float waveSpread = 25f;
     public enum LineShape { Straight, Smooth, Handles }
     [Tooltip("Straight: the points joined by straight lines. Smooth: a smooth curve through the points (handles set " +
              "automatically). Handles: like a path in Illustrator: each point has two handles that set the curve's " +
