@@ -5,4 +5,4 @@ https://freesound.org/people/nicola_ariutti/sounds/813228/
 License: Creative Commons 0 (public domain dedication) — no attribution required, credited anyway.
 
 Processing (cut 55-149 s, 80 Hz high-pass, seamless 4 s crossfade loop, -20 LUFS, three variants):
-Tools/make_wave_audio.sh
+Tools~/make_wave_audio.sh

@@ -1,12 +1,16 @@
 {
   "name": "com.vbamboo.clearwater",
   "displayName": "Clearwater Coast",
-  "version": "0.15.4",
+  "version": "0.15.5",
   "unity": "2022.3",
-  "description": "Photoreal shallow water and coasts for VRChat worlds: draw the waterline, bake, and walk into clear water with caustics, shore waves in time with the surf, and an underwater view. A port of clearwater by Aureliengmz (MIT).",
+  "description": "Photoreal shallow water and coasts for VRChat worlds: draw the waterline, bake, and walk into clear water with caustics, shore waves in time with the surf, and an underwater view. A port of clearwater by Aureliengmz (MIT, (c) Lumaris).",
   "author": {
-    "name": "vbamboo"
+    "name": "bmbb93 (vbamboo)",
+    "url": "https://github.com/bmbb93"
   },
+  "documentationUrl": "https://github.com/bmbb93/clearwater-vrc#readme",
+  "changelogUrl": "https://github.com/bmbb93/clearwater-vrc/releases",
+  "licensesUrl": "https://github.com/bmbb93/clearwater-vrc/blob/main/LICENSE",
   "license": "MIT",
   "vpmDependencies": {
     "com.vrchat.worlds": ">=3.10.0"

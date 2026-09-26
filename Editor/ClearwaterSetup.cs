@@ -19,7 +19,7 @@ public static class ClearwaterSetup
     // shares (shaders, scripts, sounds, textures) comes from the package
     internal const string Root = "Assets/Clearwater";
     internal const string Gen = Root + "/Generated";
-    const string ScenePath = Root + "/Scenes/Clearwater.unity";
+    internal const string ScenePath = Root + "/Scenes/Clearwater.unity";
     internal const string Pkg = "Packages/com.vbamboo.clearwater/Runtime";
 
     // Ocean spectrum (same constants as the demo)
@@ -184,10 +184,10 @@ public static class ClearwaterSetup
         a.water.SetFloat("_Depth", DEPTH);
         a.water.SetFloat("_RipSize", RSIZE);
         a.water.SetVector("_SunDir", SunVector());
-        a.water.EnableKeyword("_CW_TONEMAP");
+        if (IsNew(a.water)) a.water.EnableKeyword("_CW_TONEMAP");
         a.sky = Mat("Clearwater/Skybox", "Sky");
         a.sky.SetVector("_SunDir", SunVector());
-        a.sky.EnableKeyword("_CW_TONEMAP");
+        if (IsNew(a.sky)) a.sky.EnableKeyword("_CW_TONEMAP");
         float seaSize = SceneSeaSize();
         a.plane = Save(BuildPlane(seaSize), "WaterPlane.asset");
         a.water.SetFloat("_SeaHalfSize", seaSize * 0.5f);
@@ -199,17 +199,21 @@ public static class ClearwaterSetup
         a.seabed.SetTexture("_Rip", ripN);
         a.seabed.SetTexture("_Peb", a.water.GetTexture("_Peb"));
         // (the bed look: Pebbles until a coast with its own is baked)
-        if (ClearwaterBedLooks.Pebbles != null) { ClearwaterBedLooks.Pebbles.ApplyTo(a.water); ClearwaterBedLooks.Pebbles.ApplyTo(a.seabed); }
+        if (ClearwaterBedLooks.Pebbles != null)
+        {
+            if (IsNew(a.water)) ClearwaterBedLooks.Pebbles.ApplyTo(a.water);
+            if (IsNew(a.seabed)) ClearwaterBedLooks.Pebbles.ApplyTo(a.seabed);
+        }
         a.seabed.SetFloat("_PatchSize", L);
         a.seabed.SetFloat("_Depth", DEPTH);
         a.seabed.SetFloat("_RipSize", RSIZE);
         a.seabed.SetVector("_SunDir", SunVector());
         a.seabed.SetVector("_WaterOrigin", Vector4.zero);
-        a.seabed.EnableKeyword("_CW_TONEMAP");
+        if (IsNew(a.seabed)) a.seabed.EnableKeyword("_CW_TONEMAP");
         a.underwater = Mat("Clearwater/Underwater", "Underwater");
         a.underwater.SetVector("_SunDir", SunVector());
         a.underwater.SetFloat("_Depth", DEPTH);
-        a.underwater.EnableKeyword("_CW_TONEMAP");
+        if (IsNew(a.underwater)) a.underwater.EnableKeyword("_CW_TONEMAP");
         // the surface's height, for a camera at the waterline (ClearwaterSurface.cginc)
         foreach (var m in new[] { a.seabed, a.underwater }) m.SetTexture("_Surf", surf);
         a.underwater.SetTexture("_Rip", ripN);
@@ -247,6 +251,7 @@ public static class ClearwaterSetup
         }
         a.seabedGrid = Save(BuildFarGrid("SeabedGrid", seaSize * SeabedFarPerSeaSize), "SeabedGrid.asset");
 
+        _made.Clear();
         AssetDatabase.SaveAssets();
         return a;
     }
@@ -258,11 +263,26 @@ public static class ClearwaterSetup
         return new Vector3(Mathf.Sin(az) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Cos(az) * Mathf.Cos(el));
     }
 
+    // Materials made (not found) by this build: only they get their starting settings (the tone mapping keyword, the
+    // bed look); one that exists keeps what was tuned on it (the waves, exposure, clouds, the tone mapping mode...),
+    // and the build only writes again the references and constants it owns.
+    static readonly HashSet<Material> _made = new HashSet<Material>();
+    static bool IsNew(Material m) => _made.Contains(m);
+
     static Material Mat(string shader, string name)
     {
         var s = Shader.Find(shader);
         if (s == null) throw new System.Exception("Shader not found: " + shader);
-        return Save(new Material(s) { name = name }, name + ".mat");
+        var existing = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/" + name + ".mat");
+        if (existing != null)
+        {
+            if (existing.shader != s) existing.shader = s;
+            EditorUtility.SetDirty(existing);
+            return existing;
+        }
+        var m = Save(new Material(s) { name = name }, name + ".mat");
+        _made.Add(m);
+        return m;
     }
 
     static CustomRenderTexture CRT(string name, int size, RenderTextureFormat fmt, Material mat, FilterMode filter, TextureWrapMode wrap,
@@ -293,6 +313,7 @@ public static class ClearwaterSetup
     internal static T Save<T>(T o, string file) where T : Object
     {
         string path = Gen + "/" + file;
+        o.name = System.IO.Path.GetFileNameWithoutExtension(file); // (Unity warns when an asset's name is not its file's)
         var existing = AssetDatabase.LoadAssetAtPath<T>(path);
         if (existing == null || existing.GetType() != o.GetType())
         {
@@ -532,14 +553,19 @@ public static class ClearwaterSetup
 
     // ---------------------------------------------------------------- scene
 
-    public static void CreateScene(Assets a)
+    public static void CreateScene(Assets a) => CreateScene(a, ScenePath, true);
+
+    /// <summary>A new Clearwater scene at path (sun, sky, the water rig, a straight coast, a VRChat world and spawn),
+    /// baked and saved. The Clearwater scene (main) also keeps its uploaded world ID and becomes the build's only
+    /// scene; another one (a demo scene) leaves the build settings alone.</summary>
+    internal static void CreateScene(Assets a, string path, bool main)
     {
         // keep the uploaded world's ID across rebuilds, or the next upload would create a second world
         string worldId = null;
-        if (File.Exists(ScenePath))
+        if (main && File.Exists(path))
         {
             // a plain field, or (the VRCWorld prefab's case) an override: "propertyPath: blueprintId" + "value: wrld_..."
-            var m = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(ScenePath), @"blueprintId\s*(?:\r?\n\s*value)?:\s*(wrld_[0-9a-fA-F-]+)");
+            var m = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(path), @"blueprintId\s*(?:\r?\n\s*value)?:\s*(wrld_[0-9a-fA-F-]+)");
             if (m.Success) worldId = m.Groups[1].Value;
         }
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -585,11 +611,11 @@ public static class ClearwaterSetup
         prev.cullingMask = ~(1 << CausticsLayer);
         prev.depth = -1;
 
-        Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
-        EditorSceneManager.SaveScene(scene, ScenePath);
-        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        EditorSceneManager.SaveScene(scene, path);
+        if (main) EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(path, true) };
         BakeSceneCoast(); // the coast, the walkable ground and the shore sound's path
-        Debug.Log("[Clearwater] scene built: " + ScenePath);
+        Debug.Log("[Clearwater] scene built: " + path);
     }
 
     /// <summary>The water and everything that drives it: the surface, the seabed, the underwater fog, the caustics
@@ -722,7 +748,8 @@ public static class ClearwaterSetup
 
     /// <summary>Gives the open scene the Clearwater sky and sun, as Build Scene does: a "Sun (Clearwater)" light
     /// (made once, reused after), the Clearwater skybox, ambient light from it, and the controller pointed at the
-    /// sun. The world's other directional lights are switched off, not deleted (two suns would double the light).</summary>
+    /// sun. The world's other directional lights are switched off (their Light components; the objects, their children
+/// and other components are left alone), not deleted: two suns would double the light.</summary>
     [MenuItem("Tools/Clearwater/Use Clearwater Sky and Sun")]
     public static void UseSkyAndSun()
     {
@@ -740,13 +767,15 @@ public static class ClearwaterSetup
         {
             Undo.RecordObject(sun.gameObject, "Clearwater sun");
             sun.gameObject.SetActive(true);
+            Undo.RecordObject(sun, "Clearwater sun");
+            sun.enabled = true;
         }
         var off = new List<string>();
         foreach (var l in Object.FindObjectsOfType<Light>())
-            if (l != sun && l.type == LightType.Directional && l.gameObject.activeSelf)
+            if (l != sun && l.type == LightType.Directional && l.enabled)
             {
-                Undo.RecordObject(l.gameObject, "Switch off other sun");
-                l.gameObject.SetActive(false);
+                Undo.RecordObject(l, "Switch off other sun");
+                l.enabled = false;
                 off.Add(l.name);
             }
         RenderSettings.skybox = sky;
@@ -761,7 +790,7 @@ public static class ClearwaterSetup
         }
         DynamicGI.UpdateEnvironment();
         EditorSceneManager.MarkSceneDirty(sun.gameObject.scene);
-        Debug.Log("[Clearwater] Clearwater sky and sun set." + (off.Count > 0 ? " Switched off: " + string.Join(", ", off) + " (turn them back on to undo)." : ""));
+        Debug.Log("[Clearwater] Clearwater sky and sun set." + (off.Count > 0 ? " Switched off the light of: " + string.Join(", ", off) + " (tick their Light components to undo)." : ""));
     }
 
     /// <summary>Adds Clearwater to the open scene (an existing world): the water rig and a straight coast to draw on.
@@ -783,7 +812,7 @@ public static class ClearwaterSetup
         }
         int choice = EditorUtility.DisplayDialogComplex("Clearwater",
             "Use Clearwater's sky and sun as well? (The water reflects its own sky and matches its sun best.) " +
-            "The world's directional lights are switched off, not deleted.",
+            "The world's directional lights are switched off (their Light components), not deleted.",
             "Clearwater sky and sun", "Cancel", "Keep the world's");
         if (choice == 1) return;
         var a = BuildAssets();

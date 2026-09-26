@@ -1,6 +1,14 @@
 # Clearwater Coast
 
-VRChat ワールドに、歩いて入れる透明な浅瀬と海岸を作るパッケージです。水面の反射、水底に揺れる光の模様（コースティクス）、波音に合わせて寄せては返す波打ち際、潜ったときの水中の見え方までを含みます。元になった WebGL デモは [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater)（MIT、`LICENSE-clearwater.txt`）です。
+VRChat ワールドに、歩いて入れる透明な浅瀬と海岸を作るパッケージです。水面の反射、水底に揺れる光の模様（コースティクス）、波音に合わせて寄せては返す波打ち際、潜ったときの水中の見え方までを含みます。元になった WebGL デモは [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater)（MIT、© Lumaris、`LICENSE-clearwater.txt`）です。
+
+![浜から見た遠浅の海](Documentation~/images/beach.jpg)
+
+| 遠浅の水と光の模様 | 波打ち際（打ち上げと泡） |
+| --- | --- |
+| ![浅瀬を上から見た水面と水底の光の模様](Documentation~/images/shallows.jpg) | ![浜に打ち上げる波と泡](Documentation~/images/shore.jpg) |
+| **水中** | **水中から見上げた空（丸く切り取られて見える）** |
+| ![水中から浜の方を見た様子](Documentation~/images/underwater.jpg) | ![水中から水面を見上げた様子](Documentation~/images/snells-window.jpg) |
 
 PC 向けです（GPU 計算を多用するため Quest では動きません）。VRChat Worlds SDK 3.10 以降が必要で、Unity でワールドを組んでアップロードしたことがある人を想定しています。
 
@@ -8,30 +16,58 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 
 ## 入れ方
 
-- ALCOM / VCC の「User Packages」にこのフォルダを追加し、プロジェクトに追加する（プロジェクトにコピーされます）
-- またはこのフォルダをワールドのプロジェクトの `Packages/` に置く（埋め込みパッケージ）
-- パッケージ自体を編集しながら使うときは、プロジェクトの `Packages/manifest.json` の `dependencies` にこのフォルダへの参照を書きます（コピーせず、このフォルダを直接読みます）。パスは `Packages/` からの相対でも書けます
+ALCOM / VCC にこのパッケージのリポジトリを追加し、ワールドのプロジェクトに「Clearwater Coast」を追加します。
 
-  ```json
-  "com.vbamboo.clearwater": "file:../../../Packages/com.vbamboo.clearwater"
-  ```
+1. ALCOM / VCC の設定（パッケージ）で、リポジトリの追加に次の URL を入れます（[配布ページ](https://bmbb93.github.io/clearwater-vrc/) のボタンからでも追加できます）
+
+   ```
+   https://bmbb93.github.io/clearwater-vrc/index.json
+   ```
+
+2. プロジェクトの管理画面で「Clearwater Coast」を追加します
+
+リリースの zip を展開してプロジェクトの `Packages/` に置いても使えます（埋め込みパッケージ）。パッケージ自体を編集しながら使うときは、このリポジトリを手元に置き、プロジェクトの `Packages/manifest.json` の `dependencies` にそのフォルダへの参照を書きます（コピーせず、そのフォルダを直接読みます）。パスは `Packages/` からの相対でも書けます。
+
+```json
+"com.vbamboo.clearwater": "file:<このリポジトリのフォルダ>"
+```
 
 ## 始める
 
 ### 新しいシーンから始める
 
-`Tools > Clearwater > Build Scene` を実行すると、`Assets/Clearwater/Scenes/Clearwater.unity` に水・浜・太陽・スポーン地点の入ったシーンができます。2 回目以降は素材だけを作り直し、シーンに手で置いた物やワールド ID はそのまま残ります。シーンを初めから作り直すときは `Recreate Scene` を使います。
+`Tools > Clearwater > Build Scene` を実行すると、`Assets/Clearwater/Scenes/Clearwater.unity` に水・浜・太陽・スポーン地点の入ったシーンができ、ビルド設定のシーン一覧がこのシーン 1 つになります。2 回目以降は素材を作り直しますが、シーンに手で置いた物やワールド ID はそのまま残ります。マテリアル（`Assets/Clearwater/Generated`）で調整した値（波の高さ・明るさ・雲・トーンマッピングの方式など）も残り、作り直されるのはテクスチャの参照など Clearwater が決める値だけです。シーンを初めから作り直すときは `Recreate Scene` を使います。
 
 ### 既存のワールドに足す
 
 ワールドのシーンを開いて `Tools > Clearwater > Add to Current Scene` を実行します。水一式と、まっすぐな海岸の編集用オブジェクト「Coast (editor only)」が追加されます。最初に「Clearwater の空と太陽も使うか」を聞かれます。
 
-- 使う：Build Scene と同じ空と太陽（Sun (Clearwater)）になります。ワールドの Directional Light はオフになりますが、削除はしません
-- 使わない：ワールドの太陽をそのまま使います。その太陽の影が無効なら、Clearwater が有効にします
+- 使う：Build Scene と同じ空と太陽（Sun (Clearwater)）になり、環境光も Clearwater の空から取るようになります。ワールドの Directional Light は、その Light コンポーネントだけがオフになります（オブジェクトやほかのコンポーネントはそのまま。削除もしません）
+- 使わない：ワールドの太陽をそのまま使います。その太陽の影が無効なら、Clearwater が有効にします。Directional Light がなければ「Sun」を作り、空が未設定か Unity の既定の空なら Clearwater の空にします
+
+どちらでも、追加のあとシーンは保存されます。
 
 あとから切り替えるときは `Tools > Clearwater > Use Clearwater Sky and Sun` を使います。水は画面の奥行き情報を使って水底や水中の物を透かすので、影は有効のままにしてください。影を切ると奥行き情報が作られず、水が正しく描けません。ワールドの Reference Camera の Far Clip も、海の広さに合わせる必要があります（次章の `Sea size`）。
 
 どちらの始め方でも、次は海岸の形を描いて Bake します。
+
+### デモシーンで試す
+
+使い方の例になるシーンを 5 つ用意しています。`Tools > Clearwater > Demo Scenes > Build Demo Scenes` を実行すると、`Assets/Clearwater/Demo` にシーンとその地形・マテリアル・テクスチャが作られます（30 秒ほどかかります）。どれも Build Scene と同じ新しいシーンに地面を足したもので、開いているシーンは変えません。実行の前に、開いているシーンを保存するかを聞かれます。作り終えると Terrain のデモが開きます。
+
+| シーン | 開くメニュー | 内容 | 詳しい章 |
+| --- | --- | --- | --- |
+| Demo_Cove | `Open Cove (a mesh as the ground)` | メッシュで作った砂の入り江。外側の地面を「Match the user terrain」で同じ砂にしています | 自分の地形を使う |
+| Demo_Harbor | `Open Harbor (a quay and a pier)` | 垂直な岸壁、階段護岸、スロープ、杭で立つ桟橋。杭には Obstacle を付けています | 自分の地形を使う、物を置く |
+| Demo_Pool | `Open Pool (still water only)` | 海のない 25 m プール。Pool を使わず、線を `Closed` にして囲み、打ち寄せる波をオフにしています | プールを置く（最初の段落） |
+| Demo_Resort | `Open Resort (the sea and two pools)` | 海辺の建物に、1 階の屋内プールと 2 階のテラスのプール | プールを置く |
+| Demo_Terrain | `Open Terrain (a Unity Terrain)` | Unity の Terrain で作った入り江・岬・砂州 | 自分の地形を使う |
+
+デモは、必ずメニューの `Open ...` から開いてください。Bake の結果はプロジェクトに 1 組しかなく、別のシーンを Bake すると上書きされます。メニューから開くとそのデモを Bake し直しますが、Project ウィンドウからシーンを直接開くと、直前に Bake したシーンの結果で表示が崩れます。
+
+同じ理由で、自分のシーンに戻ったら Bake し直します。`Back to the Clearwater Scene` は、Build Scene で作ったシーンを開いて Bake します。別のシーンに Clearwater を足しているなら、そのシーンを開いて Coast の Bake を押してください。
+
+Build Demo Scenes は、共有の素材（`Assets/Clearwater/Generated`）も Build Scene と同じように作り直します。マテリアルで調整した値は残ります。デモが要らなくなったら、`Assets/Clearwater/Demo` フォルダを消してください。プールのデモの焼き込みは `Assets/Clearwater/Generated/Pools` の `（プール名）_demo` フォルダに残るので、これも消して構いません。
 
 ## 海岸を描く（Coast (editor only)）
 
@@ -82,6 +118,10 @@ Scene ビューの「swell」の矢印が、いまの向きです。
 
 水の下から浜までひと続きの地面（Bed）の見た目は、Coast の `Bed look` で選びます。水の下と浜は同じ見た目になり、変更は Bake なしですぐ反映されます。
 
+| `Sand` | `Pebbles` |
+| --- | --- |
+| ![Sand の浜](Documentation~/images/bed-sand.jpg) | ![Pebbles の浜](Documentation~/images/bed-pebbles.jpg) |
+
 - 同梱のプリセット：`Pebbles`（小石、初期値）/ `Sand`（ベージュ〜茶色の砂浜）。Coast の `Pebbles` / `Sand` ボタンで切り替えられます
 - 自分の見た目：Project で右クリック > Create > Clearwater > Bed Look。`Color`（色、必須・タイル状）と `Height`（高さ、任意。なければ色の明るさから推定）、1 枚が何 m 四方か（`Tile size`）を指定します
 - 重ねる効果：隙間の砂（`Sand fill`）、波紋（`Ripple marks`。`Sand bed` をオンにすると底全体に）、藻の色（`Weed tint`）、色味（`Tint`・`Saturation`・`Brightness`・大きなまだら `Patchiness`・小石の落ち着いた色調 `Muted grade`）
@@ -91,6 +131,10 @@ Scene ビューの「swell」の矢印が、いまの向きです。
 ## 自分の地形を使う（Terrain source: User）
 
 歩ける範囲（緑の四角）の地面を、自分で作ったメッシュや Unity の Terrain にできます。岩場の入り江や、岸壁のある港のように、線と断面では作れない形に使います。
+
+| メッシュの入り江 | 岸壁のある港 | Unity の Terrain |
+| --- | --- | --- |
+| ![メッシュで作った入り江](Documentation~/images/user-terrain-cove.jpg) | ![岸壁と階段護岸](Documentation~/images/harbor-quay.jpg) | ![Terrain で作った浜の波打ち際](Documentation~/images/unity-terrain.jpg) |
 
 1. 地形のメッシュ・Terrain を一つの親オブジェクトの下にまとめます。当たり判定も自分で付けます（Mesh Collider・Terrain Collider など）
 2. Coast の `Terrain source` を `User` にし、`User terrain` にその親を指定します
@@ -123,6 +167,10 @@ Bake で見つかった問題は、Coast の Inspector に番号付きの警告�
 ## プールを置く（Clearwater Pool）
 
 海とは別の高さに水面を置けるプールを、いくつでも追加できます。リゾートの建物なら、1 階の屋内プールと 2 階のテラスにあるプールを、海と一緒に置けます。水面・水中・光の模様・触ったときの波紋は海と同じ仕組みで、打ち寄せる波と波音はありません。
+
+| 1 階の屋内プール（部屋が映る） | 2 階のテラスのプール | プールの水中 |
+| --- | --- | --- |
+| ![屋内プールと海側の開口部](Documentation~/images/pool-indoor.jpg) | ![テラスのプール](Documentation~/images/pool-terrace.jpg) | ![テラスのプールの水中](Documentation~/images/pool-underwater.jpg) |
 
 同じ水面の高さのプールだけで海がないワールドなら、Pool を使わずに前章の「自分の地形」でも作れます。`Shore waves` をオフにし、線を `Closed` にしてプールを囲みます。水は地形が水面より低い所にだけ見えるので、水面の高さが同じなら、プールがいくつあっても使えます。線は全部を囲む輪で構いません（1 つだけ囲んでも見た目はほぼ同じです）。
 
@@ -168,6 +216,8 @@ Bake で見つかった問題は、Pool の Inspector に番号付きの警告�
 ## 物を置く（Clearwater Stamp）
 
 海岸の上に置いた物は、`ClearwaterStamp` を付けてから Bake すると、海岸の一部として扱われます。
+
+![杭に Obstacle を付けた桟橋](Documentation~/images/harbor-pier.jpg)
 
 | モード | 使い方 | 効果 |
 | --- | --- | --- |
@@ -235,10 +285,10 @@ RTX 4070 Ti SUPER、VR の片目 2048×2048 で測った値です。
 
 ## ライセンス
 
-MIT License（`LICENSE`）。水の表現は clearwater by Aureliengmz（MIT、`LICENSE-clearwater.txt`）を移植したものです。
+MIT License（`LICENSE`、© 2026 bmbb93 (vbamboo)）。水の表現は clearwater by Aureliengmz（MIT、© Lumaris、`LICENSE-clearwater.txt`）を移植したものです。
 
 ## クレジット
 
-- 水の表現：clearwater by Aureliengmz（MIT）
+- 水の表現：clearwater by Aureliengmz（MIT、© Lumaris）
 - 波音：Freesound「Stromboli beach」nicola_ariutti（CC0）
 - 底のテクスチャ：どちらも計算で作ったもので、写真は使っていません（小石は移植元の `tools/make_pebbles.py`、砂は `Tools~/make_sand.py`）

@@ -54,7 +54,7 @@ public static class ClearwaterCoastBake
             world.Clear();
             foreach (var p in js) world.Add(new Vector3(p.x + origin.x, origin.y, -p.y + origin.z));
         }
-        else if (user != null) Debug.LogWarning("[Clearwater] User terrain: a closed coast line is not joined to the waterline found on it.");
+        else if (user != null) Debug.Log("[Clearwater] User terrain: the coast line is closed, so it is used as drawn (not joined to the waterline found on the terrain).");
 
         // shore coordinates
         var pts = new Vector4[world.Count];

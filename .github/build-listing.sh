@@ -23,7 +23,7 @@ for tag in $(gh release list --repo "$REPO" --limit 200 --json tagName,isDraft -
 done
 
 mkdir -p "$OUT"
-jq -n --arg name "$AUTHOR packages" --arg id "com.${AUTHOR,,}.vpm" --arg url "$BASE/index.json" \
+jq -n --arg name "$AUTHOR packages" --arg id "com.${OWNER,,}.vpm" --arg url "$BASE/index.json" \
   --arg author "$AUTHOR" --argjson packages "$packages" \
   '{name: $name, id: $id, url: $url, author: $author, packages: $packages}' > "$OUT/index.json"
 

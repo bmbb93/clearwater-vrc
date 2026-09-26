@@ -52,7 +52,9 @@ public static class ClearwaterPoolBake
     static void BakeOne(ClearwaterController ctl, ClearwaterPool pool, List<ClearwaterPool> pools)
     {
         Undo.RecordObject(pool, "Bake pool");
-        if (string.IsNullOrEmpty(pool.id)) pool.id = System.Guid.NewGuid().ToString("N").Substring(0, 8);
+        if (string.IsNullOrEmpty(pool.id) || pools.Exists(p => p != pool && p.id == pool.id && Safe(p.name) == Safe(pool.name)))
+            // (new, or a copy of another with the same name: they would share a folder)
+            pool.id = System.Guid.NewGuid().ToString("N").Substring(0, 8);
         string folder = "Pools/" + Safe(pool.name) + "_" + pool.id + "/";
         var notes = new List<ClearwaterCoast.BakeNote>();
         void Note(string text, params Vector3[] at) => notes.Add(new ClearwaterCoast.BakeNote { text = text, at = at });
@@ -214,7 +216,7 @@ public static class ClearwaterPoolBake
     // the floor 1 m above the water everywhere (a table of one value)
     static Texture2D DryProfile()
     {
-        var t = new Texture2D(4, 1, TextureFormat.RGFloat, false, true) { name = "PoolDryProfile", wrapMode = TextureWrapMode.Clamp };
+        var t = new Texture2D(4, 1, TextureFormat.RGFloat, false, true) { name = "DryProfile", wrapMode = TextureWrapMode.Clamp };
         t.SetPixels(new[] { new Color(-1, 0, 0, 1), new Color(-1, 0, 0, 1), new Color(-1, 0, 0, 1), new Color(-1, 0, 0, 1) });
         t.Apply(false, false);
         return ClearwaterSetup.Save(t, "Pools/DryProfile.asset");

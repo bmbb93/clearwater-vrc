@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 vbamboo
+Copyright (c) 2026 bmbb93 (vbamboo)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,6 @@ SOFTWARE.
 ---
 
 Portions of this package are ported from clearwater by Aureliengmz
-(https://github.com/Aureliengmz/clearwater), MIT License; see
-LICENSE-clearwater.txt. The wave audio is made from "Stromboli beach" by
+(https://github.com/Aureliengmz/clearwater), Copyright (c) 2026 Lumaris,
+MIT License; see LICENSE-clearwater.txt. The wave audio is made from "Stromboli beach" by
 nicola_ariutti (Freesound, CC0); see Runtime/Audio/CREDITS.txt.
