@@ -35,13 +35,14 @@ public class ClearwaterCoastEditor : Editor
     bool _resetLine;       // (likewise)
 
     // Cross-section presets: the floor's height (m, the water surface is 0) against the distance from the waterline
-    // (m, + out to sea). null = the Gentle Beach numbers at their defaults.
+    // (m, + out to sea). null = the Gentle Beach numbers at their defaults. The gentle ones share its beach face (1:10:
+    // 0.6 m up over 6 m, down to 0.35 m deep 3.5 m out), which also sets how far and how slowly the swash runs.
     static readonly (string name, Vector2[] keys)[] Presets =
     {
         ("Gentle beach (numbers)", null),
         ("Steep beach", new[] { new Vector2(-15, 1.4f), new Vector2(-5, 1.1f), new Vector2(-1.5f, 0.4f), new Vector2(0, 0),
             new Vector2(2, -0.8f), new Vector2(8, -2.4f), new Vector2(20, -4.2f), new Vector2(40, -5f), new Vector2(80, -5f) }),
-        ("Beach with a sandbar", new[] { new Vector2(-10, 0.6f), new Vector2(-2.4f, 0.6f), new Vector2(0, 0), new Vector2(1.4f, -0.35f),
+        ("Beach with a sandbar", new[] { new Vector2(-14, 0.6f), new Vector2(-7, 0.6f), new Vector2(-3, 0.29f), new Vector2(0, 0), new Vector2(3.5f, -0.35f),
             new Vector2(10, -0.9f), new Vector2(20, -1.5f), new Vector2(28, -0.9f), new Vector2(33, -0.45f), new Vector2(38, -0.9f),
             new Vector2(50, -2.4f), new Vector2(70, -3.5f), new Vector2(100, -3.5f) }),
         ("Lagoon (wide shallow flat)", new[] { new Vector2(-10, 0.5f), new Vector2(-2, 0.5f), new Vector2(0, 0), new Vector2(3, -0.45f),
@@ -51,7 +52,7 @@ public class ClearwaterCoastEditor : Editor
         ("Rocky drop-off", new[] { new Vector2(-12, 1.8f), new Vector2(-3, 1.3f), new Vector2(-1, 0.5f), new Vector2(0, 0),
             new Vector2(1.5f, -1f), new Vector2(4, -3f), new Vector2(10, -5.5f), new Vector2(30, -6.5f), new Vector2(80, -6.5f) }),
         ("Gentle beach under hills (land seen from afar)", new[] { new Vector2(-400, 40), new Vector2(-200, 28), new Vector2(-80, 10),
-            new Vector2(-25, 2.5f), new Vector2(-6, 0.8f), new Vector2(-2.4f, 0.6f), new Vector2(0, 0), new Vector2(1.4f, -0.35f),
+            new Vector2(-25, 2.5f), new Vector2(-10, 0.85f), new Vector2(-6, 0.6f), new Vector2(0, 0), new Vector2(3.5f, -0.35f),
             new Vector2(30, -1.4f), new Vector2(48, -3.45f), new Vector2(80, -3.45f) }),
     };
 
