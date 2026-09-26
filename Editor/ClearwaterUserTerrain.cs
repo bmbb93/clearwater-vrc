@@ -170,23 +170,42 @@ public static class ClearwaterUserTerrain
     // ---------------------------------------------------------------- the caustics on it
 
     const string ProjectorName = "User Terrain Caustics";
+    const string BeachProjectorName = "User Terrain Beach";
     const float ProjectorAbove = 30f; // m above the surface; its box reaches 10 m below
 
-    /// <summary>The caustics on the user terrain: a projector over its whole area, straight down, on its meshes'
-    /// layers (anything else on them under the water there gets them too), with the avatars' caustics material (it
-    /// places the pattern from world positions, so it lines up with the floor's everywhere). Removed when there is no
-    /// user terrain.</summary>
-    public static void UpdateProjector(ClearwaterController ctl, ClearwaterCoast coast, Data d)
+    /// <summary>What is drawn on the user terrain's meshes from above: the caustics (a projector over its whole area,
+    /// straight down, on its meshes' layers - anything else on them under the water there gets them too - with the
+    /// avatars' caustics material, which places the pattern from world positions, so it lines up with the floor's
+    /// everywhere), and the beach (the damp, the swash's film and its foam: UserBeach.shader, with the seabed's
+    /// settings). Removed when there is no user terrain.</summary>
+    public static void UpdateProjectors(ClearwaterController ctl, ClearwaterCoast coast, Data d)
     {
-        var t = ctl.water.Find(ProjectorName);
-        if (d == null || ctl.avatarCausticsMaterial == null)
+        int mask = 0;
+        foreach (var r in Renderers(coast)) mask |= 1 << r.gameObject.layer;
+        Material beach = null;
+        if (d != null && ctl.seabedMaterial != null)
+        {
+            beach = new Material(Shader.Find("Clearwater/UserBeach")) { name = "UserBeach" };
+            beach.CopyPropertiesFromMaterial(ctl.seabedMaterial);
+            beach.renderQueue = -1; // (the shader's, not the seabed's)
+            beach = ClearwaterSetup.Save(beach, "UserBeach.mat");
+        }
+        if (ctl.userBeachMaterial != beach) { Undo.RecordObject(ctl, "User terrain beach"); ctl.userBeachMaterial = beach; EditorUtility.SetDirty(ctl); }
+        Project(ctl, ProjectorName, d, mask, d != null ? ctl.avatarCausticsMaterial : null);
+        Project(ctl, BeachProjectorName, d, mask, beach);
+    }
+
+    static void Project(ClearwaterController ctl, string name, Data d, int mask, Material mat)
+    {
+        var t = ctl.water.Find(name);
+        if (d == null || mat == null)
         {
             if (t != null) Undo.DestroyObjectImmediate(t.gameObject);
             return;
         }
         if (t == null)
         {
-            var go = new GameObject(ProjectorName);
+            var go = new GameObject(name);
             Undo.RegisterCreatedObjectUndo(go, "User terrain caustics");
             t = go.transform;
             t.SetParent(ctl.water, false);
@@ -200,9 +219,7 @@ public static class ClearwaterUserTerrain
         proj.aspectRatio = 1;
         proj.nearClipPlane = 0.1f;
         proj.farClipPlane = ProjectorAbove + 10f;
-        proj.material = ctl.avatarCausticsMaterial;
-        int mask = 0;
-        foreach (var r in Renderers(coast)) mask |= 1 << r.gameObject.layer;
+        proj.material = mat;
         proj.ignoreLayers = ~mask;
         EditorUtility.SetDirty(proj);
     }

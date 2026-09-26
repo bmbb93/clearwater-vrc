@@ -29,7 +29,7 @@ public static class ClearwaterToneMapping
     {
         var seen = new HashSet<Material>();
         foreach (var ctl in Object.FindObjectsOfType<ClearwaterController>(true))
-            foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial, ctl.skyMaterial, ctl.underwaterMaterial })
+            foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial, ctl.skyMaterial, ctl.underwaterMaterial, ctl.userBeachMaterial })
                 if (m != null && m.HasProperty("_Tonemap") && seen.Add(m)) yield return m;
         if (RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_Tonemap") && seen.Add(RenderSettings.skybox))
             yield return RenderSettings.skybox;

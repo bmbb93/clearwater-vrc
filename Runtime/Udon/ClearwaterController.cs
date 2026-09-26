@@ -28,6 +28,8 @@ public class ClearwaterController : UdonSharpBehaviour
     public Material seabedMaterial;
     public Material underwaterMaterial;
     public Material avatarCausticsMaterial;
+    [Tooltip("The beach drawn on the coast's user terrain (set by the coast bake; none without one)")]
+    public Material userBeachMaterial;
 
     [Header("Avatar caustics")]
     [Tooltip("Projector (player layers only) that puts the caustics on avatars; kept over the local player")]
@@ -146,6 +148,7 @@ public class ClearwaterController : UdonSharpBehaviour
             if (seabedMaterial != null) seabedMaterial.SetVector("_SunDir", sd);
             if (underwaterMaterial != null) underwaterMaterial.SetVector("_SunDir", sd);
             if (avatarCausticsMaterial != null) avatarCausticsMaterial.SetVector("_SunDir", sd);
+            if (userBeachMaterial != null) userBeachMaterial.SetVector("_SunDir", sd);
         }
 
         VRCPlayerApi local = Networking.LocalPlayer;
@@ -259,6 +262,7 @@ public class ClearwaterController : UdonSharpBehaviour
         waterMaterial.SetFloat("_SwashClock", clock);
         if (seabedMaterial != null) seabedMaterial.SetFloat("_SwashClock", clock);
         if (underwaterMaterial != null) underwaterMaterial.SetFloat("_SwashClock", clock);
+        if (userBeachMaterial != null) userBeachMaterial.SetFloat("_SwashClock", clock);
 
         // quick crossfade into / out of the muffled underwater loop
         _submerged = Mathf.MoveTowards(_submerged, under ? 1f : 0f, Time.deltaTime * 5f);

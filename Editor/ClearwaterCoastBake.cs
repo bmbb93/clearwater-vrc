@@ -43,7 +43,6 @@ public static class ClearwaterCoastBake
         // the user terrain: its heights, and the waterline found on it in place of the line through the walkable area
         var user = ClearwaterUserTerrain.Bake(ctl, coast);
         if (user != null) user.tex = ClearwaterSetup.Save(user.tex, "UserTerrain.asset");
-        ClearwaterUserTerrain.UpdateProjector(ctl, coast, user);
         if (user != null && !coast.closed)
         {
             var js = new List<Vector2>();
@@ -132,6 +131,8 @@ public static class ClearwaterCoastBake
 
         // the sea's extent
         ClearwaterSetup.ApplySeaSize(ctl, coast.seaSize);
+        // what is drawn on the user terrain from above (its caustics, its beach: with the seabed's settings)
+        ClearwaterUserTerrain.UpdateProjectors(ctl, coast, user);
         // how the bed looks
         ClearwaterBedLooks.Apply(coast);
 
