@@ -129,15 +129,15 @@ public static class ClearwaterDemoScenes
         Finish(coast, root, false);
     }
 
-    // a swimming pool: 25 x 12.5 m, 1.2 m deep at one end and 2.0 m at the other, tiled, in a stone deck 30 cm above the
-    // water; still water (no shore waves), the coast a loop round it with the water inside
+    // a swimming pool: 25 x 12.5 m, 0.5 m deep (a jump climbs the 0.8 m from its floor to the deck), tiled, in a stone
+    // deck 30 cm above the water; still water (no shore waves), the coast a loop round it with the water inside
     static void BuildPool()
     {
         var (coast, root) = Clone("Demo_Pool");
         const float hx = 12.5f, hz = 6.25f, deck = 0.3f, half = 30f; // (the deck covers the walkable area)
         var pool = new Rect(-hx, -hz, 2 * hx, 2 * hz);
         Child(root, "Deck", Deck("PoolDeck", Square(half), deck, pool), DeckStone(), Vector3.zero);
-        Child(root, "Pool", Basin("PoolBasin", pool, 1.2f, 2.0f, deck), PoolTiles(), Vector3.zero);
+        Child(root, "Pool", Basin("PoolBasin", pool, 0.5f, 0.5f, deck), PoolTiles(), Vector3.zero);
         coast.closed = true;
         coast.shoreWaves = false;
         coast.points = Loop(pool);

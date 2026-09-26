@@ -12,8 +12,11 @@ public static class ClearwaterBedLooks
     public static ClearwaterBedLook Pebbles => AssetDatabase.LoadAssetAtPath<ClearwaterBedLook>(Folder + "/Pebbles.asset");
     public static ClearwaterBedLook Sand => AssetDatabase.LoadAssetAtPath<ClearwaterBedLook>(Folder + "/Sand.asset");
 
-    /// <summary>The coast's bed look (Pebbles when it has none).</summary>
-    public static ClearwaterBedLook Of(ClearwaterCoast coast) => coast != null && coast.bedLook != null ? coast.bedLook : Pebbles;
+    /// <summary>The look a coast without one of its own gets (and a new scene's materials): the sand beach.</summary>
+    public static ClearwaterBedLook Default => Sand;
+
+    /// <summary>The coast's bed look (the default when it has none).</summary>
+    public static ClearwaterBedLook Of(ClearwaterCoast coast) => coast != null && coast.bedLook != null ? coast.bedLook : Default;
 
     /// <summary>Puts the coast's bed look on the scene's water and seabed materials.</summary>
     public static void Apply(ClearwaterCoast coast)

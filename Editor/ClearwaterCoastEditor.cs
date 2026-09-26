@@ -181,8 +181,8 @@ public class ClearwaterCoastEditor : Editor
         using (new EditorGUILayout.HorizontalScope())
         {
             EditorGUILayout.PropertyField(look, new GUIContent("Bed look"));
-            if (GUILayout.Button("Pebbles", GUILayout.Width(62))) look.objectReferenceValue = ClearwaterBedLooks.Pebbles;
             if (GUILayout.Button("Sand", GUILayout.Width(48))) look.objectReferenceValue = ClearwaterBedLooks.Sand;
+            if (GUILayout.Button("Pebbles", GUILayout.Width(62))) look.objectReferenceValue = ClearwaterBedLooks.Pebbles;
         }
         bool lookChanged = EditorGUI.EndChangeCheck();
         bool lookFromUser = false;

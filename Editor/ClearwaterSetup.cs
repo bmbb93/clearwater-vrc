@@ -198,11 +198,11 @@ public static class ClearwaterSetup
         a.seabed.SetTexture("_Caus", a.causRT);
         a.seabed.SetTexture("_Rip", ripN);
         a.seabed.SetTexture("_Peb", a.water.GetTexture("_Peb"));
-        // (the bed look: Pebbles until a coast with its own is baked)
-        if (ClearwaterBedLooks.Pebbles != null)
+        // (the bed look: the default until a coast with its own is baked)
+        if (ClearwaterBedLooks.Default != null)
         {
-            if (IsNew(a.water)) ClearwaterBedLooks.Pebbles.ApplyTo(a.water);
-            if (IsNew(a.seabed)) ClearwaterBedLooks.Pebbles.ApplyTo(a.seabed);
+            if (IsNew(a.water)) ClearwaterBedLooks.Default.ApplyTo(a.water);
+            if (IsNew(a.seabed)) ClearwaterBedLooks.Default.ApplyTo(a.seabed);
         }
         a.seabed.SetFloat("_PatchSize", L);
         a.seabed.SetFloat("_Depth", DEPTH);
@@ -618,6 +618,12 @@ public static class ClearwaterSetup
         Debug.Log("[Clearwater] scene built: " + path);
     }
 
+    /// <summary>The water surfaces' sorting order: drawn before every other see-through thing (it comes before the
+    /// render queue), and with no depth written (the shader's _CWZWrite), so an avatar's see-through clothes are
+    /// drawn over it where they are under the water, whatever their queue and wherever the camera is, instead of
+    /// being hidden by it (or by it only from some places: the sea is one large plane sorted by its centre).</summary>
+    internal const int WaterSortingOrder = -1;
+
     /// <summary>The water and everything that drives it: the surface, the seabed, the underwater fog, the caustics
     /// on avatars, the caustics rig, the wave sound and the controller. Returns the water object.</summary>
     static GameObject CreateRig(Assets a, Light sun)
@@ -628,6 +634,7 @@ public static class ClearwaterSetup
         water.AddComponent<MeshFilter>().sharedMesh = a.plane;
         var mr = water.AddComponent<MeshRenderer>();
         mr.sharedMaterial = a.water;
+        mr.sortingOrder = WaterSortingOrder;
         mr.shadowCastingMode = ShadowCastingMode.Off;
         mr.receiveShadows = false;
         mr.lightProbeUsage = LightProbeUsage.Off;

@@ -32,6 +32,12 @@ public static class ClearwaterCoastBake
             Debug.LogError("[Clearwater] Bake: the coast needs at least two points.");
             return;
         }
+        var waterRenderer = ctl.water.GetComponent<MeshRenderer>(); // (a scene made before it was drawn first)
+        if (waterRenderer != null && waterRenderer.sortingOrder != ClearwaterSetup.WaterSortingOrder)
+        {
+            Undo.RecordObject(waterRenderer, "Bake coast");
+            waterRenderer.sortingOrder = ClearwaterSetup.WaterSortingOrder;
+        }
         Vector3 origin = ctl.water.position;
         Vector2 ToWater(Vector3 w) => new Vector2(w.x - origin.x, -(w.z - origin.z));
         // the line as drawn (straight segments, or the smooth curve sampled about every metre)

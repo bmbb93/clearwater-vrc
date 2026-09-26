@@ -81,6 +81,7 @@ Shader "Clearwater/Water"
         [ToggleUI] _ShoreWaves ("Shore waves (set by the coast bake)", Float) = 1
         _FoamRelief ("Foam relief (m): the densest foam's height, for its light and shade; 0 = flat (costs ~2 ms/eye close up)", Float) = 0
         _FoamLift ("Whitewater height (m): the run-up's front lip and the breaking roller stand up this far; 0 = flat", Float) = 0.03
+        [Enum(Off, 0, On, 1)] _CWZWrite ("Depth write (Off: avatars' see-through parts after the water are not hidden under it)", Float) = 0
     }
     SubShader
     {
@@ -93,7 +94,7 @@ Shader "Clearwater/Water"
         // seen from above
         Pass
         {
-            Cull Off ZWrite On
+            Cull Off ZWrite [_CWZWrite]
             CGPROGRAM
             #pragma vertex vertAbove
             #pragma fragment fragAbove
@@ -110,7 +111,7 @@ Shader "Clearwater/Water"
         // seen from under the water
         Pass
         {
-            Cull Off ZWrite On
+            Cull Off ZWrite [_CWZWrite]
             CGPROGRAM
             #pragma vertex vertBelow
             #pragma fragment fragBelow

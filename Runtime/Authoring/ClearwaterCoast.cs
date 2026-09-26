@@ -75,7 +75,7 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
 
     [Header("Bed")]
     [Tooltip("How the bed looks, under the water and up the beach (a Bed Look asset: the package's Pebbles or Sand, or " +
-             "your own from Create > Clearwater > Bed Look). None: Pebbles. Shows at once, no bake needed.")]
+             "your own from Create > Clearwater > Bed Look). None: Sand. Shows at once, no bake needed.")]
     public ClearwaterBedLook bedLook;
 
     [Header("Sea")]

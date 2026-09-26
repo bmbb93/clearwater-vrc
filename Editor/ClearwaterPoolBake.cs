@@ -134,6 +134,7 @@ public static class ClearwaterPoolBake
         water.GetOrAdd<MeshFilter>().sharedMesh = plane;
         var wr = water.GetOrAdd<MeshRenderer>();
         wr.sharedMaterial = waterMat;
+        wr.sortingOrder = ClearwaterSetup.WaterSortingOrder;
         wr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         wr.receiveShadows = false;
         wr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
