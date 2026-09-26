@@ -60,8 +60,8 @@ float2 cwCloudUV(float3 d, float fwE, out float fp)
 inline float cwCloudCoarse(float2 q) { return 0.5 * cwNoise(q) + 0.25 * cwNoise(q * 2.03 + 17.1); }
 
 // density 0..1 of the layer at q, a pixel spanning fp there (far off, the detail averages out to haze);
-// coarse = its two broadest octaves there
-float cwCloudDensity(float2 q, float fp, out float coarse)
+// coarse = its two broadest octaves there, tau = its optical depth (~1 at the frayed edges, tens in the core)
+float cwCloudDensity(float2 q, float fp, out float coarse, out float tau)
 {
     float far = smoothstep(0.15, 0.6, fp);
     coarse = cwCloudCoarse(q);
@@ -72,15 +72,25 @@ float cwCloudDensity(float2 q, float fp, out float coarse)
             + 0.05 * (cwNoise(pd) - 0.5) * (1.0 - smoothstep(0.01, 0.04, fp)); // (crisp edges)
     n = lerp(n, 0.47, far);
     float thr = lerp(0.74, 0.30, saturate(_CloudCover));
-    return smoothstep(thr, thr + 0.12 + 0.3 * far, n);
+    float dens = smoothstep(thr, thr + 0.12 + 0.3 * far, n);
+    // what its opacity says across the edge (so the sky shows through only as much as the sunlight does: no darker
+    // ring between a bright edge and the inside), then climbing into the tens once it is opaque
+    float x = (n - thr) / 0.12;
+    tau = (-log(1.0 - 0.99 * dens) + min(60.0 * max(x - 1.0, 0.0), 60.0)) * (1.0 - 0.8 * far);
+    return dens;
 }
 
-// how much of the sun gets through the clouds seen along d (for the sun's disc)
+// Henyey-Greenstein phase function: how much of the sunlight a droplet sends off at angle acos(mu) from it
+inline float cwPhaseHG(float mu, float g) { return (1.0 - g * g) / (4.0 * CW_PI * pow(max(1.0 + g * g - 2.0 * g * mu, 1e-4), 1.5)); }
+
+// how much of the sun's direct light gets through the clouds seen along d (for the sun's disc): exp(-optical
+// depth), so a cumulus hides it entirely and only its frayed edges let a dimmed disc through
 float cwCloudSunT(float3 d)
 {
     if (_CloudCover <= 0.0 || d.y <= 0.0) return 1.0;
-    float fp, coarse; float2 q = cwCloudUV(d, 0.0, fp);
-    return 1.0 - 0.97 * cwCloudDensity(q, 0.0, coarse);
+    float fp, coarse, tau; float2 q = cwCloudUV(d, 0.0, fp);
+    cwCloudDensity(q, 0.0, coarse, tau);
+    return exp(-tau);
 }
 
 // the sky c seen along d with the clouds in front of it (e = d.y, mu = the cosine to the sun, hor = horizon colour)
@@ -88,8 +98,8 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
 {
     [branch] if (_CloudCover > 0.0 && d.y > 0.0)
     {
-        float fp, coarse; float2 q = cwCloudUV(d, fwE, fp);
-        float dens = cwCloudDensity(q, fp, coarse);
+        float fp, coarse, tau; float2 q = cwCloudUV(d, fwE, fp);
+        float dens = cwCloudDensity(q, fp, coarse, tau);
         [branch] if (dens > 0.0)
         {
             // lit from the sun's side, shaded where the cloud thickens toward the sun
@@ -97,10 +107,14 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
             float lit = saturate(0.55 + 3.5 * (coarse - cwCloudCoarse(q + toSun)));
             lit = lerp(lit, 0.6, smoothstep(0.15, 0.6, fp));
             float3 col = lerp(float3(0.46, 0.52, 0.61), float3(1.30, 1.24, 1.12), lit) * lerp(0.75, 1.0, saturate(sun.y * 3.0));
-            // thin edges round the sun glow (light scattered forward through them)
-            col += float3(1.0, 0.86, 0.66) * 2.5 * pow(max(mu, 0.0), 12.0) * (1.0 - dens);
+            // Close to the sun they glow with the sunlight they pass on, sent forward by the droplets (a phase function
+            // peaked round the sun): as much as they cover the sky at their soft edges, fading slowly into the thick
+            // core. (A band of light along the edge outlined them like a drawing.)
+            float3 sunC = float3(1.0, 0.86, 0.66) * 6.0;
+            float3 fwd = sunC * 0.4 * cwPhaseHG(mu, 0.9) * dens * exp(-tau / 12.0);
             col = lerp(hor, col, smoothstep(0.0, 0.25, d.y)); // far ones fade into the haze
-            c = lerp(c, col, dens * smoothstep(0.0, 0.04, d.y));
+            float hz = smoothstep(0.0, 0.04, d.y);
+            c = lerp(c, col, dens * hz) + fwd * hz;
         }
     }
     return c;
