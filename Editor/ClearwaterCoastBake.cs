@@ -38,6 +38,12 @@ public static class ClearwaterCoastBake
             Undo.RecordObject(waterRenderer, "Bake coast");
             waterRenderer.sortingOrder = ClearwaterSetup.WaterSortingOrder;
         }
+        var seabedRenderer = ctl.water.Find("Seabed")?.GetComponent<MeshRenderer>(); // (and before it took the sun's shadows)
+        if (seabedRenderer != null && !seabedRenderer.receiveShadows)
+        {
+            Undo.RecordObject(seabedRenderer, "Bake coast");
+            seabedRenderer.receiveShadows = true;
+        }
         Vector3 origin = ctl.water.position;
         Vector2 ToWater(Vector3 w) => new Vector2(w.x - origin.x, -(w.z - origin.z));
         // the line as drawn (straight segments, or the smooth curve sampled about every metre)

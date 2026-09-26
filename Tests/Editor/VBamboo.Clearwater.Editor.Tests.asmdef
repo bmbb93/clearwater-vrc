@@ -1,0 +1,15 @@
+{
+    "name": "VBamboo.Clearwater.Editor.Tests",
+    "rootNamespace": "",
+    "references": ["VBamboo.Clearwater.Editor", "VBamboo.Clearwater.Udon", "VBamboo.Clearwater.Authoring", "UdonSharp.Runtime",
+                   "VRC.SDKBase", "VRC.SDK3", "VRC.Udon", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["nunit.framework.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -100,10 +100,13 @@ Shader "Clearwater/Seabed"
             #pragma fragment frag
             #pragma target 5.0
             #pragma multi_compile_instancing
+            #pragma multi_compile_fwdbase nolightmap nodynlightmap nodirlightmap novertexlight
             #pragma shader_feature_local _CW_TONEMAP
+            #include "AutoLight.cginc"
 
             struct appdata { float4 vertex : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct v2f { float4 pos : SV_POSITION; float3 wpos : TEXCOORD0; UNITY_VERTEX_OUTPUT_STEREO };
+            // (the sun's shadows on the dry beach: avatars and whatever stands on it)
+            struct v2f { float4 pos : SV_POSITION; float3 wpos : TEXCOORD0; SHADOW_COORDS(1) UNITY_VERTEX_OUTPUT_STEREO };
 
             float _BedGloss;
             float4 _LightColor0;
@@ -112,7 +115,7 @@ Shader "Clearwater/Seabed"
             // by the roughness, and the scene's sun light. For a bed look matching the user terrain, so the ground
             // past the user's meshes has their sheen; it adds to the tone-mapped colour, as the Standard shader's
             // output is not tone mapped by the shaders either. (world-space n, v)
-            float3 cwStandardSpecular(float3 n, float3 v, float smoothness)
+            float3 cwStandardSpecular(float3 n, float3 v, float smoothness, float shadow)
             {
                 float pr = 1.0 - smoothness, r = max(pr * pr, 0.002);
                 float nv = saturate(dot(n, v));
@@ -126,7 +129,7 @@ Shader "Clearwater/Seabed"
                 float vis = 0.5 / (nl * (nv * (1.0 - r) + r) + nv * (nl * (1.0 - r) + r) + 1e-5);
                 float a2 = r * r, d = (nh * a2 - nh) * nh + 1.0;
                 float spec = max(0.0, vis * a2 / (d * d + 1e-7) * nl);
-                return ind + spec * _LightColor0.rgb * (0.04 + 0.96 * pow(1.0 - lh, 5.0));
+                return ind + spec * shadow * _LightColor0.rgb * (0.04 + 0.96 * pow(1.0 - lh, 5.0));
             }
 
             v2f vert(appdata v)
@@ -137,6 +140,7 @@ Shader "Clearwater/Seabed"
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.wpos = seabedWorld(v.vertex);
                 o.pos = UnityWorldToClipPos(o.wpos);
+                TRANSFER_SHADOW(o);
                 return o;
             }
 
@@ -200,11 +204,12 @@ Shader "Clearwater/Seabed"
                     float film = cwWetFilm(p, -depth);
                     float3 dry = alb * lerp(0.72, 1.0, smoothstep(0.0, 0.3, -depth));
                     float3 albW = dry * (1.0 - 0.5 * film);
-                    L = albW / CW_PI * (cwSunColor() * max(dot(n, sun), 0.0) * ao + cwSkyIrr() * 1.3 * ao);
+                    float shadow = SHADOW_ATTENUATION(i);
+                    L = albW / CW_PI * (cwSunColor() * max(dot(n, sun), 0.0) * shadow * ao + cwSkyIrr() * 1.3 * ao);
                     // the dry ground's own sheen (the bed look's smoothness; none on the rock, and the swash's film
                     // has its own)
                     [branch] if (_BedGloss > 0.0 && !under)
-                        spec = cwStandardSpecular(cwToJS(n), normalize(_WorldSpaceCameraPos - i.wpos), _BedGloss)
+                        spec = cwStandardSpecular(cwToJS(n), normalize(_WorldSpaceCameraPos - i.wpos), _BedGloss, shadow)
                              * (1.0 - rockM) * (1.0 - film) * smoothstep(0.03, 0.0, depth);
                     [branch] if (depth > 0.0)
                     {
@@ -231,7 +236,7 @@ Shader "Clearwater/Seabed"
                         float glint = exp(-(1.0 - c2) / c2 / a2) / (CW_PI * a2 * c2 * c2) * fr * saturate(dot(nf, sun)) * 0.25;
                         // water stands on the tops of the stones and in scattered spots: the glint sparkles, it is no mirror
                         float sparkle = smoothstep(0.3, 0.65, hgt + 0.35 * (cwNoise(p * 26.0) - 0.5));
-                        L += film * dryNow * (fr * cwSkyFw(reflect(-v, nf), sun, 0.002) * lerp(0.8, 1.0, sparkle) + cwSunColor() * min(glint, 60.0) * sparkle);
+                        L += film * dryNow * (fr * cwSkyFw(reflect(-v, nf), sun, 0.002) * lerp(0.8, 1.0, sparkle) + cwSunColor() * min(glint, 60.0) * shadow * sparkle);
                         // the run-up's own foam, left behind as the sheet drains: the same lace as on the water (so
                         // it carries on across the water's edge) as dense as at the sheet's edge, fading as it soaks in
                         float fc = 0.45 * pow(film, 1.3) * cwFoamAlong(suvS.y, _SwashClock);

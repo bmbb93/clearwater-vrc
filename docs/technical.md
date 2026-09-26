@@ -2,7 +2,7 @@
 
 この文書は、Clearwater Coast が海をどう描いているかを、コードに手を入れたい人や、負荷と見た目の理由を知りたい人に向けて説明します。使い方は [README](../README.md) にあります。ここでは、同じ機能を「中で何が起きているか」の側から書きます。Unity のシェーダーと、VRChat のワールド制作の基本は知っている前提です。
 
-最初の 3 章（全体像・波・水底）を読めば、残りの章はどこから読んでも追えます。4 章以降は、必要になったときに引く参照用です。用語は [CONTEXT.md](../CONTEXT.md)、後から変えにくい決定は [docs/adr](adr/) にまとめてあります。数値はパッケージ 0.15.6 時点のものです。
+最初の 3 章（全体像・波・水底）を読めば、残りの章はどこから読んでも追えます。4 章以降は、必要になったときに引く参照用です。パッケージに手を入れるときは、12 章のテストも見てください。用語は [CONTEXT.md](../CONTEXT.md)、後から変えにくい決定は [docs/adr](adr/) にまとめてあります。数値はパッケージ 0.15.9 時点のものです。
 
 ## 1. 全体像：焼き込んだ少しのテクスチャと、毎フレームの GPU 計算で海を描く
 
@@ -148,7 +148,7 @@ Bake が作るものは、すべて `Assets/Clearwater/Generated` にありま�
 | シェーダー | キュー | 合成 / 深度書き込み | 画面の取り込み | 深度テクスチャ |
 | --- | --- | --- | --- | --- |
 | Sky | Background | なし / Off | なし | 読まない |
-| Seabed | Geometry（2000） | 不透明 / On（影も落とす） | なし | 書く |
+| Seabed | Geometry（2000） | 不透明 / On（影を落とし、乾いた浜は太陽の影を受ける） | なし | 書く |
 | UserBeach（Projector） | 2498 | One SrcAlpha / Off | なし | 読まない |
 | AvatarCaustics（Projector） | 2499 | 2 倍の乗算 / Off | なし | 読まない |
 | Water | 3000、sortingOrder −1 | なし / Off（`_CWZWrite`） | `_CWGrabWater` | 読む |
@@ -179,3 +179,21 @@ Post Processing Stack v2 を使うときは、`Tools > Clearwater > Tone Mapping
 - **焼き込みはプロジェクトに 1 組です。** シーンを切り替えたら Bake し直します
 
 移植元の WebGL デモとの対応、コードの中の細かい判断は、各ファイルの冒頭と関数のコメントに書いてあります。この文書で分からない点は、GitHub の Issue で質問してください。
+
+## 12. テスト：焼き込みの計算と Bake の警告を確かめる
+
+`Tests/Editor` に、Unity Test Framework（EditMode）のテストがあります。対象は、数値で正解を書ける焼き込みの計算と、Bake の警告です。
+
+- プールの範囲（どの高さまでが、そのプールの中か）
+- 波打ち際からの符号付き距離と、海岸に沿った距離（`CoastField`）
+- 線の点の数の上限、Bake し直しの判定
+- 自分の地形の波打ち際への差し替えと、その警告
+- 覆われていない所・焼き込む範囲からのはみ出しの警告
+
+シェーダーの見た目と、VRChat の中での挙動（同期、実際のジャンプ）はテストしていません。見た目は撮影して比べて確かめます。
+
+テストを動かすには、ワールドのプロジェクトの `Packages/manifest.json` に次を足し、`Window > General > Test Runner` の EditMode で実行します。テストは Test Runner が用意する空のシーンで動き、焼き込んだデータ（`Assets/Clearwater/Generated`）には書き込みません。
+
+```json
+"testables": ["com.vbamboo.clearwater"]
+```

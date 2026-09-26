@@ -647,7 +647,7 @@ public static class ClearwaterSetup
         var smr = seabed.AddComponent<MeshRenderer>();
         smr.sharedMaterial = a.seabed;
         smr.shadowCastingMode = ShadowCastingMode.On; // puts it in the camera depth texture
-        smr.receiveShadows = false;
+        smr.receiveShadows = true; // (the sun's shadows on the dry beach)
         smr.lightProbeUsage = LightProbeUsage.Off;
         smr.reflectionProbeUsage = ReflectionProbeUsage.Off;
 

@@ -445,8 +445,23 @@ public static class ClearwaterUserTerrain
         }
         Vector2 e1 = i1 > 0 ? Crossing(line[i1 - 1], line[i1]) : line[i1];
         Vector2 e2 = i2 < line.Count - 1 ? Crossing(line[i2 + 1], line[i2]) : line[i2];
-        List<Vector2> best = null; float bestScore = float.MaxValue;
+        // each waterline's part through the walkable area, from where it first comes in to where it last leaves: the
+        // terrain reaches on into the seam, and only the part inside replaces the line (joined, and measured, there)
+        var parts = new List<List<Vector2>>();
         foreach (var l in lines)
+        {
+            int a = -1, b = -1;
+            for (int i = 0; i < l.Count; i++) if (Inside(l[i])) { if (a < 0) a = i; b = i; }
+            if (a < 0 || b == a) continue;
+            var part = new List<Vector2>();
+            if (a > 0) part.Add(Crossing(l[a - 1], l[a]));
+            part.AddRange(l.GetRange(a, b - a + 1));
+            if (b < l.Count - 1) part.Add(Crossing(l[b + 1], l[b]));
+            parts.Add(part);
+        }
+        if (parts.Count == 0) { note = "no waterline found on the user terrain in the walkable area (is it above and below the water there?)"; return line; }
+        List<Vector2> best = null; float bestScore = float.MaxValue;
+        foreach (var l in parts)
         {
             float score = Vector2.Distance(l[0], e1) + Vector2.Distance(l[l.Count - 1], e2);
             if (score < bestScore) { bestScore = score; best = l; }

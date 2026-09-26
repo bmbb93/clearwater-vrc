@@ -130,16 +130,17 @@ Shader "Clearwater/UserBeach"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 CwBeach b;
                 if (!cwUserBeach(i.wpos, b)) clip(-1);
-                // the damp and the film darken the ground under them
-                float m = b.damp * (1.0 - 0.5 * b.film);
+                // is the swash's water standing on it now? Then the water surface draws it, from the screen: darkened
+                // here as well, the ground under the run-up would show through it as a dark band along the still
+                // water's line, so the damp and the film only darken the ground the water has left
+                float2 suv = cwShoreUV(b.p);
+                float wetNow = cwSwashNow(suv).level + cwSwashLobes(_SwashClock, b.p) - b.above;
+                float dryNow = smoothstep(0.08, 0.03, wetNow);
+                float m = lerp(1.0, b.damp * (1.0 - 0.5 * b.film), dryNow);
             #if defined(_CW_TONEMAP)
                 m = pow(m, 0.7); // (on colours already tone mapped: about what the darkening is in the scene's light)
             #endif
                 [branch] if (b.film <= 0.01) return float4(0, 0, 0, m);
-                // where the swash has just drained: is the water still standing on it (then the water surface draws it)?
-                float2 suv = cwShoreUV(b.p);
-                float wetNow = cwSwashNow(suv).level + cwSwashLobes(_SwashClock, b.p) - b.above;
-                float dryNow = smoothstep(0.08, 0.03, wetNow);
                 float3 sun = cwSun();
                 float3 v = normalize(cwToJS(_WorldSpaceCameraPos - i.wpos));
                 float3 n = normalize(cwToJS(i.wn));
