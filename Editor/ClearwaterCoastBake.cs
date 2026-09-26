@@ -64,7 +64,7 @@ public static class ClearwaterCoastBake
         farField.name = "CoastFieldOuter";
 
         // how exposed each stretch of shore is to the swell
-        var (exposure, exposureV, expAt, expH) = BakeExposure(coast, pts, centre);
+        var (exposure, exposureV, expAt, expH, expD) = BakeExposure(coast, pts, centre);
         exposure = ClearwaterSetup.Save(exposure, "ShoreExposure.asset");
 
         // cross-section
@@ -119,7 +119,9 @@ public static class ClearwaterCoastBake
                                     coast.groundHalfSize + SoundReach, out soundClosed);
         ctl.shoreClosed = soundClosed;
         // (the surf is as loud as the waves there are big)
+        // (and in step with the waves there, which come a little early or late along the shore)
         var exp = new float[ctl.shorePoints.Length];
+        var del = new float[ctl.shorePoints.Length];
         for (int i = 0; i < exp.Length; i++)
         {
             var q = ToWater(ctl.shorePoints[i]);
@@ -128,10 +130,11 @@ public static class ClearwaterCoastBake
             for (int j = 0; j < expAt.Length; j++)
             {
                 float d = (expAt[j] - q).sqrMagnitude;
-                if (d < best) { best = d; exp[i] = expH[j]; }
+                if (d < best) { best = d; exp[i] = expH[j]; del[i] = expD[j]; }
             }
         }
         ctl.shoreExposure = exp;
+        ctl.shoreDelay = del;
         ctl.shoreWaves = coast.shoreWaves;
         EditorUtility.SetDirty(ctl);
 
@@ -144,31 +147,19 @@ public static class ClearwaterCoastBake
 
     const float ExposureStep = 2f;    // m between shore exposure samples (more on a very long line)
     const float ExposureSmooth = 10f; // m along the shore it is smoothed over (the waves bend round into the lee)
+    const float DelaySmooth = 5f;     // m along the shore the arrival times are smoothed over
 
-    /// <summary>The swell's direction of travel in water space: from the coast's setting, or square onto the shore
-    /// nearest the coast object.</summary>
-    public static Vector2 SwellTravel(ClearwaterCoast coast, Vector4[] pts, Vector2 centre)
+    /// <summary>The swell's direction of travel in water space (ClearwaterCoast.SwellFrom, reversed).</summary>
+    public static Vector2 SwellTravel(ClearwaterCoast coast)
     {
-        if (!coast.waveDirectionAuto)
-        {
-            float a = coast.waveFrom * Mathf.Deg2Rad;
-            return -new Vector2(Mathf.Sin(a), -Mathf.Cos(a)); // (from +Z world = from -y in water space)
-        }
-        int n = pts.Length, segs = coast.closed ? n : n - 1;
-        float best = float.MaxValue; Vector2 nrm = new Vector2(0, -1);
-        for (int k = 0; k < segs; k++)
-        {
-            Vector2 a = pts[k], b = pts[(k + 1) % n], ab = b - a;
-            float t = Mathf.Clamp01(Vector2.Dot(centre - a, ab) / Mathf.Max(ab.sqrMagnitude, 1e-8f));
-            float d = (a + ab * t - centre).sqrMagnitude;
-            if (d < best && ab.sqrMagnitude > 1e-8f) { best = d; ab.Normalize(); nrm = new Vector2(ab.y, -ab.x); }
-        }
-        return -nrm; // (toward the land: the sea is on the line's right in water space)
+        Vector3 from = coast.SwellFrom();
+        return -new Vector2(from.x, -from.z).normalized; // (water space: z flipped)
     }
 
-    /// <summary>The shore's exposure to the swell along it (ClearwaterCoastExposure) as a texture over v, with the
-    /// range the shaders map it by; also the samples' positions and values, for the surf's loudness.</summary>
-    static (Texture2D, Vector4, Vector2[], float[]) BakeExposure(ClearwaterCoast coast, Vector4[] pts, Vector2 centre)
+    /// <summary>The shore's exposure to the swell along it (ClearwaterCoastExposure, R) and when the swell reaches it
+    /// (ClearwaterCoastTiming, G: seconds after the shore nearest the coast object) as a texture over v, with the range
+    /// the shaders map it by; also the samples' positions and values, for the surf's loudness and timing.</summary>
+    static (Texture2D, Vector4, Vector2[], float[], float[]) BakeExposure(ClearwaterCoast coast, Vector4[] pts, Vector2 centre)
     {
         int n = pts.Length;
         var xy = new Vector2[n];
@@ -179,16 +170,18 @@ public static class ClearwaterCoastBake
         int steps = Mathf.Clamp(Mathf.RoundToInt(total / ExposureStep), 1, 8191);
         float step = Mathf.Max(total, 1e-3f) / steps;
         float reach = Mathf.Clamp(coast.seaSize * 0.5f, 200f, 3000f);
-        var h = ClearwaterCoastExposure.Compute(xy, coast.closed, SwellTravel(coast, pts, centre), coast.waveSpread,
+        var waveTo = SwellTravel(coast);
+        var h = ClearwaterCoastExposure.Compute(xy, coast.closed, waveTo, coast.waveSpread,
                                                 reach, ExposureSmooth, step, out var at);
-        var tex = new Texture2D(h.Length, 1, TextureFormat.RHalf, false, true)
+        var delay = ClearwaterCoastTiming.ShoreDelays(coast, pts, centre, waveTo, at, coast.closed, DelaySmooth, step);
+        var tex = new Texture2D(h.Length, 1, TextureFormat.RGFloat, false, true)
         { name = "ShoreExposure", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
         var px = new Color[h.Length];
-        for (int i = 0; i < h.Length; i++) px[i] = new Color(h[i], 0, 0, 1);
+        for (int i = 0; i < h.Length; i++) px[i] = new Color(h[i], delay[i], 0, 1);
         tex.SetPixels(px);
         tex.Apply(false);
         // (the samples run from the line's start, whose v is pts[0].z, over (count - 1) steps)
-        return (tex, new Vector4(pts[0].z, step * (h.Length - 1), coast.closed ? 1 : 0, 1), at, h);
+        return (tex, new Vector4(pts[0].z, step * (h.Length - 1), coast.closed ? 1 : 0, 1), at, h, delay);
     }
 
     /// <summary>What a coast's bake depends on (with its stamps), to tell when it needs baking again.</summary>
@@ -295,7 +288,7 @@ public static class ClearwaterCoastBake
 
     // format: the detailed field is full float - half floats step v by 3 cm 40 m along the shore, which the foam's
     // fine lace (laid out along v) showed as blocks; the coarse field over the whole sea is only seen from afar
-    static Texture2D BakeCoastField(Vector4[] shore, bool closed, Vector2 centre, float size, int res, TextureFormat format)
+    internal static Texture2D BakeCoastField(Vector4[] shore, bool closed, Vector2 centre, float size, int res, TextureFormat format)
     {
         var mat = new Material(Shader.Find("Hidden/Clearwater/CoastBake"));
         var arr = new Vector4[MaxShorePoints];

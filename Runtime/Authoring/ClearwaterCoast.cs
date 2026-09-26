@@ -22,7 +22,7 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     public bool shoreWaves = true;
     [Tooltip("The swell comes in from one direction: each stretch of shore gets the waves as far as it is open that way " +
              "(a bay's head only what comes in through its mouth, a wall the waves run along next to nothing). " +
-             "Auto: square onto the shore nearest this object.")]
+             "Auto: square onto the shore round this object (the way it faces on average within ~200 m).")]
     public bool waveDirectionAuto = true;
     [Tooltip("Where the swell comes from (degrees clockwise from world +Z), when not Auto")]
     [Range(0f, 360f)] public float waveFrom = 0f;
@@ -97,6 +97,30 @@ public class ClearwaterCoast : MonoBehaviour, IEditorOnly
     }
 
     public static Vector3 Flat(Vector3 p) => new Vector3(p.x, 0, p.z);
+
+    /// <summary>Where the swell comes from (world, flat, pointing out to sea): set, or when Auto the way the shore
+    /// round this object faces on average (within ~200 m: a bay's or an inlet's sides cancel out, leaving the coast
+    /// it opens from).</summary>
+    public Vector3 SwellFrom()
+    {
+        if (!waveDirectionAuto)
+        {
+            float a = waveFrom * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Sin(a), 0, Mathf.Cos(a));
+        }
+        var line = Sampled();
+        Vector3 c = transform.position, acc = Vector3.zero;
+        const float R = 200f;
+        for (int k = 0; k + 1 < line.Count; k++)
+        {
+            Vector3 a = transform.TransformPoint(line[k]), b = transform.TransformPoint(line[k + 1]);
+            Vector3 d = b - a; d.y = 0;
+            Vector3 mid = (a + b) * 0.5f; mid.y = c.y;
+            float w = Mathf.Exp(-(mid - c).sqrMagnitude / (R * R));
+            acc += new Vector3(-d.z, 0, d.x) * w; // (the sea: left of the line's direction seen from above, as long as it)
+        }
+        return acc.sqrMagnitude > 1e-6f ? acc.normalized : Vector3.forward;
+    }
 
     // ---- the line as drawn: a cubic Bezier between each pair of points (straight, auto-smooth, or your handles)
 

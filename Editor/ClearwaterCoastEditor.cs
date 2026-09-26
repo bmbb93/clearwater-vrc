@@ -321,25 +321,7 @@ public class ClearwaterCoastEditor : Editor
         // the swell: three arrows off the shore nearest the object, the way it travels
         if (coast.shoreWaves && n > 1)
         {
-            Vector3 from;
-            if (!coast.waveDirectionAuto)
-            {
-                float a = coast.waveFrom * Mathf.Deg2Rad;
-                from = new Vector3(Mathf.Sin(a), 0, Mathf.Cos(a));
-            }
-            else
-            {
-                float best = float.MaxValue; from = Vector3.forward;
-                for (int k = 0; k < segs; k++)
-                {
-                    Vector3 a = w[k], b = w[(k + 1) % n], ab = b - a; ab.y = 0;
-                    if (ab.sqrMagnitude < 1e-8f) continue;
-                    Vector3 p = tf.position; p.y = a.y;
-                    float t = Mathf.Clamp01(Vector3.Dot(p - a, ab) / ab.sqrMagnitude);
-                    float d = (a + ab * t - p).sqrMagnitude;
-                    if (d < best) { best = d; from = new Vector3(-ab.z, 0, ab.x).normalized; } // (the sea side)
-                }
-            }
+            Vector3 from = coast.SwellFrom();
             Vector3 side = new Vector3(from.z, 0, -from.x);
             Handles.color = new Color(0.6f, 0.9f, 1f, 0.9f);
             for (int j = -1; j <= 1; j++)

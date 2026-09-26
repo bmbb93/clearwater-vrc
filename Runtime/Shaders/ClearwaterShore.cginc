@@ -23,10 +23,12 @@ float _SwashSlope; // rise per metre of the beach face over the swash zone (bake
 float _ShoreWaves; // 1 = waves roll in, break and run up the beach; 0 = still water at the shore (a lake, a pond)
 float _FoamRelief; // m: how high the densest foam stands (its density is its height, lit through the normal)
 float _FoamLift;   // m: how far the whitewater stands up out of the water (the run-up's front lip, the breaking roller)
-// How much of the swell each stretch of shore gets (baked by the coast from the swell's direction: a bay's head only
-// what comes in through its mouth, a wall the waves run along next to nothing), as a height factor over the shore's
-// length v. _ShoreExposureV: x = v of the first sample, y = the samples' span (m), z = 1 for a closed line, w = 1 once
-// baked (before that every shore is open).
+// How the swell meets each stretch of shore, over the shore's length v (baked by the coast from the swell's
+// direction): R = how much of it the shore gets, as a height factor (a bay's head only what comes in through its
+// mouth, a wall the waves run along next to nothing); G = seconds after the shore nearest the coast object that a
+// crest gets there (it bends into bays and sweeps along a shore it meets at an angle). _ShoreExposureV: x = v of the
+// first sample, y = the samples' span (m), z = 1 for a closed line, w = 1 once baked (before that every shore is open
+// and in step).
 sampler2D _ShoreExposure;
 float4 _ShoreExposure_TexelSize, _ShoreExposureV;
 
@@ -45,15 +47,18 @@ float2 cwSwashState(float t)
     return float2(atan2(s.y, s.x), s.z);
 }
 
-// along the beach (v = distance along the shore), crests arrive a little early or late and vary in strength
-inline float cwSwashJitter(float v) { return 0.8 * (cwNoise(float2(v * 0.045, 3.7)) - 0.5) + 0.3 * (cwNoise(float2(v * 0.19, 9.1)) - 0.5) + 0.18 * (cwNoise(float2(v * 0.7, 15.3)) - 0.5); }
-float cwShoreExposure(float v)
+float2 cwShoreSwell(float v)
 {
-    if (_ShoreExposureV.w < 0.5) return 1.0;
+    if (_ShoreExposureV.w < 0.5) return float2(1.0, 0.0);
     float x = (v - _ShoreExposureV.x) / max(_ShoreExposureV.y, 1e-3);
     x = _ShoreExposureV.z > 0.5 ? frac(x) : saturate(x);
-    return tex2Dlod(_ShoreExposure, float4(x * (1.0 - _ShoreExposure_TexelSize.x) + 0.5 * _ShoreExposure_TexelSize.x, 0.5, 0, 0)).r;
+    return tex2Dlod(_ShoreExposure, float4(x * (1.0 - _ShoreExposure_TexelSize.x) + 0.5 * _ShoreExposure_TexelSize.x, 0.5, 0, 0)).rg;
 }
+inline float cwShoreExposure(float v) { return cwShoreSwell(v).x; }
+
+// along the beach (v = distance along the shore), crests arrive when the swell gets there, a little early or late,
+// and vary in strength
+inline float cwSwashJitter(float v) { return 0.8 * (cwNoise(float2(v * 0.045, 3.7)) - 0.5) + 0.3 * (cwNoise(float2(v * 0.19, 9.1)) - 0.5) + 0.18 * (cwNoise(float2(v * 0.7, 15.3)) - 0.5) - cwShoreSwell(v).y; }
 // the waves' height here: how exposed the shore is, and some variation along it
 inline float cwSwashAmpVar(float v) { return lerp(0.75, 1.1, cwNoise(float2(v * 0.03, 21.0))) * cwShoreExposure(v); }
 

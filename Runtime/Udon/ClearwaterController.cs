@@ -61,6 +61,9 @@ public class ClearwaterController : UdonSharpBehaviour
     [Tooltip("How big the waves are at each of the points, 0..1 (set by the coast bake from the swell's direction): the surf " +
              "sounds from the nearest shore that has it, as loud as it is there")]
     public float[] shoreExposure;
+    [Tooltip("Seconds after the shore nearest the coast object that the swell reaches each of the points (set by the coast " +
+             "bake): the waves are kept in step with the surf where it sounds from")]
+    public float[] shoreDelay;
     [Tooltip("The points form a loop (set by the coast bake)")]
     public bool shoreClosed;
     [Tooltip("Waves break at the shore, with the surf sound (set by the coast bake); off: still water, no surf")]
@@ -209,6 +212,8 @@ public class ClearwaterController : UdonSharpBehaviour
     int _shoreSeg;
     int _shoreFrame;
     float _shoreLoud = 1f;
+    float _shoreDelayNow, _clockShift; // the swell's delay where the surf sounds from, and the shift eased toward it
+    bool _clockShiftSet;
     Vector3 NearestOnShore(Vector3 p)
     {
         int n = shorePoints.Length;
@@ -218,6 +223,7 @@ public class ClearwaterController : UdonSharpBehaviour
         float best = float.MaxValue;
         Vector3 bestP = shorePoints[0];
         bool weighted = shoreExposure != null && shoreExposure.Length == n;
+        bool timed = shoreDelay != null && shoreDelay.Length == n;
         for (int k = from; k <= to; k++)
         {
             int s = shoreClosed ? (k % segs + segs) % segs : Mathf.Clamp(k, 0, segs - 1);
@@ -229,7 +235,11 @@ public class ClearwaterController : UdonSharpBehaviour
             float d = (p.x - q.x) * (p.x - q.x) + (p.z - q.z) * (p.z - q.z);
             float e = weighted ? Mathf.Lerp(shoreExposure[s], shoreExposure[(s + 1) % n], t) : 1f;
             d /= Mathf.Max(e * e, 0.0025f);
-            if (d < best) { best = d; bestP = q; _shoreSeg = s; _shoreLoud = e; }
+            if (d < best)
+            {
+                best = d; bestP = q; _shoreSeg = s; _shoreLoud = e;
+                _shoreDelayNow = timed ? Mathf.Lerp(shoreDelay[s], shoreDelay[(s + 1) % n], t) : 0f;
+            }
         }
         return bestP;
     }
@@ -240,6 +250,12 @@ public class ClearwaterController : UdonSharpBehaviour
             shoreAudio.transform.position = NearestOnShore(headPos);
         // shoreline waves follow the shore loop's playback, so each surge lands with its sound
         float clock = (shoreAudio != null && shoreAudio.isPlaying) ? shoreAudio.time : Time.time % swashLoop;
+        // The swell reaches each stretch of shore at its own time (it bends into bays and sweeps along an oblique
+        // shore); the waves where the surf sounds from are kept in step with it. Eased, so the waves never jump when
+        // the surf moves to another shore (at most a tenth of a second per second: unnoticeable).
+        _clockShift = _clockShiftSet ? Mathf.MoveTowards(_clockShift, _shoreDelayNow, Time.deltaTime * 0.1f) : _shoreDelayNow;
+        _clockShiftSet = true;
+        clock += _clockShift;
         waterMaterial.SetFloat("_SwashClock", clock);
         if (seabedMaterial != null) seabedMaterial.SetFloat("_SwashClock", clock);
         if (underwaterMaterial != null) underwaterMaterial.SetFloat("_SwashClock", clock);
