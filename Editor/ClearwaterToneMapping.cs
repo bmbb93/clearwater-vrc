@@ -31,6 +31,14 @@ public static class ClearwaterToneMapping
         foreach (var ctl in Object.FindObjectsOfType<ClearwaterController>(true))
             foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial, ctl.skyMaterial, ctl.underwaterMaterial, ctl.userBeachMaterial })
                 if (m != null && m.HasProperty("_Tonemap") && seen.Add(m)) yield return m;
+        // (the pools' copies of the water's)
+        foreach (var pool in Object.FindObjectsOfType<ClearwaterPool>(true))
+        {
+            var water = pool.transform.Find(ClearwaterPoolBake.WaterName);
+            if (water == null) continue;
+            foreach (var r in water.GetComponentsInChildren<Renderer>(true))
+                if (r.sharedMaterial != null && r.sharedMaterial.HasProperty("_Tonemap") && seen.Add(r.sharedMaterial)) yield return r.sharedMaterial;
+        }
         if (RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_Tonemap") && seen.Add(RenderSettings.skybox))
             yield return RenderSettings.skybox;
     }

@@ -34,6 +34,20 @@ float _PatchSize, _Depth, _RipSize, _SunIntensity;
 sampler2D _CoastTex, _CoastProfile, _CoastFarTex;
 float4 _CoastTex_TexelSize, _CoastProfile_TexelSize, _CoastArea, _CoastProfileU, _CoastFarTex_TexelSize, _CoastFarArea;
 
+// The pools (ClearwaterPool, each its own water) cut through the sea's water and ground: _PoolMask over _PoolMaskArea
+// (xy = world x, z of its corner, z = size in m, w = 1 when there are pools; the sea's materials only) holds, per
+// texel, R = the highest pool surface there and G = the lowest pool floor (world y). Read texel by texel (no sampler).
+Texture2D _PoolMask;
+float4 _PoolMask_TexelSize, _PoolMaskArea;
+bool cwInPool(float3 wpos)
+{
+    [branch] if (_PoolMaskArea.w <= 0.0) return false;
+    float2 uv = (wpos.xz - _PoolMaskArea.xy) / _PoolMaskArea.z;
+    if (any(uv < 0.0) || any(uv >= 1.0)) return false;
+    float2 s = _PoolMask.Load(int3(uv * _PoolMask_TexelSize.zw, 0)).rg;
+    return wpos.y < s.x && wpos.y > s.y;
+}
+
 // seen through the moving water surface the finest rock detail (cracks, crystals) is lost in refraction and
 // caustics; the water shader defines this > 1 so that detail fades out (and is skipped) closer to the viewer
 #ifndef CW_ROCK_DETAIL_FP_SCALE

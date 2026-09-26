@@ -188,6 +188,8 @@ float4 fragSide(v2f i)
     }
     t = max(t, 0.0);
     float3 P = uCam + wd * t;
+    // (the sea: none in a pool's basin, whose own water is there)
+    [branch] if (_PoolMaskArea.w > 0.0) clip(cwInPool(i.origin + cwToJS(P)) ? -1.0 : 1.0);
     // Anything standing out of the water between the raised plane and the surface (an avatar's waist, a post) is
     // in front of the water here: the depth buffer let the plane over it, so let it show through.
     float sceneFront = sceneDistance(i.screenPos.xy / i.screenPos.w, rdWorld);

@@ -127,6 +127,8 @@ public static class ClearwaterCoastBake
         }
 
         // walkable ground around the coast object, with invisible walls at its edge
+        // the pools (their own water, and the sea cut round them), then the walkable ground, with holes for them
+        ClearwaterPoolBake.BakeAll();
         BakeGround(ctl, coast, floorBake, user == null);
         if (user != null) notes.AddRange(ClearwaterUserTerrain.Check(user, coast, floorBake, origin));
         Object.DestroyImmediate(floorBake);
@@ -232,6 +234,7 @@ public static class ClearwaterCoastBake
                 sb.Append(mf.sharedMesh != null ? mf.sharedMesh.name : "-").Append(mf.transform.localToWorldMatrix);
         }
         if (coast.terrainSource == ClearwaterCoast.TerrainSource.User) ClearwaterUserTerrain.HashInto(coast, sb);
+        ClearwaterPoolBake.HashInto(sb); // (the walkable ground is cut round the pools)
         return Hash128.Compute(sb.ToString()).ToString();
     }
 
@@ -492,17 +495,27 @@ public static class ClearwaterCoastBake
         for (int j = 0; j < n; j++)
             for (int i = 0; i < n; i++)
                 v[j * n + i] = new Vector3(-half + i * step, -px[j * n + i].r, -half + j * step);
-        var idx = new int[(n - 1) * (n - 1) * 6];
-        int o = 0;
+        // (none in a pool's basin, where the ground would cut through its water: the basin's own colliders are there)
+        var spans = new List<(Rect r, float top, float bottom)>();
+        foreach (var p in ClearwaterPoolBake.All()) if (p.basin != null) spans.Add(ClearwaterPoolBake.Span(p));
+        bool InPool(Vector3 local)
+        {
+            Vector3 w = water.TransformPoint(groundTf.localPosition + local);
+            foreach (var (r, top, bottom) in spans)
+                if (r.Contains(new Vector2(w.x, w.z)) && w.y < top && w.y > bottom) return true;
+            return false;
+        }
+        var idx = new List<int>((n - 1) * (n - 1) * 6);
         for (int j = 0; j < n - 1; j++)
             for (int i = 0; i < n - 1; i++)
             {
                 int a = j * n + i, b = a + 1, cc = a + n, d = cc + 1;
-                idx[o++] = a; idx[o++] = cc; idx[o++] = b; idx[o++] = b; idx[o++] = cc; idx[o++] = d; // facing up
+                if (spans.Count > 0 && InPool((v[a] + v[d]) * 0.5f)) continue;
+                idx.Add(a); idx.Add(cc); idx.Add(b); idx.Add(b); idx.Add(cc); idx.Add(d); // facing up
             }
         var mesh = new Mesh { name = "SeabedCollider", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
         mesh.vertices = v;
-        mesh.triangles = idx;
+        mesh.SetTriangles(idx, 0);
         mesh.bounds = new Bounds(Vector3.zero, new Vector3(2 * half, 12, 2 * half));
         mesh = ClearwaterSetup.Save(mesh, "SeabedCollider.asset");
 

@@ -33,24 +33,30 @@ public static class ClearwaterUserTerrain
     const float Texel = 0.2f; // m: the finest the heights are baked at
 
     /// <summary>The meshes that make the user terrain (enabled mesh renderers under the coast's User terrain).</summary>
-    public static List<MeshRenderer> Renderers(ClearwaterCoast coast)
+    public static List<MeshRenderer> Renderers(ClearwaterCoast coast) => Renderers(coast != null ? coast.userTerrain : null);
+
+    /// <summary>The enabled mesh renderers under a root (none past skip, what Clearwater made there).</summary>
+    public static List<MeshRenderer> Renderers(GameObject root, Transform skip = null)
     {
         var list = new List<MeshRenderer>();
-        if (coast == null || coast.userTerrain == null) return list;
-        foreach (var r in coast.userTerrain.GetComponentsInChildren<MeshRenderer>(false))
+        if (root == null) return list;
+        foreach (var r in root.GetComponentsInChildren<MeshRenderer>(false))
         {
             var mf = r.GetComponent<MeshFilter>();
-            if (r.enabled && mf != null && mf.sharedMesh != null) list.Add(r);
+            if (r.enabled && mf != null && mf.sharedMesh != null && (skip == null || !r.transform.IsChildOf(skip))) list.Add(r);
         }
         return list;
     }
 
     /// <summary>The Unity terrains that make the user terrain (enabled Terrain components under the User terrain).</summary>
-    public static List<Terrain> Terrains(ClearwaterCoast coast)
+    public static List<Terrain> Terrains(ClearwaterCoast coast) => Terrains(coast != null ? coast.userTerrain : null);
+
+    /// <summary>The enabled Unity terrains under a root.</summary>
+    public static List<Terrain> Terrains(GameObject root)
     {
         var list = new List<Terrain>();
-        if (coast == null || coast.userTerrain == null) return list;
-        foreach (var t in coast.userTerrain.GetComponentsInChildren<Terrain>(false))
+        if (root == null) return list;
+        foreach (var t in root.GetComponentsInChildren<Terrain>(false))
             if (t.enabled && t.terrainData != null) list.Add(t);
         return list;
     }
@@ -96,9 +102,15 @@ public static class ClearwaterUserTerrain
             Debug.LogWarning("[Clearwater] Terrain source is User, but the User terrain has no meshes or terrains: the generated terrain is used.");
             return null;
         }
-        Vector3 origin = ctl.water.position;
-        float half = Mathf.Max(coast.groundHalfSize, 1f), seam = Mathf.Max(coast.seamWidth, 1f), step = Mathf.Max(coast.groundStep, 0.05f);
-        Vector3 c = coast.transform.position - origin;
+        return Bake(ctl.water.position, coast.transform.position, Mathf.Max(coast.groundHalfSize, 1f), Mathf.Max(coast.seamWidth, 1f),
+                    Mathf.Max(coast.groundStep, 0.05f), renderers, terrains);
+    }
+
+    /// <summary>Bakes meshes and terrains from above as a user terrain: heights relative to a water surface at origin,
+    /// over the square of half size half round centre (world; snapped to step), with a seam round them.</summary>
+    public static Data Bake(Vector3 origin, Vector3 centre, float half, float seam, float step, List<MeshRenderer> renderers, List<Terrain> terrains)
+    {
+        Vector3 c = centre - origin;
         c = new Vector3(Mathf.Round(c.x / step) * step, 0, Mathf.Round(c.z / step) * step);
         float size = 2f * (half + seam);
         int res = Mathf.Clamp(Mathf.NextPowerOfTwo(Mathf.CeilToInt(size / Texel)), 256, 2048);

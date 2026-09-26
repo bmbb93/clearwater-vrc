@@ -286,6 +286,8 @@ public static class ClearwaterSetup
         return Save(crt, name + ".asset");
     }
 
+    static string Dir(string path) => System.IO.Path.GetDirectoryName(path).Replace('\\', '/');
+
     /// <summary>Stores o at Generated/file. If that asset already exists its content is overwritten in place,
     /// keeping its GUID (and every reference to it); returns the object that now lives in the asset.</summary>
     internal static T Save<T>(T o, string file) where T : Object
@@ -294,6 +296,10 @@ public static class ClearwaterSetup
         var existing = AssetDatabase.LoadAssetAtPath<T>(path);
         if (existing == null || existing.GetType() != o.GetType())
         {
+            // (a file in a sub-folder, a pool's: the folders made as needed)
+            var missing = new System.Collections.Generic.Stack<string>();
+            for (string d = Dir(path); !AssetDatabase.IsValidFolder(d); d = Dir(d)) missing.Push(d);
+            while (missing.Count > 0) { string d = missing.Pop(); AssetDatabase.CreateFolder(Dir(d), System.IO.Path.GetFileName(d)); }
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             AssetDatabase.CreateAsset(o, path);
             return o;

@@ -28,6 +28,8 @@ Shader "Clearwater/AvatarCaustics"
         [HideInInspector] _UserTex ("Coast: user terrain heights (baked)", 2D) = "black" {}
         [HideInInspector] _UserArea ("User terrain area (centre, size, on)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
+        [HideInInspector] _PoolMask ("Pools: their surfaces and floors, cut out of the sea (baked)", 2D) = "black" {}
+        [HideInInspector] _PoolMaskArea ("Its area (world x, z corner, size, 1 = any pools)", Vector) = (0, 0, 0, 0)
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
     }
     SubShader
@@ -79,6 +81,7 @@ Shader "Clearwater/AvatarCaustics"
                 float3 p = cwToJS(i.wpos - _WaterOrigin.xyz); // water space: y = 0 on the mean surface
                 float depth = -p.y;
                 clip(depth - 0.02);
+                clip(cwInPool(i.wpos) ? -1.0 : 1.0); // (the sea's: not in a pool's basin, which has its own)
                 float3 sun = cwSun(), sunT = cwSunT(sun), n = normalize(cwToJS(i.wn));
                 // follow the refracted sun ray on to the floor below, and read the floor's caustics there. The floor is
                 // looked for a metre out along an upright surface's normal: under a quay wall's face lies the quay's top,

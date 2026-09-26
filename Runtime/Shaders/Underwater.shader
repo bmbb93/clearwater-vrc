@@ -34,6 +34,8 @@ Shader "Clearwater/Underwater"
         [HideInInspector] _UserTex ("Coast: user terrain heights (baked)", 2D) = "black" {}
         [HideInInspector] _UserArea ("User terrain area (centre, size, on)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _UserMean ("User terrain average colour", Vector) = (0.2, 0.2, 0.2, 1)
+        [HideInInspector] _PoolMask ("Pools: their surfaces and floors, cut out of the sea (baked)", 2D) = "black" {}
+        [HideInInspector] _PoolMaskArea ("Its area (world x, z corner, size, 1 = any pools)", Vector) = (0, 0, 0, 0)
         _StampArea ("Stamp area (centre xz, size, 1 = any stamps)", Vector) = (0, 0, 200, 0)
         _SwashTrack ("Break timing track (generated)", 2D) = "black" {}
         _SwashBreaks ("Breaks: time, strength (generated)", 2D) = "black" {}
