@@ -104,6 +104,24 @@ Shader "Clearwater/Seabed"
             #pragma shader_feature_local _CW_TONEMAP
             #include "AutoLight.cginc"
 
+            // The sun's straight shadow at a world point, read from the screen's (1 off screen, or with no shadows)
+            float cwScreenShadowAt(float3 w)
+            {
+            #if defined(SHADOWS_SCREEN) && !defined(UNITY_NO_SCREENSPACE_SHADOWS)
+                float4 c = UnityWorldToClipPos(w);
+                [branch] if (c.w <= 0.0 || abs(c.x) >= c.w || abs(c.y) >= c.w) return 1.0;
+                float4 s = ComputeScreenPos(c);
+                float2 uv = s.xy / s.w;
+            #if defined(UNITY_STEREO_INSTANCING_ENABLED) || defined(UNITY_STEREO_MULTIVIEW_ENABLED)
+                return UNITY_SAMPLE_TEX2DARRAY_LOD(_ShadowMapTexture, float3(uv, unity_StereoEyeIndex), 0).r;
+            #else
+                return tex2Dlod(_ShadowMapTexture, float4(uv, 0, 0)).r;
+            #endif
+            #else
+                return 1.0;
+            #endif
+            }
+
             struct appdata { float4 vertex : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
             // (the sun's shadows on the dry beach: avatars and whatever stands on it)
             struct v2f { float4 pos : SV_POSITION; float3 wpos : TEXCOORD0; SHADOW_COORDS(1) UNITY_VERTEX_OUTPUT_STEREO };
@@ -186,7 +204,9 @@ Shader "Clearwater/Seabed"
                 {
                     // explicit gradients (we are inside a branch); x2 = one mip softer, the demo's LOD bias of 1
                     float3 caus = tex2Dgrad(_Caus, cwCausUV(p, hgt, sun), dpdx * (2.0 / _PatchSize), dpdy * (2.0 / _PatchSize)).rgb;
-                    float sunShade = shadow;
+                    // (the shadow where the light's path through the waves calls for, as the water reads it for its floor)
+                    float2 q = cwShadowReadXZ(p, depth, sun);
+                    float sunShade = cwScreenShadowAt(_WaterOrigin.xyz + cwToJS(float3(q.x, -depth, q.y)));
                     [branch] if (rockM > 0.0) sunShade *= lerp(1.0, cwUnderSunShade(cwFloorNormal(p, rockM), sun), rockM);
                     L = cwFloorRadianceUnder(p, depth, hgt, cwAlgae(alb, rockM), sun, caus, sunShade);
                 }

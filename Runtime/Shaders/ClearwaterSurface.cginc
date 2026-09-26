@@ -31,6 +31,35 @@ float cwSurfaceHeight(float2 xz)
     return (A.x + WB * SC * B.x) * CW_WAVE * (1.0 - 0.75 * s.swash) + R.x + s.eta;
 }
 
+// Surface slope (dh/dx, dh/dz, water space) over xz: the swell and the touch ripples (not the shore waves'), as the
+// water shader's own, for where the light comes in through it
+float2 cwSurfaceSlope(float2 xz)
+{
+    const float SC = 0.41, WB = 0.10;
+    float4 A = tex2Dlod(_Surf, float4(xz / _PatchSize, 0, 0));
+    float4 B = tex2Dlod(_Surf, float4(mulM(xz) / (_PatchSize * SC) + 0.37, 0, 0));
+    float4 R = tex2Dlod(_Rip, float4((xz - _RipCenter.xy) / _RipSize + 0.5, 0, 0));
+    return (A.yz + WB * mulMt(B.yz)) * CW_WAVE + R.yz;
+}
+
+// Where to read the sun's straight shadow for the light reaching the floor at xz, depth under the still water (water
+// space xz): that light came in through the surface at S, bent there by the waves' slope (found from the flat
+// surface's refraction, then bettered with the slope where that lands); above the water its path is the straight
+// line to the sun, which comes down to the floor's depth here. So the shadow lies nearer under what casts it than a
+// straight one would, and its edge ripples with the waves as the caustics do.
+float2 cwShadowReadXZ(float2 xz, float depth, float3 sun)
+{
+    float3 d = cwSunT(sun);
+    float2 S = xz - d.xz * depth / (-d.y);
+    [unroll] for (int k = 0; k < 2; k++)
+    {
+        float2 sl = cwSurfaceSlope(S);
+        d = refract(-sun, normalize(float3(-sl.x, 1.0, -sl.y)), 1.0 / CW_IOR);
+        S = xz - d.xz * depth / max(-d.y, 0.2);
+    }
+    return S - sun.xz * depth / max(sun.y, 0.1);
+}
+
 bool cwCameraNearSurface(float waterY) { return abs(_WorldSpaceCameraPos.y - waterY) < CW_SURFACE_BAND; }
 
 // Is this camera in this water (seen from below, fogged)? A pool: only in its footprint and above its floor

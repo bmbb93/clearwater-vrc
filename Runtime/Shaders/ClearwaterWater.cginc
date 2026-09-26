@@ -84,13 +84,15 @@ float sceneDistance(float2 uvD, float3 rdWorld)
 #define CW_GRAB_LOD(uv) tex2Dlod(_CWGrabWater, float4(uv, 0, 0))
 #endif
 
-// The sun's shadow on the floor at FP (water space round origin: the floor the water traces): the seabed mesh
-// drawn under the water leaves it on screen for the water, in the red of the pixels it marks with alpha 0. Read
-// where FP is on screen; 1 (lit) where the screen shows something else there (an avatar, the user terrain: in its
-// own material, with its own shadows) or FP is off screen.
-float cwFloorShadow(float3 FP, float3 origin)
+// The sun's shadow on the floor at FP (water space round origin: the floor the water traces, depth under the still
+// water): the seabed mesh drawn under the water leaves its straight shadow on screen for the water, in the red of
+// the pixels it marks with alpha 0, read where the light's path calls for (cwShadowReadXZ). 1 (lit) where the
+// screen shows something else there (an avatar, the user terrain: in its own material, with its own shadows) or it
+// is off screen.
+float cwFloorShadow(float3 FP, float depth, float3 sun, float3 origin)
 {
-    float4 c = UnityWorldToClipPos(origin + cwToJS(FP));
+    float2 Q = cwShadowReadXZ(FP.xz, depth, sun);
+    float4 c = UnityWorldToClipPos(origin + cwToJS(float3(Q.x, FP.y, Q.y)));
     [branch] if (c.w <= 0.0 || abs(c.x) >= c.w || abs(c.y) >= c.w) return 1.0;
     float4 g = ComputeGrabScreenPos(c);
     float4 px = CW_GRAB_LOD(g.xy / g.w);
@@ -357,7 +359,7 @@ float4 fragSide(v2f i)
     float hgt, rockM;
     float2 dFPdx = ddx(FP.xz), dFPdy = ddy(FP.xz);
     float3 alb = cwAlgae(cwFloorAlbedo(FP.xz, dFPdx, dFPdy, hgt, rockM), rockM);
-    float sunShade = cwFloorShadow(FP, i.origin);
+    float sunShade = cwFloorShadow(FP, depthHere, uSun, i.origin);
     [branch] if (rockM > 0.0) sunShade *= lerp(1.0, cwUnderSunShade(cwFloorNormal(FP.xz, rockM), uSun), rockM);
     float3 caus = tex2Dbias(_Caus, float4(cwCausUV(FP.xz, hgt, uSun), 0, 1.0)).rgb;
     float3 Lfloor = cwFloorRadianceUnder(FP.xz, depthHere, hgt, alb, uSun, caus, sunShade);
