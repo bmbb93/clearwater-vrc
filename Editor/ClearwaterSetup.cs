@@ -327,10 +327,29 @@ public static class ClearwaterSetup
             return o;
         }
         if (existing is RenderTexture ert) ert.Release(); // size/format changes apply on next use
-        EditorUtility.CopySerialized(o, existing);
+        if (existing is Mesh em && o is Mesh om) CopyMesh(om, em);
+        else EditorUtility.CopySerialized(o, existing);
         EditorUtility.SetDirty(existing);
         Object.DestroyImmediate(o);
         return existing;
+    }
+
+    // A mesh is rewritten through the Mesh API: copied serialized over one with another layout, the grids drew
+    // nothing (their data read back right, but not what the GPU was given).
+    static void CopyMesh(Mesh from, Mesh to)
+    {
+        to.Clear();
+        to.indexFormat = from.indexFormat;
+        to.vertices = from.vertices;
+        if (from.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.Normal)) to.normals = from.normals;
+        if (from.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.Tangent)) to.tangents = from.tangents;
+        if (from.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.Color)) to.colors = from.colors;
+        var uv = new List<Vector4>();
+        for (int c = 0; c < 4; c++)
+            if (from.HasVertexAttribute(UnityEngine.Rendering.VertexAttribute.TexCoord0 + c)) { from.GetUVs(c, uv); to.SetUVs(c, uv); }
+        to.subMeshCount = from.subMeshCount;
+        for (int s = 0; s < from.subMeshCount; s++) to.SetIndices(from.GetIndices(s), from.GetTopology(s), s, false);
+        to.bounds = from.bounds;
     }
 
     // ---- initial spectrum: a port of the demo's buildH0(), same seed, so the waves are the demo's waves
@@ -488,28 +507,7 @@ public static class ClearwaterSetup
 
     static Mesh BuildFarGrid(string name, float seabedFar)
     {
-        var half = new List<float>();
-        for (int i = 0; i * SeabedStep <= SeabedInner + 1e-3f; i++) half.Add(i * SeabedStep);
-        for (float s = SeabedStep, x = half[half.Count - 1]; x < seabedFar;) { s *= SeabedGrowth; x += s; half.Add(x); }
-        var ax = new List<float>();
-        for (int i = half.Count - 1; i > 0; i--) ax.Add(-half[i]);
-        ax.AddRange(half);
-        int n = ax.Count;
-        var v = new Vector3[n * n];
-        for (int j = 0; j < n; j++)
-            for (int i = 0; i < n; i++)
-                v[j * n + i] = new Vector3(ax[i], 0, ax[j]);
-        var idx = new int[(n - 1) * (n - 1) * 6];
-        int o = 0;
-        for (int j = 0; j < n - 1; j++)
-            for (int i = 0; i < n - 1; i++)
-            {
-                int a = j * n + i, b = a + 1, c = a + n, d = c + 1;
-                idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d; // facing up
-            }
-        var mesh = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
-        mesh.vertices = v;
-        mesh.triangles = idx;
+        var mesh = BuildRingGrid(name, SeabedStep, SeabedInner, SeabedGrowth, seabedFar, false, false);
         // never culled: it moves with the viewer and its heights are set on the GPU
         mesh.bounds = new Bounds(Vector3.zero, new Vector3(4 * seabedFar, 40, 4 * seabedFar));
         return mesh;
@@ -523,32 +521,82 @@ public static class ClearwaterSetup
     /// shimmered.)</summary>
     static Mesh BuildPlane(float size)
     {
-        float s = size * 0.5f;
-        var half = new List<float>();
-        for (int i = 0; i * WaterStep < Mathf.Min(WaterInner, s); i++) half.Add(i * WaterStep);
-        for (float step = WaterStep, x = half[half.Count - 1]; x < s;) { step *= WaterGrowth; x = Mathf.Min(x + step, s); half.Add(x); }
-        if (half[half.Count - 1] < s) half.Add(s);
-        var ax = new List<float>();
-        for (int i = half.Count - 1; i > 0; i--) ax.Add(-half[i]);
-        ax.AddRange(half);
-        int n = ax.Count;
-        var v = new Vector3[n * n];
-        var nr = new Vector3[n * n];
-        for (int j = 0; j < n; j++)
-            for (int i = 0; i < n; i++) { v[j * n + i] = new Vector3(ax[i], 0, ax[j]); nr[j * n + i] = Vector3.up; }
-        var idx = new int[(n - 1) * (n - 1) * 6];
-        int o = 0;
-        for (int j = 0; j < n - 1; j++)
-            for (int i = 0; i < n - 1; i++)
-            {
-                int a = j * n + i, b = a + 1, c = a + n, d = c + 1;
-                idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d; // facing up
-            }
-        var mesh = new Mesh { name = "WaterPlane", indexFormat = IndexFormat.UInt32 };
-        mesh.vertices = v;
-        mesh.normals = nr;
-        mesh.triangles = idx;
+        var mesh = BuildRingGrid("WaterPlane", WaterStep, WaterInner, WaterGrowth, size * 0.5f, true, true);
         mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    /// <summary>A flat grid, finest round its centre: cells of step out to inner (a square on the step's lattice), then
+    /// square rings, each growth times further from the last than that one from the one before, out to far (ending
+    /// exactly there when clampToFar). The rings keep fewer points round them as they widen - half as many, where
+    /// that leaves their cells no more than 1.25 times as long round the ring as they are deep - joined with no gaps,
+    /// so the cells stay near square all the way out. (It was one axis of steps crossed with itself: its fine steps
+    /// ran on to the horizon in a cross of long thin cells, near half of all the points.)</summary>
+    static Mesh BuildRingGrid(string name, float step, float inner, float growth, float far, bool clampToFar, bool normals)
+    {
+        var v = new List<Vector3>();
+        var idx = new List<int>();
+        void Tri(int a, int b, int c) // (wound to face up, whatever the order given)
+        {
+            if (Vector3.Cross(v[b] - v[a], v[c] - v[a]).y > 0f) { idx.Add(a); idx.Add(b); idx.Add(c); }
+            else { idx.Add(a); idx.Add(c); idx.Add(b); }
+        }
+        // the inner square
+        int m = Mathf.Max(1, Mathf.FloorToInt(Mathf.Min(inner, far) / step + 1e-3f)), w = 2 * m + 1;
+        for (int j = -m; j <= m; j++)
+            for (int i = -m; i <= m; i++)
+                v.Add(new Vector3(i * step, 0, j * step));
+        int At(int i, int j) => (j + m) * w + (i + m);
+        for (int j = -m; j < m; j++)
+            for (int i = -m; i < m; i++)
+            {
+                Tri(At(i, j), At(i, j + 1), At(i + 1, j));
+                Tri(At(i + 1, j), At(i, j + 1), At(i + 1, j + 1));
+            }
+        // its edge, round from the corner at (-, -): n segments a side
+        int n = 2 * m;
+        var ring = new List<int>();
+        for (int k = 0; k < n; k++) ring.Add(At(-m + k, -m));
+        for (int k = 0; k < n; k++) ring.Add(At(m, -m + k));
+        for (int k = 0; k < n; k++) ring.Add(At(m - k, m));
+        for (int k = 0; k < n; k++) ring.Add(At(-m, m - k));
+        // the rings
+        float r = m * step, s = step;
+        while (r < far - 1e-3f)
+        {
+            s *= growth;
+            float rNext = clampToFar ? Mathf.Min(r + s, far) : r + s;
+            int nNext = n;
+            if (n % 2 == 0 && n / 2 >= 8 && 2f * rNext / (n / 2) <= 1.25f * (rNext - r)) nNext = n / 2;
+            var next = new List<int>();
+            for (int side = 0; side < 4; side++)
+                for (int k = 0; k < nNext; k++)
+                {
+                    float t = -rNext + 2f * rNext * k / nNext;
+                    Vector3 p = side == 0 ? new Vector3(t, 0, -rNext) : side == 1 ? new Vector3(rNext, 0, t)
+                              : side == 2 ? new Vector3(-t, 0, rNext) : new Vector3(-rNext, 0, -t);
+                    next.Add(v.Count);
+                    v.Add(p);
+                }
+            int cnt = ring.Count, cntN = next.Count;
+            if (nNext == n)
+                for (int k = 0; k < cnt; k++)
+                {
+                    int a = ring[k], b = ring[(k + 1) % cnt], c = next[k], d = next[(k + 1) % cntN];
+                    Tri(a, c, b); Tri(b, c, d);
+                }
+            else // (two segments of this ring to each of the next: a fan, no T-junctions)
+                for (int k = 0; k < cntN; k++)
+                {
+                    int p0 = ring[2 * k], p1 = ring[2 * k + 1], p2 = ring[(2 * k + 2) % cnt], c0 = next[k], c1 = next[(k + 1) % cntN];
+                    Tri(p0, p1, c0); Tri(p1, p2, c1); Tri(p1, c1, c0);
+                }
+            ring = next; n = nNext; r = rNext;
+        }
+        var mesh = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
+        mesh.SetVertices(v);
+        if (normals) { var nr = new Vector3[v.Count]; for (int k = 0; k < nr.Length; k++) nr[k] = Vector3.up; mesh.normals = nr; }
+        mesh.SetTriangles(idx, 0);
         return mesh;
     }
 
