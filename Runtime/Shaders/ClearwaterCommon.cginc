@@ -304,8 +304,10 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
     // aerial perspective: the air in front of it, lit by the sky all round, not by a low sun behind it (that air is in
     // the land's shadow). (It was the horizon's own colour, which toward a low sun is the glow of a long way of sunlit
     // air: at sunrise and sunset the land shone with it, as if lit from inside, instead of standing dark against it.)
+    // No brighter than the sky low over it that way: after sunset the all-round horizon is mostly the glow on the
+    // sunset side, and the land beside it showed pale against the dark sky over it.
     float ha = cwHazeAmount(2000.0);
-    land = lerp(land, cwHazeAt(d, sun, 0.0), ha);
+    land = lerp(land, min(cwHazeAt(d, sun, 0.0), hor), ha);
     float w = fwE * 1.2 + 2e-4;
     c = lerp(c, land, smoothstep(r + w, r - w, e) * step(-0.3, e) * saturate(landHere * 20.0));
     return c;
