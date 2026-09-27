@@ -471,13 +471,12 @@ float2 cwCausUV(float2 FP, float hgt, float3 sun)
 // Seen from under the water (set by the shader that draws it: the underwater fog, the water's view from below, the
 // seabed seen from below), the light in the water never falls below a deep blue-green glow: after dusk, with no sun
 // and no moon, it was black all round, nothing to tell the floor, the slope or an avatar by. With it the water glows
-// a deep blue-green in the distance (some 20/255 on screen: the tone curve's toe crushes anything much dimmer to
-// black) and what is near stands dark against it. It is the day sky's light in the water; the day's sun there is
-// several times more, so by day nothing changes. The floor gets a third of it, no more than the day sky gives it 3 m
-// down. From above the water the dark stays as it is.
+// a dark blue-green in the distance (some 10/255 on screen: only just out of black, for it to stay night) and what is
+// near stands dark against it. It is under half the day sky's light in the water; the day's sun there is many times
+// more, so by day nothing changes. The floor gets a third of it. From above the water the dark stays as it is.
 static bool cwUnderView = false;
-#define CW_UNDER_GLOW float3(0.10, 0.50, 0.66)
-#define CW_UNDER_GLOW_FLOOR float3(0.03, 0.15, 0.20)
+#define CW_UNDER_GLOW float3(0.04, 0.20, 0.26)
+#define CW_UNDER_GLOW_FLOOR float3(0.012, 0.06, 0.08)
 
 // radiance leaving a submerged floor point; caus = the caustics texture sampled at cwCausUV
 // (the caller samples it: implicitly with a LOD bias of 1 like the demo, or with explicit gradients in a branch)
