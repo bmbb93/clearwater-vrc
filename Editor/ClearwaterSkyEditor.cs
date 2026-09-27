@@ -262,7 +262,7 @@ public static class ClearwaterSkySetup
         var opener = UdonSharpUndo.AddComponent<ClearwaterSkyPanelOpener>(go);
         opener.panel = panel;
         EditorUtility.SetDirty(opener);
-        UdonSharpEditorUtility.GetBackingUdonBehaviour(opener).interactText = "Sky";
+        UdonSharpEditorUtility.GetBackingUdonBehaviour(opener).interactText = "Sky Settings";
         return go;
     }
 

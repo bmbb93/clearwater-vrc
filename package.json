@@ -1,7 +1,7 @@
 {
   "name": "com.vbamboo.clearwater",
   "displayName": "Clearwater Coast",
-  "version": "0.15.28",
+  "version": "0.15.29",
   "unity": "2022.3",
   "description": "Photoreal shallow water and coasts for VRChat worlds: draw the waterline, bake, and walk into clear water with caustics, shore waves in time with the surf, and an underwater view. A port of clearwater by Aureliengmz (MIT, (c) Lumaris).",
   "author": {
