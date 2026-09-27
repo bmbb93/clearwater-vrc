@@ -112,6 +112,7 @@ Shader "Clearwater/Underwater"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 cwEnvPos = _WorldSpaceCameraPos; // (indoors the room is seen from the camera)
+                cwUnderView = true; // (the water's light never quite black: cwInscatter)
                 float3 sun = cwSun();
                 float camY = _WorldSpaceCameraPos.y - unity_ObjectToWorld._m13;
                 float3 rdWorld = normalize(i.wpos - _WorldSpaceCameraPos);

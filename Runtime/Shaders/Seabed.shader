@@ -214,6 +214,7 @@ Shader "Clearwater/Seabed"
                     float2 q = cwShadowReadXZ(p, depth, sun);
                     float sunShade = cwScreenShadowAt(_WaterOrigin.xyz + cwToJS(float3(q.x, -depth, q.y)), shadow);
                     [branch] if (rockM > 0.0) sunShade *= lerp(1.0, cwUnderSunShade(cwFloorNormal(p, rockM), sun), rockM);
+                    cwUnderView = under; // (seen from under the water, never quite black: cwFloorRadianceUnder)
                     L = cwFloorRadianceUnder(p, depth, hgt, cwAlgae(alb, rockM), sun, caus, sunShade);
                 }
                 else

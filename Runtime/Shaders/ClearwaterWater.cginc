@@ -293,6 +293,7 @@ float4 fragSide(v2f i)
 
     if (below)
     {
+        cwUnderView = true; // (the water's own light, seen from within it: never quite black)
         // ---- seen from under the water: Snell's window, total internal reflection outside it ----
         // The light let through falls steeply to nothing at the window's edge (the critical angle), following the
         // Fresnel curve rather than switched on and off, and averaged over the pixel's spread so the edge stays sharp

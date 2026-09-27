@@ -468,6 +468,17 @@ float2 cwCausUV(float2 FP, float hgt, float3 sun)
     return (FP - cwCausShift(sun, _Depth) + sunT.xz / (-sunT.y) * (hgt - 0.35) * 0.05) / _PatchSize;
 }
 
+// Seen from under the water (set by the shader that draws it: the underwater fog, the water's view from below, the
+// seabed seen from below), the light in the water never falls below a deep blue-green glow: after dusk, with no sun
+// and no moon, it was black all round, nothing to tell the floor, the slope or an avatar by. With it the water glows
+// a deep blue-green in the distance (some 20/255 on screen: the tone curve's toe crushes anything much dimmer to
+// black) and what is near stands dark against it. It is the day sky's light in the water; the day's sun there is
+// several times more, so by day nothing changes. The floor gets a third of it, no more than the day sky gives it 3 m
+// down. From above the water the dark stays as it is.
+static bool cwUnderView = false;
+#define CW_UNDER_GLOW float3(0.10, 0.50, 0.66)
+#define CW_UNDER_GLOW_FLOOR float3(0.03, 0.15, 0.20)
+
 // radiance leaving a submerged floor point; caus = the caustics texture sampled at cwCausUV
 // (the caller samples it: implicitly with a LOD bias of 1 like the demo, or with explicit gradients in a branch)
 float3 cwFloorRadianceUnder(float2 FP, float depthHere, float hgt, float3 alb, float3 sun, float3 caus, float sunShade)
@@ -485,6 +496,7 @@ float3 cwFloorRadianceUnder(float2 FP, float depthHere, float hgt, float3 alb, f
     float ao = lerp(0.55, 1.0, smoothstep(0.08, 0.42, hgt));
     float3 Esun = SUN * Ts * exp(-SIG_T * depthHere / (-sunT.y)) * caus * (-sunT.y) * lerp(0.75, 1.0, ao) * sunShade;
     float3 Esky = cwSkyIrr() * exp(-(SIG_A + 0.4 * SIG_S) * depthHere * 1.25) * ao;
+    [branch] if (cwUnderView) Esky = max(Esky, CW_UNDER_GLOW_FLOOR * ao);
     // sand under the last few centimetres of water is as dark as the wet sand just above the waterline (its pores are
     // full of water too), so the water edge does not show as a step in brightness; deeper, the floor as before
     float wet = lerp(0.65, 1.0, smoothstep(0.0, 0.25, depthHere));
@@ -502,6 +514,7 @@ float3 cwInscatter(float depthHere, float s, float3 tr, float3 sun)
     float cosS = dot(sunT, -tr);
     float g = 0.8; float ph = (1.0 - g * g) / (4.0 * CW_PI * pow(1.0 + g * g - 2.0 * g * cosS, 1.5));
     float3 Lmid = SUN * Ts * exp(-SIG_T * depthHere * 0.5 / (-sunT.y)) * (ph + 0.02) + cwSkyIrr() * exp(-SIG_A * depthHere * 0.6) / (4.0 * CW_PI);
+    [branch] if (cwUnderView) Lmid = max(Lmid, CW_UNDER_GLOW / (4.0 * CW_PI));
     return SIG_S / SIG_T * Lmid * (1.0 - Tv) * 3.2;
 }
 
