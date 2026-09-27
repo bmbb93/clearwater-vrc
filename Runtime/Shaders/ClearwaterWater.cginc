@@ -32,22 +32,22 @@ v2f vertSide(appdata v)
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
     o.wpos = mul(unity_ObjectToWorld, v.vertex).xyz;
     o.origin = mul(unity_ObjectToWorld, float4(0, 0, 0, 1)).xyz;
+    // Seen from above, the plane is raised to the highest the run-up reaches: at the still-water height the beach face
+    // above it hid it, so the sheet running up the beach was never drawn, only the wet sand it leaves (two layers
+    // meeting at a fixed line). The fragment traces the true surface and drops the dry beach itself. (Also for a
+    // camera at the waterline, up to its near clip below: held at the still water there, the sheet was lost to a
+    // wet-sand band whenever the eye came within the band's 60 cm.)
+    float reach = (CW_WATER_BELOW == 0 && _ShoreWaves > 0.5) ? _SwashHeight * _SwashRunup * 1.2 + _FoamLift + 0.05 : 0.0;
     if (cwCameraNearSurface(o.origin.y))
     {
         // a camera at the waterline draws both passes, each keeping its own pixels (fragSide); the plane only
         // marks where to shade, so it is moved clear of the near clip plane, to the camera's side of the surface
         // that the pass looks at (the fragment traces the true surface from the camera)
         float off = 0.1 + 4.0 * _ProjectionParams.y;
-        o.wpos.y = (CW_WATER_BELOW != 0) ? max(o.wpos.y, _WorldSpaceCameraPos.y + off) : min(o.wpos.y, _WorldSpaceCameraPos.y - off);
+        o.wpos.y = (CW_WATER_BELOW != 0) ? max(o.wpos.y, _WorldSpaceCameraPos.y + off) : min(o.wpos.y + reach, _WorldSpaceCameraPos.y - off);
     }
-    else if (CW_WATER_BELOW == 0 && _ShoreWaves > 0.5)
-    {
-        // Seen from above, the plane is raised to the highest the run-up reaches: at the still-water height the beach
-        // face above it hid it, so the sheet running up the beach was never drawn, only the wet sand it leaves (two
-        // layers meeting at a fixed line). The fragment traces the true surface and drops the dry beach itself.
-        float reach = _SwashHeight * _SwashRunup * 1.2 + _FoamLift + 0.05;
+    else
         o.wpos.y += min(reach, max(_WorldSpaceCameraPos.y - o.origin.y - 0.2, 0.0));
-    }
     o.pos = UnityWorldToClipPos(o.wpos);
     if (!cwCameraNearSurface(o.origin.y) && (_WorldSpaceCameraPos.y < o.origin.y) != (CW_WATER_BELOW != 0))
         o.pos = float4(-2, -2, -2, 1); // the other side's pass
