@@ -23,6 +23,8 @@ float _SwashSlope; // rise per metre of the beach face over the swash zone (bake
 float _ShoreWaves; // 1 = waves roll in, break and run up the beach; 0 = still water at the shore (a lake, a pond)
 float _FoamRelief; // m: how high the densest foam stands (its density is its height, lit through the normal)
 float _FoamLift;   // m: how far the whitewater stands up out of the water (the run-up's front lip, the breaking roller)
+float _SwellDepth; // m: the water's depth where the swell rolling in to the shore starts to show (full height 0.8 m
+                   // shallower); out past it, the open water's small waves only
 // How the swell meets each stretch of shore, over the shore's length v (baked by the coast from the swell's
 // direction): R = how much of it the shore gets, as a height factor (a bay's head only what comes in through its
 // mouth, a wall the waves run along next to nothing); G = seconds after the shore nearest the coast object that a
@@ -239,14 +241,14 @@ CwShore cwShoreSw(float2 xz, float floorDepth, CwSwash sw)
     float u = sv.x, v = sv.y;
     float2 prof = cwCoastProfile(u); // relief-free depth, travel time
     float db = prof.x;
-    [branch] if (db <= 2.7 && _ShoreWaves > 0.5) // past the shallows (or no shore waves): open water, the demo's waves only
+    [branch] if (db <= _SwellDepth + 0.1 && _ShoreWaves > 0.5) // past the shallows (or no shore waves): open water, the demo's waves only
     {
         float uw = cwWaterlineU();
         float t = _SwashClock + prof.y + cwSwashJitter(v);
         float2 st = cwSwashState(t);
         o.phase = st.x;
         // Green's law shoaling (H ~ d^-1/4), faded out where the shallows end
-        float Hs = _SwashHeight * st.y * cwSwashAmpVar(v) * pow(0.2 / max(db, 0.2), 0.25) * smoothstep(2.6, 1.8, db);
+        float Hs = _SwashHeight * st.y * cwSwashAmpVar(v) * pow(0.2 / max(db, 0.2), 0.25) * smoothstep(_SwellDepth, max(_SwellDepth - 0.8, 0.1), db);
         // a wave cannot be taller than ~0.8 of the depth: the rest turns into whitewater
         float D = max(floorDepth, 0.0);
         float Hc = min(Hs, 0.8 * D + 0.02);

@@ -237,6 +237,7 @@ Bake で見つかった問題は、Pool の Inspector に番号付きの警告�
 波・明るさ・雲・音量を変える設定の置き場所です。マテリアルは `Assets/Clearwater/Generated` の中の、シーンのフォルダーにあります（「焼き込みはシーンごと」）。
 
 - 波の大きさ：Water・Seabed マテリアルの `Breaker height`（砕ける波の高さ）/ `Run-up`（打ち上げが届く高さ。`Breaker height` の倍数）
+- 波が沖のどこから現れるか：Water マテリアルの `Swell start depth`（初期値 2.6 m）。水深がこれより浅い所からうねりが現れ、0.8 m 浅い所で本来の高さになります。深くするほど沖から見えます（沖ほど波は低い）。海岸の断面の最深部より深くすると海全体にうねりが出て、そのぶん重くなります（範囲 0.5〜6 m）
 - 波打ち際の白波：`Whitewater height`（打ち上げる波の先端の盛り上がり、初期値 3 cm）/ `Foam relief`（泡の凹凸の陰影。近くで見るとき用、初期値 0 = なし）
 - 打ち上げの速さと距離は、Bake のときに浜の傾きから自動で決まります。坂に投げたボールと同じ動きで、緩い浜ほどゆっくり遠くまで上がります。浜の傾きは Coast の `Beach Slope`（初期値 0.1）です
 - 明るさ：水・Seabed・空・水中のマテリアル（Water・Seabed・Sky・Underwater）の `Sun intensity` / `Exposure`。4 つとも同じ値にします

@@ -68,6 +68,7 @@ Shader "Clearwater/UserBeach"
         _SwashLoop ("Track length (s)", Float) = 90
         _SwashHeight ("Breaker height (m)", Float) = 0.14
         _SwashRunup ("Run-up (x breaker height)", Float) = 2.6
+        [HideInInspector] _SwellDepth ("Swell start depth (m, copied from the water by the controller)", Float) = 2.6
         [ToggleUI] _ShoreWaves ("Shore waves (set by the coast bake)", Float) = 1
         _FoamRelief ("Foam relief (m): the densest foam's height, for its light and shade; 0 = flat (costs ~2 ms/eye close up)", Float) = 0
         _FoamLift ("Whitewater height (m): the run-up's front lip and the breaking roller stand up this far; 0 = flat", Float) = 0.03

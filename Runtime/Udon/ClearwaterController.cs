@@ -129,6 +129,14 @@ public class ClearwaterController : UdonSharpBehaviour
         RefreshPlayers();
         if (!shoreWaves && shoreAudio != null) shoreAudio.Stop(); // still water: no surf
         RememberBuilt();
+        // where the swell starts to show, as set on the water (the others work out the surface's height too: the
+        // waterline across a camera's view)
+        if (waterMaterial != null)
+        {
+            float swell = waterMaterial.GetFloat("_SwellDepth");
+            if (seabedMaterial != null) seabedMaterial.SetFloat("_SwellDepth", swell);
+            if (userBeachMaterial != null) userBeachMaterial.SetFloat("_SwellDepth", swell);
+        }
         // the waves' clock as built, unless the sky's shared settings came first (a value left over from the editor's
         // last play otherwise stays: shader globals outlive it)
         if (_rippleSpeed == 1f && _rippleShift == 0f)
@@ -138,6 +146,7 @@ public class ClearwaterController : UdonSharpBehaviour
             // the fog finds the waterline with the water's own breakers
             underwaterMaterial.SetFloat("_SwashHeight", waterMaterial.GetFloat("_SwashHeight"));
             underwaterMaterial.SetFloat("_SwashRunup", waterMaterial.GetFloat("_SwashRunup"));
+            underwaterMaterial.SetFloat("_SwellDepth", waterMaterial.GetFloat("_SwellDepth"));
         }
         if (skyMaterial != null) skyMaterial.SetFloat("_CloudShift", 0f); // (none left over from the editor's play)
         CopyClouds(waterMaterial);
