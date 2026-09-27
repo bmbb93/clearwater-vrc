@@ -259,11 +259,16 @@ public static class ClearwaterSkySetup
         go.transform.SetPositionAndRotation(at, turn);
         go.layer = WalkthroughLayer;
         var mesh = ClearwaterSetup.Save(Pebble(), "Pebble.asset");
-        go.AddComponent<MeshFilter>().sharedMesh = mesh;
         var mat = new Material(Shader.Find("Standard")) { color = new Color(0.40f, 0.36f, 0.31f) };
         mat.SetFloat("_Glossiness", 0.08f);
         mat = ClearwaterSetup.Save(mat, "Pebble.mat");
-        go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        // what shows is a child on the UI layer, out of VRChat's camera as the panel's face is; the collider it is
+        // used by stays on the pebble's own layer
+        var look = new GameObject("Look");
+        look.transform.SetParent(go.transform, false);
+        look.layer = UILayer;
+        look.AddComponent<MeshFilter>().sharedMesh = mesh;
+        look.AddComponent<MeshRenderer>().sharedMaterial = mat;
         var col = go.AddComponent<MeshCollider>();
         col.sharedMesh = mesh; col.convex = true;
         var opener = UdonSharpUndo.AddComponent<ClearwaterSkyPanelOpener>(go);
