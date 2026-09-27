@@ -110,7 +110,7 @@ Shader "Clearwater/Skybox"
                 float3 rd = normalize(cwToJS(i.dir));
                 float3 sun = cwSun();
                 float3 c = cwSky(rd, sun);
-                float pa = max(length(ddx(rd)), length(ddy(rd)));
+                float pa = max(length(ddx(rd)), length(ddy(rd))), fwE = fwidth(rd.y);
                 [branch] if (CW_TOD)
                 {
                     // the sun, the moon and the stars of the moment, behind the clouds and dimmed by the thick air low down
@@ -118,12 +118,12 @@ Shader "Clearwater/Skybox"
                     float3 add = _Udon_CWSunColor.rgb * 18.0 * cwDisc(rd, sd);
                     [branch] if (_Udon_CWMoonColor.a > 0.0) add += _Udon_CWMoonDisc.rgb * cwMoonDisc(rd, md);
                     [branch] if (_Udon_CWNight.x > 0.0 && rd.y > 0.0) add += cwStars(rd, pa) * _Udon_CWNight.x * smoothstep(0.0, 0.12, rd.y);
-                    [branch] if (any(add > 0.0)) c += add * cwCloudSunT(rd);
+                    [branch] if (any(add > 0.0)) c += add * cwCloudSunT(rd) * (1.0 - cwHeadlandCover(rd, fwE));
                 }
                 else
                 {
                     float disc = smoothstep(0.99996, 0.999985, dot(rd, sun));
-                    [branch] if (disc > 0.0) c += float3(1.0, 0.90, 0.74) * _SunIntensity * 18.0 * disc * cwCloudSunT(rd);
+                    [branch] if (disc > 0.0) c += float3(1.0, 0.90, 0.74) * _SunIntensity * 18.0 * disc * cwCloudSunT(rd) * (1.0 - cwHeadlandCover(rd, fwE));
                 }
                 // below the horizon: the far water's haze colour, so the plane's far edge blends away
                 [branch] if (rd.y < -0.0015) c = lerp(cwHazeColor(rd, sun) * 0.95, c, smoothstep(-0.02, -0.0015, rd.y));

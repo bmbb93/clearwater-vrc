@@ -297,7 +297,7 @@ float4 fragSide(v2f i)
         {
             through = cwSkyFw(ta, uSun, fwRd) * 1.1;
             float disc = smoothstep(0.9990, 0.99995, dot(ta, uSun));
-            [branch] if (disc > 0.0) through += SUN * 18.0 * disc * (1.0 - cwFresnel(uSun.y, CW_IOR)) * cwCloudSunT(ta);
+            [branch] if (disc > 0.0) through += SUN * 18.0 * disc * (1.0 - cwFresnel(uSun.y, CW_IOR)) * cwCloudSunT(ta) * (1.0 - cwHeadlandCover(ta, fwRd));
         }
 
         // Things above the water (a head, a raised arm) seen through the window: the refracted ray into
@@ -547,7 +547,7 @@ float4 fragSide(v2f i)
         float3 skyc = cwSkyFw(rd, uSun, fwRd);
         float mu = dot(rd, uSun);
         float disc = smoothstep(0.99996, 0.999985, mu);
-        [branch] if (disc > 0.0) skyc += SUN * 18.0 * disc * cwCloudSunT(rd);
+        [branch] if (disc > 0.0) skyc += SUN * 18.0 * disc * cwCloudSunT(rd) * (1.0 - cwHeadlandCover(rd, fwRd));
         col = lerp(col, skyc, hz);
     }
 

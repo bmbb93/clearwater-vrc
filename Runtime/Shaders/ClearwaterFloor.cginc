@@ -64,7 +64,13 @@ static const float3 SIG_T = SIG_A + SIG_S;
 
 // the light that shades (none indoors): the time of day's (the sun, or the moon at night; Sun intensity scales it as
 // against its 6), or the fixed sky's sun
-inline float3 cwSunColor() { return (CW_TOD ? cwKeyColor() * (_SunIntensity / 6.0) : float3(1.0, 0.90, 0.74) * _SunIntensity) * (1.0 - _Indoor); }
+// (the sky of the time of day: none while the sun, or the moon, is behind the distant headland round the horizon)
+inline float3 cwSunColor()
+{
+    float3 c = (CW_TOD ? cwKeyColor() * (_SunIntensity / 6.0) : float3(1.0, 0.90, 0.74) * _SunIntensity) * (1.0 - _Indoor);
+    [branch] if (CW_TOD && _Udon_CWKey.y < 0.08) c *= 1.0 - cwHeadlandCover(cwSun(), 0.003);
+    return c;
+}
 // the light from the whole sky on a level surface (indoors: from the room, the probe's broadest look upward)
 inline float3 cwSkyIrr()
 {

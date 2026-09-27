@@ -199,6 +199,20 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
     return c;
 }
 
+// the distant headland's ridge along d (its elevation, radians), and how much of d it covers (with its antialiased
+// edge; fwE = fwidth(d.y)): the sun, the moon and the stars go behind it
+float cwHeadlandRidge(float3 d)
+{
+    float a = atan2(d.z, d.x);
+    return cwRidge(a) + 0.0045 * (cwNoise(float2(a * 260.0, 0.0)) - 0.5) + 0.002 * (cwNoise(float2(a * 900.0, 3.0)) - 0.5);
+}
+float cwHeadlandCover(float3 d, float fwE)
+{
+    [branch] if (d.y > 0.08 || d.y < -0.3) return 0.0; // (it stands no higher than some 4 degrees)
+    float r = cwHeadlandRidge(d), w = fwE * 1.2 + 2e-4;
+    return smoothstep(r + w, r - w, d.y);
+}
+
 // sky radiance for a JS-space direction (HDR, linear). fwE = fwidth(d.y), for the anti-aliased ridge edge;
 // pass it in when calling from inside a dynamic branch. (Indoors the room is there instead: cwSkyFw below.)
 float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
@@ -230,7 +244,7 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
     c = cwCloudsOver(c, d, sun, mu, hor, fwE);
     // distant headland: pine canopy over pale limestone, softened by ~2 km of air
     float a = atan2(d.z, d.x);
-    float r = cwRidge(a) + 0.0045 * (cwNoise(float2(a * 260.0, 0.0)) - 0.5) + 0.002 * (cwNoise(float2(a * 900.0, 3.0)) - 0.5);
+    float r = cwHeadlandRidge(d);
     float back = smoothstep(-0.3, 0.95, dot(normalize(float2(d.x, d.z) + 1e-5), normalize(float2(sun.x, sun.z))));
     float u = saturate(e / max(r, 1e-3));
     float2 q = float2(a * 420.0, e * 420.0);
