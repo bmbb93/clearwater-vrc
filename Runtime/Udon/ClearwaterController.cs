@@ -143,6 +143,18 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetVector("_SeaDir", skyMaterial.GetVector("_SeaDir"));
     }
 
+    /// <summary>The clouds' cover (0..1) on the sky, the water, the seabed and the pools at once (ClearwaterSky.SetClouds).</summary>
+    public void SetCloudCover(float cover)
+    {
+        if (skyMaterial == null) return;
+        skyMaterial.SetFloat("_CloudCover", cover);
+        CopyClouds(waterMaterial);
+        CopyClouds(seabedMaterial);
+        for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
+    }
+
+    public float CloudCover() { return skyMaterial != null ? skyMaterial.GetFloat("_CloudCover") : 0f; }
+
     public override void OnPlayerJoined(VRCPlayerApi player) { RefreshPlayers(); }
     public override void OnPlayerLeft(VRCPlayerApi player) { RefreshPlayers(); }
 

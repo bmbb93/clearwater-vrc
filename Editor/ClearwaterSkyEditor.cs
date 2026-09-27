@@ -3,6 +3,8 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
+using UnityEditor.Events;
 
 /// <summary>
 /// The sky of the time of day in the editor: its tables baked (ClearwaterAtmosphere) and given to the scene's
@@ -47,6 +49,7 @@ public static class ClearwaterSkySetup
         Fill(sky);
         if (made) sky.north = DefaultNorth(sky.timeOfDay, sky.latitude, sky.dayOfYear);
         sky.sunLight = sun;
+        if (sky.controller == null) sky.controller = Object.FindObjectOfType<ClearwaterController>(true);
 
         var probe = sky.reflectionProbe;
         if (probe == null)
@@ -75,6 +78,110 @@ public static class ClearwaterSkySetup
         EditorUtility.SetDirty(sky);
         Show(sky);
         return sky;
+    }
+
+    const string PanelName = "Sky Control Panel (Clearwater)";
+
+    /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour and the clouds on sliders, the day going
+    /// by on a toggle; anyone can use it and what they set goes to everyone. Placed in front of the spawn, facing it.</summary>
+    [MenuItem("Tools/Clearwater/Add Sky Control Panel")]
+    public static void AddPanel()
+    {
+        var sky = Object.FindObjectOfType<ClearwaterSky>(true);
+        if (sky == null)
+        {
+            EditorUtility.DisplayDialog("Clearwater", "This scene has no sky of the day: use Tools > Clearwater > Use Clearwater Sky and Sun first.", "OK");
+            return;
+        }
+        Undo.RecordObject(sky, "Clearwater sky panel");
+        if (sky.controller == null) sky.controller = Object.FindObjectOfType<ClearwaterController>(true);
+        EditorUtility.SetDirty(sky);
+        ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanel.cs");
+
+        // in front of the spawn, at chest height, facing it
+        Vector3 at = Vector3.zero; Quaternion facing = Quaternion.identity;
+        var desc = Object.FindObjectOfType<VRC.SDK3.Components.VRCSceneDescriptor>();
+        if (desc != null && desc.spawns != null && desc.spawns.Length > 0 && desc.spawns[0] != null)
+        {
+            at = desc.spawns[0].position; facing = Quaternion.Euler(0f, desc.spawns[0].eulerAngles.y, 0f);
+        }
+        var root = new GameObject(PanelName);
+        Undo.RegisterCreatedObjectUndo(root, "Clearwater sky panel");
+        root.transform.SetPositionAndRotation(at + facing * new Vector3(0f, 1.3f, 1.5f), facing);
+        var canvas = root.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        root.AddComponent<GraphicRaycaster>();
+        var rt = (RectTransform)root.transform;
+        rt.sizeDelta = new Vector2(420f, 230f);
+        rt.localScale = Vector3.one * 0.0015f; // (63 x 35 cm)
+        root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
+
+        var res = new DefaultControls.Resources
+        {
+            standard = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd"),
+            background = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd"),
+            knob = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd"),
+            checkmark = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Checkmark.psd"),
+        };
+        var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        var bg = root.AddComponent<Image>();
+        bg.sprite = res.background; bg.type = Image.Type.Sliced; bg.color = new Color(0.08f, 0.10f, 0.14f, 0.82f);
+
+        Text Label(string text, float y)
+        {
+            var go = new GameObject("Label", typeof(RectTransform));
+            go.transform.SetParent(root.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
+            r.sizeDelta = new Vector2(380f, 32f); r.anchoredPosition = new Vector2(0f, y);
+            var t = go.AddComponent<Text>();
+            t.font = font; t.fontSize = 24; t.color = Color.white; t.text = text; t.alignment = TextAnchor.MiddleLeft;
+            return t;
+        }
+        Slider MakeSlider(string name, float y, float max)
+        {
+            var go = DefaultControls.CreateSlider(res);
+            go.name = name;
+            go.transform.SetParent(root.transform, false);
+            var r = (RectTransform)go.transform;
+            r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
+            r.sizeDelta = new Vector2(380f, 24f); r.anchoredPosition = new Vector2(0f, y);
+            var s = go.GetComponent<Slider>();
+            s.minValue = 0f; s.maxValue = max;
+            return s;
+        }
+        var hourLabel = Label("Time", -30f);
+        var hour = MakeSlider("Hour", -62f, 24f);
+        var cloudLabel = Label("Clouds", -100f);
+        var clouds = MakeSlider("Clouds", -132f, 1f);
+        var toggleGo = DefaultControls.CreateToggle(res);
+        toggleGo.name = "Day goes by";
+        toggleGo.transform.SetParent(root.transform, false);
+        var tr = (RectTransform)toggleGo.transform;
+        tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 1f);
+        tr.sizeDelta = new Vector2(380f, 30f); tr.anchoredPosition = new Vector2(0f, -185f);
+        var toggle = toggleGo.GetComponent<Toggle>();
+        var toggleText = toggleGo.GetComponentInChildren<Text>();
+        toggleText.font = font; toggleText.fontSize = 24; toggleText.color = Color.white; toggleText.text = "Day goes by";
+        var tl = (RectTransform)toggleText.transform; tl.offsetMin = new Vector2(34f, 0f);
+        var box = (RectTransform)toggleGo.transform.Find("Background");
+        box.sizeDelta = new Vector2(26f, 26f);
+
+        var panel = UdonSharpUndo.AddComponent<ClearwaterSkyPanel>(root);
+        panel.sky = sky;
+        panel.hourSlider = hour; panel.cloudSlider = clouds; panel.cycleToggle = toggle;
+        panel.hourLabel = hourLabel; panel.cloudLabel = cloudLabel;
+        EditorUtility.SetDirty(panel);
+        // the UI tells the panel's Udon program (VRChat lets UI events call SendCustomEvent)
+        var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(panel);
+        UnityEventTools.AddStringPersistentListener(hour.onValueChanged, udon.SendCustomEvent, "OnHour");
+        UnityEventTools.AddStringPersistentListener(clouds.onValueChanged, udon.SendCustomEvent, "OnClouds");
+        UnityEventTools.AddStringPersistentListener(toggle.onValueChanged, udon.SendCustomEvent, "OnCycle");
+        hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
+        clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
+        Selection.activeGameObject = root;
+        EditorSceneManager.MarkSceneDirty(root.scene);
+        Debug.Log("[Clearwater] Sky control panel added in front of the spawn: move it where you like.");
     }
 
     /// <summary>The baked tables, and the light the sky is calibrated to: the fixed sky's, with its sun 31 degrees up.</summary>

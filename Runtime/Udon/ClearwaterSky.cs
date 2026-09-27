@@ -9,7 +9,9 @@ using VRC.SDKBase;
 /// a fixed hour, or with the day going by, for everyone in the instance alike (from the server's clock).
 /// Everything is handed to the shaders at once (global _Udon_CW* values, ClearwaterCommon.cginc), with the directional
 /// light and the ambient light turned and tinted to match. A day that goes by starts at the set hour when the instance
-/// opens: its owner shares the server time it started at, so everyone who joins later sees the same hour. Brightness is as the eye sees it: it adapts to the dark, so a
+/// opens: its owner shares the server time it started at, so everyone who joins later sees the same hour. The hour, the
+/// day going by and the clouds can be changed while the world runs (SetHour, SetCycle, SetClouds; ClearwaterSkyPanel
+/// is a panel for them): whoever changes them takes the sky over and shares them. Brightness is as the eye sees it: it adapts to the dark, so a
 /// moonlit night shows dim and blue (nightBrightness) instead of black, and the light of the fixed sky (the sun 31
 /// degrees up) is kept exactly at that elevation.
 /// </summary>
@@ -18,9 +20,9 @@ public class ClearwaterSky : UdonSharpBehaviour
 {
     [Header("Time of day")]
     [Tooltip("The day goes by, from the hour below when the instance opens, the same for everyone in it; off: the sky stays at the hour below")]
-    public bool cycle;
+    [UdonSynced] public bool cycle;
     [Tooltip("The hour (local solar time: the sun is highest at 12): the sky's, or the one the day starts from when it goes by")]
-    [Range(0f, 24f)] public float timeOfDay = 16.5f;
+    [UdonSynced, Range(0f, 24f)] public float timeOfDay = 16.5f;
     [Tooltip("Real minutes a whole day takes when it goes by")]
     public float dayMinutes = 24f;
 
@@ -50,6 +52,8 @@ public class ClearwaterSky : UdonSharpBehaviour
     public float updateInterval = 0.1f;
     [Tooltip("Seconds between renders of the reflection probe while the day goes by")]
     public float probeInterval = 10f;
+    [Tooltip("The water's controller: the clouds set from here (SetClouds) go to the sky, the water and the seabed through it")]
+    public ClearwaterController controller;
 
     [Header("Baked (by Build Scene / Use Clearwater Sky and Sun)")]
     public Texture3D skyTable;
@@ -88,8 +92,10 @@ public class ClearwaterSky : UdonSharpBehaviour
     Vector3 _sunScale, _wb, _lightScale;
     float _ambScale, _skyScale, _yRef, _meanRef, _x0, _upGain, _sideGain, _downGain;
     float _nextApply, _nextProbe;
-    // the server time the instance's day started at (the owner's, shared), and whether it has come
+    // the server time the instance's day started at (the owner's, shared), and whether it has come; the cloud cover
+    // set while the world runs (below 0: the sky material's own)
     [UdonSynced] double _start;
+    [UdonSynced] float _clouds = -1f;
     bool _started;
 
     void Start()
@@ -106,7 +112,59 @@ public class ClearwaterSky : UdonSharpBehaviour
     public override void OnDeserialization()
     {
         _started = true;
-        if (cycle) ApplyNow();
+        ApplyClouds();
+        ApplyNow();
+    }
+
+    /// <summary>Puts the sky at this hour for everyone (the day, if it goes by, goes on from it).</summary>
+    public void SetHour(float hours)
+    {
+        TakeOver();
+        timeOfDay = Mathf.Repeat(hours, 24f);
+        _start = Networking.GetServerTimeInSeconds();
+        Share();
+        ApplyNow();
+    }
+
+    /// <summary>Lets the day go by from the hour it is now, or holds it there, for everyone.</summary>
+    public void SetCycle(bool on)
+    {
+        if (on == cycle) return;
+        TakeOver();
+        timeOfDay = Hours();
+        _start = Networking.GetServerTimeInSeconds();
+        cycle = on;
+        Share();
+        ApplyNow();
+    }
+
+    /// <summary>Sets how much of the sky the clouds cover (0..1), for everyone.</summary>
+    public void SetClouds(float cover)
+    {
+        TakeOver();
+        _clouds = Mathf.Clamp01(cover);
+        Share();
+        ApplyClouds();
+        if (reflectionProbe != null) reflectionProbe.RenderProbe();
+    }
+
+    /// <summary>The cloud cover now: as set while the world runs, or the sky material's.</summary>
+    public float Clouds() { return _clouds >= 0f || controller == null ? Mathf.Max(_clouds, 0f) : controller.CloudCover(); }
+
+    void TakeOver()
+    {
+        if (!Networking.IsOwner(gameObject)) Networking.SetOwner(Networking.LocalPlayer, gameObject);
+    }
+
+    void Share()
+    {
+        _started = true;
+        RequestSerialization();
+    }
+
+    void ApplyClouds()
+    {
+        if (controller != null && _clouds >= 0f) controller.SetCloudCover(_clouds);
     }
 
     void Update()
