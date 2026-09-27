@@ -301,6 +301,7 @@ Inspector で値を動かすと、Scene ビューと Game ビューにすぐ映�
 - 時刻の同期は Clearwater Sky が、雲と波の同期は Sky & Waves Settings が受け持ちます（同期するオブジェクトが 2 つなので、ネットワーク ID も 2 つ使います）
 - パネルの見た目（子の Face）と小石の見た目（子の Look）は UI レイヤーに置くので、VRChat のカメラ（写真・配信用）には写りません。カメラの設定で UI を表示したときだけ写ります。操作を受ける親（パネルの VRC Ui Shape、小石の当たり判定）は UI レイヤーにしません。UI レイヤーのものは、VRChat のメニューを開いている間しか触れないためです
 - パネルの親と小石は Walkthrough レイヤーに置くので、アバターはぶつからずに通り抜けます
+- パネルの文字は TextMesh Pro で、スライダーなどの図形は VRChat の超解像 UI シェーダー（`VRChat/Mobile/Worlds/Supersampled UI`）で描くので、VR でも縁がにじみにくくなります。プロジェクトに TextMesh Pro の Essential Resources がないときは、パネルを作るときに取り込みます（`Assets/TextMesh Pro` ができます）
 
 自分の Udon から変えるときは、Clearwater Sky の `SetHour(時刻)`・`SetCycle(true/false)`・`SetDayMinutes(分)`・`ResetTime()` と、Sky & Waves Settings（`ClearwaterSettings`）の `SetClouds(0〜1)`・`SetCloudDrift(m/s)`・`SetShoreWaves(m)`・`SetRipples(0〜1)`・`SetRippleSpeed(倍率)`・`ResetAll()` を呼びます。どれも全員に同期します。
 

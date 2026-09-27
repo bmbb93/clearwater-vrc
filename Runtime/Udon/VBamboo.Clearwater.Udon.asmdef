@@ -1,7 +1,7 @@
 {
     "name": "VBamboo.Clearwater.Udon",
     "rootNamespace": "",
-    "references": ["VRC.SDKBase", "VRC.SDK3", "VRC.Udon", "UdonSharp.Runtime", "UdonSharp.Lib", "UnityEngine.UI"],
+    "references": ["VRC.SDKBase", "VRC.SDK3", "VRC.Udon", "UdonSharp.Runtime", "UdonSharp.Lib", "UnityEngine.UI", "Unity.TextMeshPro"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

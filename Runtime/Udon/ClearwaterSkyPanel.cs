@@ -1,3 +1,4 @@
+using TMPro;
 using UdonSharp;
 using UnityEngine;
 using UnityEngine.UI;
@@ -32,13 +33,13 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
     [Tooltip("How fast the sea's small waves go, 0 (still) to 2 (twice as built)")]
     public Slider rippleSpeedSlider;
     [Tooltip("Shows the hour it is now")]
-    public Text hourLabel;
-    public Text cloudLabel;
-    public Text cloudSpeedLabel;
-    public Text dayLengthLabel;
-    public Text shoreWaveLabel;
-    public Text seaWaveLabel;
-    public Text rippleSpeedLabel;
+    public TextMeshProUGUI hourLabel;
+    public TextMeshProUGUI cloudLabel;
+    public TextMeshProUGUI cloudSpeedLabel;
+    public TextMeshProUGUI dayLengthLabel;
+    public TextMeshProUGUI shoreWaveLabel;
+    public TextMeshProUGUI seaWaveLabel;
+    public TextMeshProUGUI rippleSpeedLabel;
 
     bool _showing; // (while the panel shows the sky's state: the UI's events it sets off are not the viewer's)
     float _nextShow;

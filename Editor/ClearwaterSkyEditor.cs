@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 using UnityEditor.Events;
+using TMPro;
 
 /// <summary>
 /// The sky of the time of day in the editor: its tables baked (ClearwaterAtmosphere) and given to the scene's
@@ -168,23 +169,21 @@ public static class ClearwaterSkySetup
             knob = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd"),
             checkmark = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Checkmark.psd"),
         };
-        var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        var font = PanelFont();
         var bg = face.AddComponent<Image>();
         bg.sprite = res.background; bg.type = Image.Type.Sliced; bg.color = new Color(0.08f, 0.10f, 0.14f, 0.82f);
 
         // Two panes side by side, each under its heading: the sky on the left, the sea on the right (x = a pane's
         // centre; a row's label above its slider)
         const float SkyX = -190f, SeaX = 190f, PaneW = 330f;
-        Text Label(string text, float x, float y, int size = 24)
+        TextMeshProUGUI Label(string text, float x, float y, int size = 24)
         {
             var go = new GameObject("Label", typeof(RectTransform));
             go.transform.SetParent(face.transform, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
             r.sizeDelta = new Vector2(PaneW, 32f); r.anchoredPosition = new Vector2(x, y);
-            var t = go.AddComponent<Text>();
-            t.font = font; t.fontSize = size; t.color = Color.white; t.text = text; t.alignment = TextAnchor.MiddleLeft;
-            return t;
+            return Text(go, font, text, size, TextAlignmentOptions.MidlineLeft);
         }
         Slider MakeSlider(string name, float x, float y, float max)
         {
@@ -199,8 +198,8 @@ public static class ClearwaterSkySetup
             return s;
         }
         // the headings, tinted apart (the sky's warm, the sea's cool), and a rule between the panes
-        var skyHead = Label("Sky", SkyX, -30f, 28); skyHead.fontStyle = FontStyle.Bold; skyHead.color = new Color(1f, 0.88f, 0.62f);
-        var seaHead = Label("Waves", SeaX, -30f, 28); seaHead.fontStyle = FontStyle.Bold; seaHead.color = new Color(0.62f, 0.88f, 1f);
+        var skyHead = Label("Sky", SkyX, -30f, 28); skyHead.fontStyle = FontStyles.Bold; skyHead.color = new Color(1f, 0.88f, 0.62f);
+        var seaHead = Label("Waves", SeaX, -30f, 28); seaHead.fontStyle = FontStyles.Bold; seaHead.color = new Color(0.62f, 0.88f, 1f);
         var rule = new GameObject("Divider", typeof(RectTransform));
         rule.transform.SetParent(face.transform, false);
         var ru = (RectTransform)rule.transform;
@@ -226,8 +225,7 @@ public static class ClearwaterSkySetup
         tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 1f);
         tr.sizeDelta = new Vector2(PaneW, 30f); tr.anchoredPosition = new Vector2(SkyX, -365f);
         var toggle = toggleGo.GetComponent<Toggle>();
-        var toggleText = toggleGo.GetComponentInChildren<Text>();
-        toggleText.font = font; toggleText.fontSize = 24; toggleText.color = Color.white; toggleText.text = "Day goes by";
+        var toggleText = Text(toggleGo.GetComponentInChildren<Text>().gameObject, font, "Day goes by", 24, TextAlignmentOptions.MidlineLeft);
         var tl = (RectTransform)toggleText.transform; tl.offsetMin = new Vector2(34f, 0f);
         var box = (RectTransform)toggleGo.transform.Find("Background");
         box.sizeDelta = new Vector2(26f, 26f);
@@ -248,8 +246,8 @@ public static class ClearwaterSkySetup
         var rr = (RectTransform)resetGo.transform;
         rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 1f);
         rr.sizeDelta = new Vector2(200f, 40f); rr.anchoredPosition = new Vector2(SeaX + (PaneW - 200f) * 0.5f, -360f);
-        var resetText = resetGo.GetComponentInChildren<Text>();
-        resetText.font = font; resetText.fontSize = 22; resetText.text = "Reset all";
+        var resetText = Text(resetGo.GetComponentInChildren<Text>().gameObject, font, "Reset all", 22, TextAlignmentOptions.Center);
+        resetText.color = new Color(0.20f, 0.20f, 0.20f);
         var reset = resetGo.GetComponent<Button>();
 
         var panel = UdonSharpUndo.AddComponent<ClearwaterSkyPanel>(root);
@@ -276,6 +274,11 @@ public static class ClearwaterSkySetup
         UnityEventTools.AddStringPersistentListener(rippleSpeed.onValueChanged, udon.SendCustomEvent, "OnRippleSpeed");
         UnityEventTools.AddStringPersistentListener(reset.onClick, udon.SendCustomEvent, "OnReset");
         foreach (var t in face.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
+        // the shapes drawn super-sampled, sharper in a headset (VRChat's own UI shader; the text is TextMesh Pro's)
+        var ui = PanelUIMaterial();
+        if (ui != null)
+            foreach (var g in face.GetComponentsInChildren<Graphic>(true))
+                if (!(g is TMP_Text)) g.material = ui;
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = settings.clouds;
         speed.value = settings.cloudDrift;
@@ -292,6 +295,37 @@ public static class ClearwaterSkySetup
         root.SetActive(false); // (the stone shows it)
         EditorSceneManager.MarkSceneDirty(root.scene);
         return stone;
+    }
+
+    /// <summary>A TextMesh Pro text on go (a Unity text there, as the default controls make, replaced by it).</summary>
+    static TextMeshProUGUI Text(GameObject go, TMP_FontAsset font, string text, float size, TextAlignmentOptions align)
+    {
+        var old = go.GetComponent<Text>();
+        if (old != null) Object.DestroyImmediate(old);
+        var t = go.AddComponent<TextMeshProUGUI>();
+        if (font != null) t.font = font;
+        t.fontSize = size; t.color = Color.white; t.text = text; t.alignment = align;
+        t.enableWordWrapping = false; t.raycastTarget = false;
+        return t;
+    }
+
+    /// <summary>The panel's font: TextMesh Pro's default (its Essential Resources, imported into the project first if
+    /// they are not there yet: its shaders and fonts come with them).</summary>
+    static TMP_FontAsset PanelFont()
+    {
+        if (TMP_Settings.instance == null)
+        {
+            string pkg = System.IO.Path.GetFullPath("Packages/com.unity.textmeshpro/Package Resources/TMP Essential Resources.unitypackage");
+            if (System.IO.File.Exists(pkg)) AssetDatabase.ImportPackage(pkg, false);
+        }
+        return TMP_Settings.instance != null ? TMP_Settings.defaultFontAsset : null;
+    }
+
+    /// <summary>VRChat's super-sampled UI shader in a material of the panel's own (none without it: Unity's default).</summary>
+    static Material PanelUIMaterial()
+    {
+        var shader = Shader.Find("VRChat/Mobile/Worlds/Supersampled UI");
+        return shader != null ? ClearwaterSetup.Save(new Material(shader), "SkyPanelUI.mat") : null;
     }
 
     const string SettingsName = "Sky & Waves Settings (Clearwater)";
