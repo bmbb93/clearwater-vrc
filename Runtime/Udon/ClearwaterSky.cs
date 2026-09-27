@@ -11,7 +11,8 @@ using VRC.SDKBase;
 /// light and the ambient light turned and tinted to match. A day that goes by starts at the set hour when the instance
 /// opens: its owner shares the server time it started at, so everyone who joins later sees the same hour. The hour, the
 /// day going by and the clouds can be changed while the world runs (SetHour, SetCycle, SetClouds; ClearwaterSkyPanel
-/// is a panel for them): whoever changes them takes the sky over and shares them. Brightness is as the eye sees it: it adapts to the dark, so a
+/// is a panel for them): whoever changes them takes the sky over and shares them. So can the sea's waves (SetShoreWaves,
+/// SetSeaWaves), shared along with the sky and set on the water through the controller. Brightness is as the eye sees it: it adapts to the dark, so a
 /// moonlit night shows dim and blue (nightBrightness) instead of black, and the light of the fixed sky (the sun 31
 /// degrees up) is kept exactly at that elevation.
 /// </summary>
@@ -97,6 +98,9 @@ public class ClearwaterSky : UdonSharpBehaviour
     [UdonSynced] double _start;
     [UdonSynced] float _clouds = -1f;
     [UdonSynced] float _cloudSpeed = -1f; // (below 0: the sky material's own)
+    // the shore waves' height (m) and the sea's small waves' strength set while the world runs (below 0: the water's own)
+    [UdonSynced] float _shoreWaves = -1f;
+    [UdonSynced] float _seaWaves = -1f;
     bool _started;
 
     void Start()
@@ -113,7 +117,7 @@ public class ClearwaterSky : UdonSharpBehaviour
     public override void OnDeserialization()
     {
         _started = true;
-        ApplyClouds();
+        ApplyShared();
         ApplyNow();
     }
 
@@ -158,7 +162,7 @@ public class ClearwaterSky : UdonSharpBehaviour
         TakeOver();
         _clouds = Mathf.Clamp01(cover);
         Share();
-        ApplyClouds();
+        ApplyShared();
         if (reflectionProbe != null) reflectionProbe.RenderProbe();
     }
 
@@ -168,8 +172,32 @@ public class ClearwaterSky : UdonSharpBehaviour
         TakeOver();
         _cloudSpeed = Mathf.Max(speed, 0f);
         Share();
-        ApplyClouds();
+        ApplyShared();
     }
+
+    /// <summary>Sets how high the shore waves are (m, the breaker height; 0 = none), for everyone.</summary>
+    public void SetShoreWaves(float height)
+    {
+        TakeOver();
+        _shoreWaves = Mathf.Max(height, 0f);
+        Share();
+        ApplyShared();
+    }
+
+    /// <summary>Sets how strong the sea's small waves are (0 = a glassy calm, 1 = as built), for everyone.</summary>
+    public void SetSeaWaves(float strength)
+    {
+        TakeOver();
+        _seaWaves = Mathf.Clamp01(strength);
+        Share();
+        ApplyShared();
+    }
+
+    /// <summary>The shore waves' height now (m): as set while the world runs, or the water's.</summary>
+    public float ShoreWaves() { return _shoreWaves >= 0f || controller == null ? Mathf.Max(_shoreWaves, 0f) : controller.ShoreWaveHeight(); }
+
+    /// <summary>The sea's small waves' strength now (0..1): as set while the world runs, or the water's.</summary>
+    public float SeaWaves() { return _seaWaves >= 0f || controller == null ? Mathf.Clamp01(_seaWaves) : controller.SeaWaves(); }
 
     /// <summary>How fast the clouds drift now (m/s): as set while the world runs, or the sky material's.</summary>
     public float CloudSpeed()
@@ -191,10 +219,14 @@ public class ClearwaterSky : UdonSharpBehaviour
         RequestSerialization();
     }
 
-    void ApplyClouds()
+    // what was set while the world runs, on the sky and the water (through the controller)
+    void ApplyShared()
     {
-        if (controller != null && _clouds >= 0f) controller.SetCloudCover(_clouds);
-        if (controller != null && _cloudSpeed >= 0f) controller.SetCloudSpeed(_cloudSpeed);
+        if (controller == null) return;
+        if (_clouds >= 0f) controller.SetCloudCover(_clouds);
+        if (_cloudSpeed >= 0f) controller.SetCloudSpeed(_cloudSpeed);
+        if (_shoreWaves >= 0f) controller.SetShoreWaveHeight(_shoreWaves);
+        if (_seaWaves >= 0f) controller.SetSeaWaves(_seaWaves);
     }
 
     void Update()

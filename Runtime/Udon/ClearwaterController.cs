@@ -90,6 +90,10 @@ public class ClearwaterController : UdonSharpBehaviour
     [Tooltip("Length of the break timing track (= the shore loop)")]
     public float swashLoop = 90f;
     float _submerged;
+    // the shore waves' breaker height the world was built with (m): the surf's sound is as loud as built at it; and
+    // whether the coast was built with shore waves (the materials' _ShoreWaves)
+    float _builtHeight = -1f;
+    float _builtShore = -1f;
 
     int _body = -1;       // the water the viewer is at: -1 the sea, else a pool (the ripples are on it)
     int _poolCount;
@@ -119,6 +123,7 @@ public class ClearwaterController : UdonSharpBehaviour
         _poolFog = new bool[_poolCount];
         RefreshPlayers();
         if (!shoreWaves && shoreAudio != null) shoreAudio.Stop(); // still water: no surf
+        RememberBuilt();
         if (underwaterMaterial != null && waterMaterial != null)
         {
             // the fog finds the waterline with the water's own breakers
@@ -173,6 +178,54 @@ public class ClearwaterController : UdonSharpBehaviour
     }
 
     public float CloudSpeed() { return skyMaterial != null ? skyMaterial.GetFloat("_CloudSpeed") : 0f; }
+
+    /// <summary>How high the shore waves are (m, the breaker height; 0 = none): their breaking, run-up, foam and wet
+    /// sand, on the water, the seabed, the underwater view and the user terrain's beach at once, the surf's sound louder
+    /// or softer with them (ClearwaterSky.SetShoreWaves).</summary>
+    public void SetShoreWaveHeight(float height)
+    {
+        if (waterMaterial == null) return;
+        RememberBuilt();
+        height = Mathf.Max(height, 0f);
+        // none at all: still water at the shore, as a coast built without shore waves (no foam or wet sand left at the
+        // water's edge, and none of their work for the shaders)
+        float shore = height > 0.005f ? _builtShore : 0f;
+        SetShore(waterMaterial, height, shore);
+        SetShore(seabedMaterial, height, shore);
+        SetShore(underwaterMaterial, height, shore);
+        SetShore(userBeachMaterial, height, shore);
+    }
+
+    // the shore waves as built, before anything sets them (the sky's shared settings can come before Start)
+    void RememberBuilt()
+    {
+        if (_builtHeight >= 0f || waterMaterial == null) return;
+        _builtHeight = waterMaterial.GetFloat("_SwashHeight");
+        _builtShore = waterMaterial.GetFloat("_ShoreWaves");
+    }
+
+    void SetShore(Material m, float height, float shore)
+    {
+        if (m == null) return;
+        m.SetFloat("_SwashHeight", height);
+        m.SetFloat("_ShoreWaves", shore);
+    }
+
+    public float ShoreWaveHeight() { return waterMaterial != null ? waterMaterial.GetFloat("_SwashHeight") : 0f; }
+
+    /// <summary>How strong the sea's small waves are, 0 (a glassy calm: no light patterns on the floor) to 1 (as built),
+    /// on the sea's water, seabed, underwater view and the light patterns on avatars at once; the pools keep their own
+    /// (ClearwaterSky.SetSeaWaves).</summary>
+    public void SetSeaWaves(float strength)
+    {
+        float calm = 1f - Mathf.Clamp01(strength);
+        if (waterMaterial != null) waterMaterial.SetFloat("_Calm", calm);
+        if (seabedMaterial != null) seabedMaterial.SetFloat("_Calm", calm);
+        if (underwaterMaterial != null) underwaterMaterial.SetFloat("_Calm", calm);
+        if (avatarCausticsMaterial != null) avatarCausticsMaterial.SetFloat("_Calm", calm);
+    }
+
+    public float SeaWaves() { return waterMaterial != null ? 1f - waterMaterial.GetFloat("_Calm") : 1f; }
 
     public override void OnPlayerJoined(VRCPlayerApi player) { RefreshPlayers(); }
     public override void OnPlayerLeft(VRCPlayerApi player) { RefreshPlayers(); }
@@ -387,7 +440,9 @@ public class ClearwaterController : UdonSharpBehaviour
 
         // quick crossfade into / out of the muffled underwater loop
         _submerged = Mathf.MoveTowards(_submerged, under ? 1f : 0f, Time.deltaTime * 5f);
-        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? shoreLevel * _shoreLoud * (1f - _submerged) : 0f;
+        // (the surf as loud as built at the built wave height, louder or softer as the waves are set higher or lower)
+        float surf = _builtHeight > 0f ? Mathf.Sqrt(ShoreWaveHeight() / _builtHeight) : 1f;
+        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? shoreLevel * surf * _shoreLoud * (1f - _submerged) : 0f;
         if (bedAudio != null) bedAudio.volume = bedLevel * (1f - _submerged);
         if (underwaterAudio != null) underwaterAudio.volume = underwaterLevel * _submerged;
     }

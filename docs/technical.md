@@ -1,6 +1,6 @@
 # Clearwater Coast の仕組み
 
-この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.36 時点のものです。
+この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.37 時点のものです。
 
 **読み方**。1 章（全体像）と 2 章（用語）で全体の流れをつかめば、あとはどの章からでも読めます。4〜8 章は水の見た目、9〜10 章は焼き込みとプール、13〜14 章は空、15 章以降は調べるときに引く参照用です。Unity に詳しくない人は、2 章の用語表から読んでください。パッケージに手を入れるときは、19 章のテストも見てください。用語の定義は [CONTEXT.md](../CONTEXT.md)、後から変えにくい決定は [docs/adr](adr/) にまとめてあります。
 
@@ -32,7 +32,7 @@ Clearwater の描画は、大きく 3 つの層に分かれます。
 
 1. **エディターでの焼き込み（Bake）**。海岸の線と断面、スタンプ、自分の地形、プールから、水底の形と波の届き方をテクスチャに焼きます。結果は `Assets/Clearwater/Generated` の中の、シーンごとのフォルダーに保存されます（9 章）。
 2. **GPU での毎フレームの計算**。Custom Render Texture（CRT）の連鎖で波の高さを FFT で求め、別のカメラで水底の光の模様を描きます。
-3. **Udon**。コントローラー（`Runtime/Udon/ClearwaterController.cs`）が、見ている人がどの水にいるかを決め、波紋・水中の霧・波音を切り替えます。コントローラーに同期する変数はありません。時刻の空は別の Udon（`ClearwaterSky`）が受け持ちます（13 章）。
+3. **Udon**。コントローラー（`Runtime/Udon/ClearwaterController.cs`）が、見ている人がどの水にいるかを決め、波紋・水中の霧・波音を切り替えます。コントローラーに同期する変数はありません。時刻の空は別の Udon（`ClearwaterSky`）が受け持ちます（13 章）。パネルで変えた雲と波も `ClearwaterSky` が全員に同期し、コントローラーがマテリアルに入れます（14 章）。
 
 水面のシェーダーは、この 3 つの結果を読んで 1 画素ずつ色を決めます。そのとき、**水底を画面から拾わず、焼き込んだ形から計算で求めます**。これが Clearwater の性格を決めている一番大きな選択で、5 章で詳しく説明します。
 
@@ -538,6 +538,8 @@ sequenceDiagram
 | `SetDayMinutes(分)` | 1 日の長さ。今の時刻から新しい速さで進む |
 | `SetClouds(0〜1)` | 雲の量 |
 | `SetCloudSpeed(m/s)` | 雲の流れる速さ。今の位置から新しい速さで流れる |
+| `SetShoreWaves(m)` | 岸の波の高さ（砕ける波の高さ、`_SwashHeight`）。水面・水底・水中・自分の地形の浜のマテリアルに入れる。波音は作ったときの高さとの比の平方根で大きくなる。0 では `_ShoreWaves` も 0 にして、岸の波のない水際にする |
+| `SetSeaWaves(0〜1)` | 沖のさざ波の強さ。海の水面・水底・水中・アバターの光の模様のマテリアルの `_Calm`（= 1 − 強さ）に入れる。プールの `_Calm` はプールごとの値のまま |
 
 **負荷**。空・水面・水底は、見る方向ごとに表を 1 回引きます。太陽と月のどちらかの空が他方の 1000 分の 1 に満たないときは、その分は引きません。見えない星の計算も飛ばします（値をちょうど 0 にして、シェーダーの分岐で飛ばします。昼の星を小さな値のまま残すと、1080p で +0.2 ms かかりました）。1920×1080 の 1 画面で、時刻のない空と比べて、昼は +0.05 ms、夜空を見上げたときは +0.15 ms でした。
 
@@ -548,8 +550,8 @@ sequenceDiagram
 | 部品 | オブジェクト | レイヤー | 役割 |
 | --- | --- | --- | --- |
 | パネルの親 | Sky Control Panel (Clearwater) | 17 Walkthrough | ワールド空間の Canvas と VRC Ui Shape（操作を受ける当たり判定）。ClearwaterSkyPanel の Udon |
-| パネルの見た目 | Face | 5 UI | 入れ子の Canvas。スライダー 4 本とトグル 1 つ。63 × 54 cm |
-| 小石 | Sky Stone (Clearwater) | 17 Walkthrough | 当たり判定（凸のメッシュ）と ClearwaterSkyPanelOpener の Udon。Interact の表示は「Sky Settings」 |
+| パネルの見た目 | Face | 5 UI | 入れ子の Canvas。スライダー 6 本とトグル 1 つ。63 × 75 cm |
+| 小石 | Sky Stone (Clearwater) | 17 Walkthrough | 当たり判定（凸のメッシュ）と ClearwaterSkyPanelOpener の Udon。Interact の表示は「Sky & Waves」 |
 | 小石の見た目 | Look | 5 UI | 小石のメッシュ（約 30 cm） |
 
 **見た目を UI レイヤーに置く理由**。VRChat のカメラ（写真・配信用）は、UI レイヤーを写しません（カメラの設定で UI を表示したときは写ります）。一方で、操作を受ける部分まで UI レイヤーにすると、VRChat のメニューを開いている間しか触れなくなります。そこで、見た目だけを子にして UI レイヤーに置き、操作を受ける親は Walkthrough に残しています。Walkthrough はアバターとぶつからないので、パネルや小石を通り抜けられます。
@@ -560,10 +562,10 @@ sequenceDiagram
   participant S as 小石（Opener）
   participant P as パネル（ClearwaterSkyPanel）
   participant K as ClearwaterSky
-  V->>S: Interact（Sky Settings）
+  V->>S: Interact（Sky & Waves）
   S->>P: 小石の上、目の少し下に<br/>こちら向きで表示
   loop 0.25 秒ごと
-    P->>K: 今の時刻・雲・1 日の長さを読む
+    P->>K: 今の時刻・雲・1 日の長さ・波を読む
     P->>P: スライダーとラベルを合わせる
   end
   V->>P: スライダーを動かす
@@ -579,6 +581,8 @@ sequenceDiagram
 | 雲の流れ（Cloud drift） | 0〜60 m/s | `SetCloudSpeed` |
 | 1 日の長さ（A day in） | 1 分〜24 時間の 17 段階 | `SetDayMinutes` |
 | 時刻を進める（Day goes by） | オン / オフ | `SetCycle` |
+| 岸の波の高さ（Shore waves） | 0〜作ったときの 2 倍（最低 30 cm） | `SetShoreWaves` |
+| 沖のさざ波（Ripples） | 0〜100% | `SetSeaWaves` |
 
 パネルが値を表示し直すとき、スライダーを動かすと UI のイベントが起きます。パネルは表示し直している間の印（`_showing`）を持ち、その間のイベントは見ている人の操作として扱いません。パネルを出すか隠すかは見ている人ごとで、同期しません。
 

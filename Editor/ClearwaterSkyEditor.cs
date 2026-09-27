@@ -86,7 +86,8 @@ public static class ClearwaterSkySetup
     const string StoneName = "Sky Stone (Clearwater)";
 
     /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
-    /// sliders, the day going by on a toggle; anyone can use it and what they set goes to everyone. Placed in front of the
+    /// sliders, the day going by on a toggle, the shore waves' height and the sea's small waves on sliders; anyone can use
+    /// it and what they set goes to everyone. Placed in front of the
     /// spawn, facing it, what shows on the UI layer (out of VRChat's camera); one made before is replaced in place.</summary>
     [MenuItem("Tools/Clearwater/Add Sky Control Panel")]
     public static void AddPanel()
@@ -134,8 +135,8 @@ public static class ClearwaterSkySetup
         canvas.renderMode = RenderMode.WorldSpace;
         root.AddComponent<GraphicRaycaster>();
         var rt = (RectTransform)root.transform;
-        rt.sizeDelta = new Vector2(420f, 360f);
-        rt.localScale = Vector3.one * 0.0015f; // (63 x 54 cm)
+        rt.sizeDelta = new Vector2(420f, 500f);
+        rt.localScale = Vector3.one * 0.0015f; // (63 x 75 cm)
         root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
         // what shows sits in a canvas of its own on the UI layer, which VRChat's camera leaves out (unless its UI is
         // on); the shape stays on the root's layer, as VRChat's pointer passes by UI-layer shapes while its menu is shut
@@ -202,6 +203,12 @@ public static class ClearwaterSkySetup
         var tl = (RectTransform)toggleText.transform; tl.offsetMin = new Vector2(34f, 0f);
         var box = (RectTransform)toggleGo.transform.Find("Background");
         box.sizeDelta = new Vector2(26f, 26f);
+        // the sea: up to twice the waves it was built with (at least 30 cm)
+        float builtWaves = sky.controller != null ? sky.controller.ShoreWaveHeight() : 0.14f;
+        var shoreLabel = Label("Shore waves", -365f);
+        var shoreWaves = MakeSlider("Shore waves", -397f, Mathf.Max(0.3f, 2f * builtWaves));
+        var seaLabel = Label("Ripples", -435f);
+        var seaWaves = MakeSlider("Ripples", -467f, 1f);
 
         var panel = UdonSharpUndo.AddComponent<ClearwaterSkyPanel>(root);
         panel.sky = sky;
@@ -209,6 +216,8 @@ public static class ClearwaterSkySetup
         panel.hourLabel = hourLabel; panel.cloudLabel = cloudLabel;
         panel.cloudSpeedSlider = speed; panel.cloudSpeedLabel = speedLabel;
         panel.dayLengthSlider = dayLength; panel.dayLengthLabel = dayLabel;
+        panel.shoreWaveSlider = shoreWaves; panel.shoreWaveLabel = shoreLabel;
+        panel.seaWaveSlider = seaWaves; panel.seaWaveLabel = seaLabel;
         EditorUtility.SetDirty(panel);
         // the UI tells the panel's Udon program (VRChat lets UI events call SendCustomEvent)
         var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(panel);
@@ -218,11 +227,15 @@ public static class ClearwaterSkySetup
         UnityEventTools.AddStringPersistentListener(speed.onValueChanged, udon.SendCustomEvent, "OnCloudSpeed");
         UnityEventTools.AddStringPersistentListener(dayLength.onValueChanged, udon.SendCustomEvent, "OnDayLength");
         UnityEventTools.AddStringPersistentListener(toggle.onValueChanged, udon.SendCustomEvent, "OnCycle");
+        UnityEventTools.AddStringPersistentListener(shoreWaves.onValueChanged, udon.SendCustomEvent, "OnShoreWaves");
+        UnityEventTools.AddStringPersistentListener(seaWaves.onValueChanged, udon.SendCustomEvent, "OnSeaWaves");
         foreach (var t in face.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
         speed.value = sky.controller != null ? sky.controller.CloudSpeed() : 0f;
         dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
+        shoreWaves.value = builtWaves;
+        seaWaves.value = sky.controller != null ? sky.controller.SeaWaves() : 1f;
         var stone = AddStone(root, spawn, spawnFacing);
         // above the pebble, facing away from the spawn (the pebble puts it there again, facing whoever uses it)
         Vector3 away = stone.transform.position - spawn;
@@ -276,7 +289,7 @@ public static class ClearwaterSkySetup
         opener.panel = panel;
         EditorUtility.SetDirty(opener);
         var openerUdon = UdonSharpEditorUtility.GetBackingUdonBehaviour(opener);
-        openerUdon.interactText = "Sky Settings";
+        openerUdon.interactText = "Sky & Waves";
         openerUdon.SyncMethod = VRC.SDKBase.Networking.SyncType.None;
         return go;
     }
