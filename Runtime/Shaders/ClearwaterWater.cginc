@@ -100,8 +100,10 @@ float sceneDistance(float2 uvD, float3 rdWorld)
 
 // the grab's pixel at uv as it is, not blended with its neighbours: the shadow its alpha carries is in two codes
 // (below), and a blend across where they meet (the seabed's marks and the ground it draws itself, along the 25 cm
-// depth line) read as a deep shadow in a dotted line along it
-inline float4 cwGrabPixel(float2 uv) { return CW_GRAB_LOD((floor(uv * _CWGrabWater_TexelSize.zw) + 0.5) * _CWGrabWater_TexelSize.xy); }
+// depth line) read as a deep shadow in a dotted line along it. (abs: a camera drawing into a render texture - VRChat's
+// photo camera - has the grab upside down, which Unity tells with a negative texel height; taken as it is, every
+// read went off the grab's edge onto its last row, and a shadow crossing that row stood up to the horizon)
+inline float4 cwGrabPixel(float2 uv) { return CW_GRAB_LOD((floor(uv * _CWGrabWater_TexelSize.zw) + 0.5) * abs(_CWGrabWater_TexelSize.xy)); }
 
 // the shadow a grab pixel carries: 0 (shadowed) to 1, or -1 where none is known
 float cwShadowOf(float4 px)
