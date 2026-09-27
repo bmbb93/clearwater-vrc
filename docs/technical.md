@@ -1,6 +1,6 @@
 # Clearwater Coast の仕組み
 
-この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.44 時点のものです。
+この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.45 時点のものです。
 
 **読み方**。1 章（全体像）と 2 章（用語）で全体の流れをつかめば、あとはどの章からでも読めます。4〜8 章は水の見た目、9〜10 章は焼き込みとプール、13〜14 章は空、15 章以降は調べるときに引く参照用です。Unity に詳しくない人は、2 章の用語表から読んでください。パッケージに手を入れるときは、19 章のテストも見てください。用語の定義は [CONTEXT.md](../CONTEXT.md)、後から変えにくい決定は [docs/adr](adr/) にまとめてあります。
 
@@ -554,7 +554,7 @@ sequenceDiagram
 | 部品 | オブジェクト | レイヤー | 役割 |
 | --- | --- | --- | --- |
 | パネルの親 | Sky Control Panel (Clearwater) | 17 Walkthrough | ワールド空間の Canvas と VRC Ui Shape（操作を受ける当たり判定）。ClearwaterSkyPanel の Udon |
-| パネルの見た目 | Face | 5 UI | 入れ子の Canvas。スライダー 7 本、トグル 1 つ、右上に Reset ボタン。63 × 86 cm |
+| パネルの見た目 | Face | 5 UI | 入れ子の Canvas。左に空（Sky：スライダー 4 本とトグル）、右に波（Waves：スライダー 3 本と右下に Reset all ボタン）の 2 ペイン。見出しは空を暖色、波を寒色にし、間に仕切り線。106 × 57 cm |
 | 小石 | Sky Stone (Clearwater) | 17 Walkthrough | 当たり判定（凸のメッシュ）と ClearwaterSkyPanelOpener の Udon。Interact の表示は「Sky & Waves」 |
 | 小石の見た目 | Look | 5 UI | 小石のメッシュ（約 30 cm） |
 
@@ -588,7 +588,7 @@ sequenceDiagram
 | 岸の波の高さ（Shore waves） | 0〜作ったときの 2 倍（最低 30 cm） | `SetShoreWaves` |
 | 沖のさざ波（Ripples） | 0〜100% | `SetSeaWaves` |
 | さざ波の速さ（Ripple speed） | 0〜200% | `SetRippleSpeed` |
-| 初期状態に戻す（Reset ボタン） | — | `ResetAll` |
+| 初期状態に戻す（Reset all ボタン） | — | `ResetAll` |
 
 パネルが値を表示し直すとき、スライダーを動かすと UI のイベントが起きます。パネルは表示し直している間の印（`_showing`）を持ち、その間のイベントは見ている人の操作として扱いません。パネルを出すか隠すかは見ている人ごとで、同期しません。
 

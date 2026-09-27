@@ -152,8 +152,8 @@ public static class ClearwaterSkySetup
         canvas.renderMode = RenderMode.WorldSpace;
         root.AddComponent<GraphicRaycaster>();
         var rt = (RectTransform)root.transform;
-        rt.sizeDelta = new Vector2(420f, 575f);
-        rt.localScale = Vector3.one * 0.0015f; // (63 x 86 cm)
+        rt.sizeDelta = new Vector2(760f, 410f);
+        rt.localScale = Vector3.one * 0.0014f; // (106 x 57 cm)
         root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
         // what shows sits in a canvas of its own on the UI layer, which VRChat's camera leaves out (unless its UI is
         // on); the shape stays on the root's layer, as VRChat's pointer passes by UI-layer shapes while its menu is shut
@@ -175,68 +175,84 @@ public static class ClearwaterSkySetup
         var bg = face.AddComponent<Image>();
         bg.sprite = res.background; bg.type = Image.Type.Sliced; bg.color = new Color(0.08f, 0.10f, 0.14f, 0.82f);
 
-        Text Label(string text, float y)
+        // Two panes side by side, each under its heading: the sky on the left, the sea on the right (x = a pane's
+        // centre; a row's label above its slider)
+        const float SkyX = -190f, SeaX = 190f, PaneW = 330f;
+        Text Label(string text, float x, float y, int size = 24)
         {
             var go = new GameObject("Label", typeof(RectTransform));
             go.transform.SetParent(face.transform, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
-            r.sizeDelta = new Vector2(380f, 32f); r.anchoredPosition = new Vector2(0f, y);
+            r.sizeDelta = new Vector2(PaneW, 32f); r.anchoredPosition = new Vector2(x, y);
             var t = go.AddComponent<Text>();
-            t.font = font; t.fontSize = 24; t.color = Color.white; t.text = text; t.alignment = TextAnchor.MiddleLeft;
+            t.font = font; t.fontSize = size; t.color = Color.white; t.text = text; t.alignment = TextAnchor.MiddleLeft;
             return t;
         }
-        Slider MakeSlider(string name, float y, float max)
+        Slider MakeSlider(string name, float x, float y, float max)
         {
             var go = DefaultControls.CreateSlider(res);
             go.name = name;
             go.transform.SetParent(face.transform, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
-            r.sizeDelta = new Vector2(380f, 24f); r.anchoredPosition = new Vector2(0f, y);
+            r.sizeDelta = new Vector2(PaneW, 24f); r.anchoredPosition = new Vector2(x, y);
             var s = go.GetComponent<Slider>();
             s.minValue = 0f; s.maxValue = max;
             return s;
         }
-        var hourLabel = Label("Time", -30f);
-        var hour = MakeSlider("Hour", -62f, 24f);
-        var cloudLabel = Label("Clouds", -100f);
-        var clouds = MakeSlider("Clouds", -132f, 1f);
-        var speedLabel = Label("Cloud drift", -170f);
-        var speed = MakeSlider("Cloud drift", -202f, 60f);
+        // the headings, tinted apart (the sky's warm, the sea's cool), and a rule between the panes
+        var skyHead = Label("Sky", SkyX, -30f, 28); skyHead.fontStyle = FontStyle.Bold; skyHead.color = new Color(1f, 0.88f, 0.62f);
+        var seaHead = Label("Waves", SeaX, -30f, 28); seaHead.fontStyle = FontStyle.Bold; seaHead.color = new Color(0.62f, 0.88f, 1f);
+        var rule = new GameObject("Divider", typeof(RectTransform));
+        rule.transform.SetParent(face.transform, false);
+        var ru = (RectTransform)rule.transform;
+        ru.anchorMin = ru.anchorMax = new Vector2(0.5f, 1f);
+        ru.sizeDelta = new Vector2(2f, 350f); ru.anchoredPosition = new Vector2(0f, -205f);
+        rule.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.18f);
+
+        // the sky
+        var hourLabel = Label("Time", SkyX, -75f);
+        var hour = MakeSlider("Hour", SkyX, -107f, 24f);
+        var cloudLabel = Label("Clouds", SkyX, -145f);
+        var clouds = MakeSlider("Clouds", SkyX, -177f, 1f);
+        var speedLabel = Label("Cloud drift", SkyX, -215f);
+        var speed = MakeSlider("Cloud drift", SkyX, -247f, 60f);
         speed.wholeNumbers = true;
-        var dayLabel = Label("A day in", -240f);
-        var dayLength = MakeSlider("Day length", -272f, ClearwaterSkyPanel.DayLengths().Length - 1);
+        var dayLabel = Label("A day in", SkyX, -285f);
+        var dayLength = MakeSlider("Day length", SkyX, -317f, ClearwaterSkyPanel.DayLengths().Length - 1);
         dayLength.wholeNumbers = true;
         var toggleGo = DefaultControls.CreateToggle(res);
         toggleGo.name = "Day goes by";
         toggleGo.transform.SetParent(face.transform, false);
         var tr = (RectTransform)toggleGo.transform;
         tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 1f);
-        tr.sizeDelta = new Vector2(380f, 30f); tr.anchoredPosition = new Vector2(0f, -320f);
+        tr.sizeDelta = new Vector2(PaneW, 30f); tr.anchoredPosition = new Vector2(SkyX, -365f);
         var toggle = toggleGo.GetComponent<Toggle>();
         var toggleText = toggleGo.GetComponentInChildren<Text>();
         toggleText.font = font; toggleText.fontSize = 24; toggleText.color = Color.white; toggleText.text = "Day goes by";
         var tl = (RectTransform)toggleText.transform; tl.offsetMin = new Vector2(34f, 0f);
         var box = (RectTransform)toggleGo.transform.Find("Background");
         box.sizeDelta = new Vector2(26f, 26f);
-        // the sea: up to twice the waves it was built with (at least 30 cm)
+
+        // the sea: the shore waves up to twice as built (at least 30 cm)
         float builtWaves = sky.controller != null ? sky.controller.ShoreWaveHeight() : 0.14f;
-        var shoreLabel = Label("Shore waves", -365f);
-        var shoreWaves = MakeSlider("Shore waves", -397f, Mathf.Max(0.3f, 2f * builtWaves));
-        var seaLabel = Label("Ripples", -435f);
-        var seaWaves = MakeSlider("Ripples", -467f, 1f);
-        var rippleLabel = Label("Ripple speed", -505f);
-        var rippleSpeed = MakeSlider("Ripple speed", -537f, 2f);
-        // back as built: a small button in the top corner, out of the way of the sliders
+        var shoreLabel = Label("Shore waves", SeaX, -75f);
+        var shoreWaves = MakeSlider("Shore waves", SeaX, -107f, Mathf.Max(0.3f, 2f * builtWaves));
+        var seaLabel = Label("Ripples", SeaX, -145f);
+        var seaWaves = MakeSlider("Ripples", SeaX, -177f, 1f);
+        var rippleLabel = Label("Ripple speed", SeaX, -215f);
+        var rippleSpeed = MakeSlider("Ripple speed", SeaX, -247f, 2f);
+
+        // back as built (the sky and the sea both), bottom right, clear of the sliders
         var resetGo = DefaultControls.CreateButton(res);
         resetGo.name = "Reset";
         resetGo.transform.SetParent(face.transform, false);
         var rr = (RectTransform)resetGo.transform;
         rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 1f);
-        rr.sizeDelta = new Vector2(110f, 34f); rr.anchoredPosition = new Vector2(135f, -30f);
+        rr.sizeDelta = new Vector2(200f, 40f); rr.anchoredPosition = new Vector2(SeaX + (PaneW - 200f) * 0.5f, -360f);
         var resetText = resetGo.GetComponentInChildren<Text>();
-        resetText.font = font; resetText.fontSize = 22; resetText.text = "Reset";
+        resetText.font = font; resetText.fontSize = 22; resetText.text = "Reset all";
         var reset = resetGo.GetComponent<Button>();
 
         var panel = UdonSharpUndo.AddComponent<ClearwaterSkyPanel>(root);
