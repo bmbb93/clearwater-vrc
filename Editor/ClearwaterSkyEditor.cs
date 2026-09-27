@@ -82,6 +82,8 @@ public static class ClearwaterSkySetup
 
     const string PanelName = "Sky Control Panel (Clearwater)";
     const int UILayer = 5;
+    const int WalkthroughLayer = 17; // (players go through it and can still use it)
+    const string StoneName = "Sky Stone (Clearwater)";
 
     /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
     /// sliders, the day going by on a toggle; anyone can use it and what they set goes to everyone. Placed in front of the
@@ -99,6 +101,7 @@ public static class ClearwaterSkySetup
         if (sky.controller == null) sky.controller = Object.FindObjectOfType<ClearwaterController>(true);
         EditorUtility.SetDirty(sky);
         ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanel.cs");
+        ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanelOpener.cs");
 
         // in front of the spawn, at chest height, facing it
         Vector3 at = Vector3.zero; Quaternion facing = Quaternion.identity;
@@ -107,6 +110,7 @@ public static class ClearwaterSkySetup
         {
             at = desc.spawns[0].position; facing = Quaternion.Euler(0f, desc.spawns[0].eulerAngles.y, 0f);
         }
+        Vector3 spawn = at; Quaternion spawnFacing = facing;
         at += facing * new Vector3(0f, 1.3f, 1.5f);
         Transform parent = null;
         var old = Object.FindObjectOfType<ClearwaterSkyPanel>(true);
@@ -117,6 +121,7 @@ public static class ClearwaterSkySetup
         }
         var root = new GameObject(PanelName);
         Undo.RegisterCreatedObjectUndo(root, "Clearwater sky panel");
+        root.layer = WalkthroughLayer; // (VRCUiShape's collider is on it: avatars walk through the panel)
         root.transform.SetParent(parent, false);
         root.transform.SetPositionAndRotation(at, facing);
         var canvas = root.AddComponent<Canvas>();
@@ -205,9 +210,103 @@ public static class ClearwaterSkySetup
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
         dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
-        Selection.activeGameObject = root;
+        var stone = AddStone(root, spawn, spawnFacing);
+        root.SetActive(false); // (the stone shows it)
+        Selection.activeGameObject = stone;
         EditorSceneManager.MarkSceneDirty(root.scene);
-        Debug.Log("[Clearwater] Sky control panel added in front of the spawn: move it where you like.");
+        Debug.Log("[Clearwater] Sky control panel added in front of the spawn, shown by using the pebble beside it: move them where you like.");
+    }
+
+    /// <summary>A pebble on the ground by the spawn that shows the panel (ClearwaterSkyPanelOpener); one made before
+    /// is replaced where it lies.</summary>
+    static GameObject AddStone(GameObject panel, Vector3 spawn, Quaternion facing)
+    {
+        Vector3 at = spawn + facing * new Vector3(0.8f, 0f, 1.2f);
+        Quaternion turn = facing * Quaternion.Euler(0f, 25f, 0f);
+        Transform parent = null;
+        var old = Object.FindObjectOfType<ClearwaterSkyPanelOpener>(true);
+        if (old != null)
+        {
+            at = old.transform.position; turn = old.transform.rotation; parent = old.transform.parent;
+            Undo.DestroyObjectImmediate(old.gameObject);
+        }
+        else
+        {
+            Physics.SyncTransforms();
+            if (Physics.Raycast(at + Vector3.up * 3f, Vector3.down, out var hit, 10f, ~0, QueryTriggerInteraction.Ignore))
+                at = hit.point;
+            at.y -= 0.01f; // (settled in the sand)
+        }
+        var go = new GameObject(StoneName);
+        Undo.RegisterCreatedObjectUndo(go, "Clearwater sky panel");
+        go.transform.SetParent(parent, false);
+        go.transform.SetPositionAndRotation(at, turn);
+        go.layer = WalkthroughLayer;
+        var mesh = ClearwaterSetup.Save(Pebble(), "Pebble.asset");
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var mat = new Material(Shader.Find("Standard")) { color = new Color(0.40f, 0.36f, 0.31f) };
+        mat.SetFloat("_Glossiness", 0.08f);
+        mat = ClearwaterSetup.Save(mat, "Pebble.mat");
+        go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        var col = go.AddComponent<MeshCollider>();
+        col.sharedMesh = mesh; col.convex = true;
+        var opener = UdonSharpUndo.AddComponent<ClearwaterSkyPanelOpener>(go);
+        opener.panel = panel;
+        EditorUtility.SetDirty(opener);
+        UdonSharpEditorUtility.GetBackingUdonBehaviour(opener).interactText = "Sky";
+        return go;
+    }
+
+    /// <summary>A pebble about 30 cm across, flat underneath: a lumpy squashed ball.</summary>
+    static Mesh Pebble()
+    {
+        // an icosahedron cut twice into four
+        float g = (1f + Mathf.Sqrt(5f)) / 2f;
+        var v = new System.Collections.Generic.List<Vector3>
+        {
+            new Vector3(-1, g, 0), new Vector3(1, g, 0), new Vector3(-1, -g, 0), new Vector3(1, -g, 0),
+            new Vector3(0, -1, g), new Vector3(0, 1, g), new Vector3(0, -1, -g), new Vector3(0, 1, -g),
+            new Vector3(g, 0, -1), new Vector3(g, 0, 1), new Vector3(-g, 0, -1), new Vector3(-g, 0, 1),
+        };
+        var f = new System.Collections.Generic.List<int>
+        {
+            0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+            3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1,
+        };
+        for (int i = 0; i < v.Count; i++) v[i] = v[i].normalized;
+        for (int pass = 0; pass < 2; pass++)
+        {
+            var mid = new System.Collections.Generic.Dictionary<long, int>();
+            int Mid(int a, int b)
+            {
+                long key = a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+                if (mid.TryGetValue(key, out int m)) return m;
+                v.Add(((v[a] + v[b]) * 0.5f).normalized);
+                return mid[key] = v.Count - 1;
+            }
+            var next = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < f.Count; i += 3)
+            {
+                int a = f[i], b = f[i + 1], c = f[i + 2], ab = Mid(a, b), bc = Mid(b, c), ca = Mid(c, a);
+                next.AddRange(new[] { a, ab, ca, b, bc, ab, c, ca, bc, ab, bc, ca });
+            }
+            f = next;
+        }
+        var verts = new Vector3[v.Count];
+        for (int i = 0; i < v.Count; i++)
+        {
+            Vector3 d = v[i];
+            float lump = 1f + 0.16f * Mathf.Sin(2.3f * d.x + 1.3f) * Mathf.Sin(1.9f * d.z + 0.4f)
+                + 0.07f * Mathf.Sin(4.7f * d.y + 3.1f * d.x) + 0.04f * Mathf.Sin(7.3f * d.z - 2.9f * d.y + 0.8f);
+            Vector3 p = new Vector3(d.x * 0.16f * (1f + 0.25f * d.z), d.y * 0.075f, d.z * 0.12f) * lump; // (wider at one end)
+            if (p.y > 0f) p.y *= 1f - 0.35f * p.y / 0.09f; // (a flatter back)
+            p.y = Mathf.Max(p.y, -0.02f) + 0.02f; // (flat underneath, resting on its base)
+            verts[i] = p;
+        }
+        var mesh = new Mesh { vertices = verts, triangles = f.ToArray() };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
     }
 
     /// <summary>The baked tables, and the light the sky is calibrated to: the fixed sky's, with its sun 31 degrees up.</summary>

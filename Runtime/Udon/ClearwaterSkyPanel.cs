@@ -26,7 +26,7 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
     bool _showing; // (while the panel shows the sky's state: the UI's events it sets off are not the viewer's)
     float _nextShow;
 
-    void Start() { Show(); }
+    void OnEnable() { Show(); } // (shown by an opener: the state it has now at once)
 
     void Update()
     {
