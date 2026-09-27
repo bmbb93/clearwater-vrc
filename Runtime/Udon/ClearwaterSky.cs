@@ -42,6 +42,9 @@ public class ClearwaterSky : UdonSharpBehaviour
     [Range(0.01f, 0.3f)] public float nightBrightness = 0.05f;
     [Tooltip("How bright the stars show")]
     [Range(0f, 3f)] public float stars = 1f;
+    [Tooltip("How much of a faint blue-green glow stays in the water when neither the sun nor the moon lights it, seen from " +
+             "under the water (1 = only just out of black; 0 = none: as dark as it would be)")]
+    [Range(0f, 3f)] public float underwaterGlow = 1f;
 
     [Header("Scene")]
     [Tooltip("The directional light: turned to the sun (the moon at night) and given its colour")]
@@ -406,7 +409,7 @@ public class ClearwaterSky : UdonSharpBehaviour
         VRCShader.SetGlobalVector(_idStars, new Vector4(pole.x, pole.y, pole.z, starAngle));
         float starSeen = stars * Mathf.Min(adapt / Adaptation(MoonlitNight), 4f);
         if (starSeen < 1e-3f) starSeen = 0f; // (not a star shows: the sky shader skips them)
-        VRCShader.SetGlobalVector(_idNight, new Vector4(starSeen, night, adapt, 0f));
+        VRCShader.SetGlobalVector(_idNight, new Vector4(starSeen, night, adapt, underwaterGlow));
         VRCShader.SetGlobalVector(_idCloud, new Vector4(cloudC.x, cloudC.y, cloudC.z, cloudBySun));
         VRCShader.SetGlobalVector(_idHorizon, new Vector4(horC.x, horC.y, horC.z, 0f));
         // (worked out here once, not for every pixel: the bodies across the ground and their slices of the table)

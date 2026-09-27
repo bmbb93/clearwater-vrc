@@ -474,6 +474,8 @@ float2 cwCausUV(float2 FP, float hgt, float3 sun)
 // a dark blue-green in the distance (some 10/255 on screen: only just out of black, for it to stay night) and what is
 // near stands dark against it. It is under half the day sky's light in the water; the day's sun there is many times
 // more, so by day nothing changes. The floor gets a third of it. From above the water the dark stays as it is.
+// ClearwaterSky's Underwater Glow scales it (_Udon_CWNight.w: 1 as here, 0 none; without the sky of the time of day,
+// whose fixed sky is always day, 0).
 static bool cwUnderView = false;
 #define CW_UNDER_GLOW float3(0.04, 0.20, 0.26)
 #define CW_UNDER_GLOW_FLOOR float3(0.012, 0.06, 0.08)
@@ -495,7 +497,7 @@ float3 cwFloorRadianceUnder(float2 FP, float depthHere, float hgt, float3 alb, f
     float ao = lerp(0.55, 1.0, smoothstep(0.08, 0.42, hgt));
     float3 Esun = SUN * Ts * exp(-SIG_T * depthHere / (-sunT.y)) * caus * (-sunT.y) * lerp(0.75, 1.0, ao) * sunShade;
     float3 Esky = cwSkyIrr() * exp(-(SIG_A + 0.4 * SIG_S) * depthHere * 1.25) * ao;
-    [branch] if (cwUnderView) Esky = max(Esky, CW_UNDER_GLOW_FLOOR * ao);
+    [branch] if (cwUnderView) Esky = max(Esky, CW_UNDER_GLOW_FLOOR * _Udon_CWNight.w * ao);
     // sand under the last few centimetres of water is as dark as the wet sand just above the waterline (its pores are
     // full of water too), so the water edge does not show as a step in brightness; deeper, the floor as before
     float wet = lerp(0.65, 1.0, smoothstep(0.0, 0.25, depthHere));
@@ -513,7 +515,7 @@ float3 cwInscatter(float depthHere, float s, float3 tr, float3 sun)
     float cosS = dot(sunT, -tr);
     float g = 0.8; float ph = (1.0 - g * g) / (4.0 * CW_PI * pow(1.0 + g * g - 2.0 * g * cosS, 1.5));
     float3 Lmid = SUN * Ts * exp(-SIG_T * depthHere * 0.5 / (-sunT.y)) * (ph + 0.02) + cwSkyIrr() * exp(-SIG_A * depthHere * 0.6) / (4.0 * CW_PI);
-    [branch] if (cwUnderView) Lmid = max(Lmid, CW_UNDER_GLOW / (4.0 * CW_PI));
+    [branch] if (cwUnderView) Lmid = max(Lmid, CW_UNDER_GLOW * _Udon_CWNight.w / (4.0 * CW_PI));
     return SIG_S / SIG_T * Lmid * (1.0 - Tv) * 3.2;
 }
 

@@ -34,7 +34,8 @@ float4 _Udon_CWMoonDisc;      // rgb the moon's disc (its light, as seen by eyes
 float4 _Udon_CWKey;           // xyz the light that shades (the sun, the moon at night), w 1 when it is the moon
 float4 _Udon_CWAmbient;       // rgb the whole sky's light on level ground; w the airglow's radiance (night's own faint light)
 float4 _Udon_CWStars;         // xyz the celestial pole, w the angle the stars have turned; (their brightness in _Udon_CWNight.x)
-float4 _Udon_CWNight;         // x how bright the stars show; y 0..1 night vision (colours fade and turn blue)
+float4 _Udon_CWNight;         // x how bright the stars show; y 0..1 night vision (colours fade and turn blue); w the glow
+                              // left in the water at night, seen from under it (ClearwaterSky.underwaterGlow, 1 as built)
 float4 _Udon_CWCloudLight;    // rgb the light on the clouds: the sun's as it is a couple of km up (it sets later there), and the moon's;
                               // w 1 while the sun's is the more (it lights them from its side, though the moon lights the ground)
 float4 _Udon_CWHorizon;       // rgb the sky low over the horizon, all round it
