@@ -212,6 +212,7 @@ public static class ClearwaterSkySetup
         EditorUtility.SetDirty(panel);
         // the UI tells the panel's Udon program (VRChat lets UI events call SendCustomEvent)
         var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(panel);
+        udon.SyncMethod = VRC.SDKBase.Networking.SyncType.None; // (as its class says: set now, so a scene saved at once has it)
         UnityEventTools.AddStringPersistentListener(hour.onValueChanged, udon.SendCustomEvent, "OnHour");
         UnityEventTools.AddStringPersistentListener(clouds.onValueChanged, udon.SendCustomEvent, "OnClouds");
         UnityEventTools.AddStringPersistentListener(speed.onValueChanged, udon.SendCustomEvent, "OnCloudSpeed");
@@ -274,7 +275,9 @@ public static class ClearwaterSkySetup
         var opener = UdonSharpUndo.AddComponent<ClearwaterSkyPanelOpener>(go);
         opener.panel = panel;
         EditorUtility.SetDirty(opener);
-        UdonSharpEditorUtility.GetBackingUdonBehaviour(opener).interactText = "Sky Settings";
+        var openerUdon = UdonSharpEditorUtility.GetBackingUdonBehaviour(opener);
+        openerUdon.interactText = "Sky Settings";
+        openerUdon.SyncMethod = VRC.SDKBase.Networking.SyncType.None;
         return go;
     }
 
