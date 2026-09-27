@@ -10,6 +10,7 @@
 
 float _SeaHalfSize; // the water plane's half size (m)
 UNITY_DECLARE_SCREENSPACE_TEXTURE(_CWGrabWater);
+float4 _CWGrabWater_TexelSize;
 UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
 
 struct appdata { float4 vertex : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
@@ -84,6 +85,11 @@ float sceneDistance(float2 uvD, float3 rdWorld)
 #define CW_GRAB_LOD(uv) tex2Dlod(_CWGrabWater, float4(uv, 0, 0))
 #endif
 
+// the grab's pixel at uv as it is, not blended with its neighbours: the shadow its alpha carries is in two codes
+// (below), and a blend across where they meet (the seabed's marks and the ground it draws itself, along the 25 cm
+// depth line) read as a deep shadow in a dotted line along it
+inline float4 cwGrabPixel(float2 uv) { return CW_GRAB_LOD((floor(uv * _CWGrabWater_TexelSize.zw) + 0.5) * _CWGrabWater_TexelSize.xy); }
+
 // the shadow a grab pixel carries: 0 (shadowed) to 1, or -1 where none is known
 float cwShadowOf(float4 px)
 {
@@ -109,10 +115,10 @@ float cwFloorShadow(float3 FP, float depth, float3 sun, float3 origin, float2 uv
     {
         c.xy = clamp(c.xy, -0.995 * c.w, 0.995 * c.w);
         float4 g = ComputeGrabScreenPos(c);
-        atQ = cwShadowOf(CW_GRAB_LOD(g.xy / g.w));
+        atQ = cwShadowOf(cwGrabPixel(g.xy / g.w));
     }
     [branch] if (atQ >= 0.0) return atQ;
-    float own = cwShadowOf(CW_GRAB_LOD(uvOwn)); // (behind the camera, or nothing drawn there)
+    float own = cwShadowOf(cwGrabPixel(uvOwn)); // (behind the camera, or nothing drawn there)
     return own < 0.0 ? 1.0 : own;
 }
 
