@@ -22,7 +22,24 @@ public static class ClearwaterSkySetup
     {
         EditorApplication.delayCall += ShowAll;
         EditorSceneManager.sceneOpened += (s, m) => ShowAll();
+        EditorSceneManager.sceneSaving += (s, path) => KeepStart(s);
         EditorApplication.playModeStateChanged += s => { if (s == PlayModeStateChange.EnteredEditMode) ShowAll(); };
+    }
+
+    /// <summary>The hour, the day going by and its length as set in the Inspector, copied for the panel's Reset (the
+    /// synced fields they are set in change while the world runs), in every sky of the scene about to be saved.</summary>
+    static void KeepStart(UnityEngine.SceneManagement.Scene scene)
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+        foreach (var root in scene.GetRootGameObjects())
+            foreach (var sky in root.GetComponentsInChildren<ClearwaterSky>(true))
+            {
+                int cyc = sky.cycle ? 1 : 0;
+                if (sky.startHour == sky.timeOfDay && sky.startCycle == cyc && sky.startDayMinutes == sky.dayMinutes) continue;
+                sky.startHour = sky.timeOfDay; sky.startCycle = cyc; sky.startDayMinutes = sky.dayMinutes;
+                UdonSharpEditorUtility.CopyProxyToUdon(sky);
+                EditorUtility.SetDirty(sky);
+            }
     }
 
     /// <summary>The baked sky (once per editor session: it takes a few seconds), its table saved as Generated/SkyLUT.</summary>
@@ -86,8 +103,8 @@ public static class ClearwaterSkySetup
     const string StoneName = "Sky Stone (Clearwater)";
 
     /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
-    /// sliders, the day going by on a toggle, the shore waves' height and the sea's small waves on sliders; anyone can use
-    /// it and what they set goes to everyone. Placed in front of the
+    /// sliders, the day going by on a toggle, the shore waves' height, the sea's small waves and how fast they go on
+    /// sliders, and a button to put it all back as built; anyone can use it and what they set goes to everyone. Placed in front of the
     /// spawn, facing it, what shows on the UI layer (out of VRChat's camera); one made before is replaced in place.</summary>
     [MenuItem("Tools/Clearwater/Add Sky Control Panel")]
     public static void AddPanel()
@@ -135,8 +152,8 @@ public static class ClearwaterSkySetup
         canvas.renderMode = RenderMode.WorldSpace;
         root.AddComponent<GraphicRaycaster>();
         var rt = (RectTransform)root.transform;
-        rt.sizeDelta = new Vector2(420f, 500f);
-        rt.localScale = Vector3.one * 0.0015f; // (63 x 75 cm)
+        rt.sizeDelta = new Vector2(420f, 575f);
+        rt.localScale = Vector3.one * 0.0015f; // (63 x 86 cm)
         root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
         // what shows sits in a canvas of its own on the UI layer, which VRChat's camera leaves out (unless its UI is
         // on); the shape stays on the root's layer, as VRChat's pointer passes by UI-layer shapes while its menu is shut
@@ -209,6 +226,18 @@ public static class ClearwaterSkySetup
         var shoreWaves = MakeSlider("Shore waves", -397f, Mathf.Max(0.3f, 2f * builtWaves));
         var seaLabel = Label("Ripples", -435f);
         var seaWaves = MakeSlider("Ripples", -467f, 1f);
+        var rippleLabel = Label("Ripple speed", -505f);
+        var rippleSpeed = MakeSlider("Ripple speed", -537f, 2f);
+        // back as built: a small button in the top corner, out of the way of the sliders
+        var resetGo = DefaultControls.CreateButton(res);
+        resetGo.name = "Reset";
+        resetGo.transform.SetParent(face.transform, false);
+        var rr = (RectTransform)resetGo.transform;
+        rr.anchorMin = rr.anchorMax = new Vector2(0.5f, 1f);
+        rr.sizeDelta = new Vector2(110f, 34f); rr.anchoredPosition = new Vector2(135f, -30f);
+        var resetText = resetGo.GetComponentInChildren<Text>();
+        resetText.font = font; resetText.fontSize = 22; resetText.text = "Reset";
+        var reset = resetGo.GetComponent<Button>();
 
         var panel = UdonSharpUndo.AddComponent<ClearwaterSkyPanel>(root);
         panel.sky = sky;
@@ -218,6 +247,7 @@ public static class ClearwaterSkySetup
         panel.dayLengthSlider = dayLength; panel.dayLengthLabel = dayLabel;
         panel.shoreWaveSlider = shoreWaves; panel.shoreWaveLabel = shoreLabel;
         panel.seaWaveSlider = seaWaves; panel.seaWaveLabel = seaLabel;
+        panel.rippleSpeedSlider = rippleSpeed; panel.rippleSpeedLabel = rippleLabel;
         EditorUtility.SetDirty(panel);
         // the UI tells the panel's Udon program (VRChat lets UI events call SendCustomEvent)
         var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(panel);
@@ -229,6 +259,8 @@ public static class ClearwaterSkySetup
         UnityEventTools.AddStringPersistentListener(toggle.onValueChanged, udon.SendCustomEvent, "OnCycle");
         UnityEventTools.AddStringPersistentListener(shoreWaves.onValueChanged, udon.SendCustomEvent, "OnShoreWaves");
         UnityEventTools.AddStringPersistentListener(seaWaves.onValueChanged, udon.SendCustomEvent, "OnSeaWaves");
+        UnityEventTools.AddStringPersistentListener(rippleSpeed.onValueChanged, udon.SendCustomEvent, "OnRippleSpeed");
+        UnityEventTools.AddStringPersistentListener(reset.onClick, udon.SendCustomEvent, "OnReset");
         foreach (var t in face.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
@@ -236,6 +268,7 @@ public static class ClearwaterSkySetup
         dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
         shoreWaves.value = builtWaves;
         seaWaves.value = sky.controller != null ? sky.controller.SeaWaves() : 1f;
+        rippleSpeed.value = 1f;
         var stone = AddStone(root, spawn, spawnFacing);
         // above the pebble, facing away from the spawn (the pebble puts it there again, facing whoever uses it)
         Vector3 away = stone.transform.position - spawn;

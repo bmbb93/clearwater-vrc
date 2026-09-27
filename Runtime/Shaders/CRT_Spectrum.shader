@@ -20,6 +20,9 @@ Shader "Clearwater/CRT/Spectrum"
 
             Texture2D<float4> _H0;
             float _PatchSize, _TimeScale;
+            // how fast the waves go as set while the world runs (x, as against as built) and the shift that keeps them
+            // in shape when it changes (y), w 1 once set (ClearwaterController.SetRippleSpeed)
+            float4 _Udon_CWRipple;
 
             float2 cmul(float2 a, float2 b) { return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
 
@@ -33,7 +36,8 @@ Shader "Clearwater/CRT/Spectrum"
                 float w = sqrt(9.81 * kl + 7.4e-5 * kl * kl * kl);
                 // gentle dispersion quantisation keeps the loop seamless over 60 s
                 float w0 = 6.28318530718 / 60.0; w = floor(w / w0) * w0;
-                float t = fmod(_Time.y * _TimeScale, 60.0);
+                float2 rs = _Udon_CWRipple.w > 0.5 ? _Udon_CWRipple.xy : float2(1.0, 0.0);
+                float t = fmod((_Time.y * rs.x + rs.y) * _TimeScale, 60.0);
                 float c = cos(w * t), sn = sin(w * t);
                 float2 H = cmul(s.xy, float2(c, sn)) + cmul(s.zw, float2(c, -sn));
                 float2 C1 = H - k.x * H;                  // h + i*dh/dx

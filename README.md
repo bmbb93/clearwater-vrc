@@ -283,7 +283,7 @@ Inspector で値を動かすと、Scene ビューと Game ビューにすぐ映�
 
 ### ワールドの中で変える
 
-`Tools > Clearwater > Add Sky Control Panel` を実行すると、時刻・雲の量・雲の流れる速さ（Cloud drift、0〜60 m/s）・1 日の長さ（A day in）のスライダーと、時刻を進めるかのトグル（Day goes by）、岸の波の高さ（Shore waves）と沖のさざ波の強さ（Ripples）のスライダーを並べたパネルと、スポーン地点の前の砂浜に小石（Sky Stone）が置かれます。パネルは普段は隠れていて、小石を Interact する（表示は Sky & Waves）と、小石の上の目の少し下の高さに、こちらを向いて出ます。小石は好きな場所へ動かしてください。すでにあるときは、小石を同じ位置に残して作り直します。
+`Tools > Clearwater > Add Sky Control Panel` を実行すると、時刻・雲の量・雲の流れる速さ（Cloud drift、0〜60 m/s）・1 日の長さ（A day in）のスライダーと、時刻を進めるかのトグル（Day goes by）、岸の波の高さ（Shore waves）・沖のさざ波の強さ（Ripples）・さざ波の速さ（Ripple speed）のスライダーと、全部を初期状態に戻す Reset ボタンを並べたパネルと、スポーン地点の前の砂浜に小石（Sky Stone）が置かれます。パネルは普段は隠れていて、小石を Interact する（表示は Sky & Waves）と、小石の上の目の少し下の高さに、こちらを向いて出ます。小石は好きな場所へ動かしてください。すでにあるときは、小石を同じ位置に残して作り直します。
 
 - 誰でも操作でき、変えた空はインスタンスの全員に同じく反映されます。操作した人が Clearwater Sky のオーナーになって値を配るので、後から入った人にも今の空が見えます
 - 時刻を進めているときは、時刻のスライダーも時刻に合わせて動きます。途中でスライダーを動かすと、その時刻から進み直します
@@ -292,10 +292,12 @@ Inspector で値を動かすと、Scene ビューと Game ビューにすぐ映�
 - 雲の速さを変えても雲は飛ばず、今の位置から新しい速さで流れます
 - 岸の波の高さ（Shore waves）は、0 から作ったときの 2 倍（30 cm 未満なら 30 cm）までです。砕ける波・打ち上げ・泡・濡れた砂と波音の大きさがまとめて変わります。0 にすると、Coast の `Shore waves` をオフにしたときと同じ静かな水際になります（泡や濡れた砂も消えます）
 - 沖のさざ波（Ripples）は、海の水面の揺れと水底の光の模様の強さです。0% で鏡のような凪になります。プールの水面は変わりません
+- さざ波の速さ（Ripple speed）は 0〜200% です。変えても模様は飛ばず、今の形から新しい速さで動きます。水面の波はプールと共通なので、プールの波も同じ速さになります
+- Reset は、時刻・Day goes by・1 日の長さを Inspector で設定した値に、雲と波をワールドを作ったときの値に、全員まとめて戻します（戻す時刻は、シーンを保存したときの Clearwater Sky の値です）
 - パネルの見た目（子の Face）と小石の見た目（子の Look）は UI レイヤーに置くので、VRChat のカメラ（写真・配信用）には写りません。カメラの設定で UI を表示したときだけ写ります。操作を受ける親（パネルの VRC Ui Shape、小石の当たり判定）は UI レイヤーにしません。UI レイヤーのものは、VRChat のメニューを開いている間しか触れないためです
 - パネルの親と小石は Walkthrough レイヤーに置くので、アバターはぶつからずに通り抜けます
 
-自分の Udon から変えるときは、Clearwater Sky の `SetHour(時刻)`・`SetCycle(true/false)`・`SetDayMinutes(分)`・`SetClouds(0〜1)`・`SetCloudSpeed(m/s)`・`SetShoreWaves(m)`・`SetSeaWaves(0〜1)` を呼びます。どれも全員に同期します。
+自分の Udon から変えるときは、Clearwater Sky の `SetHour(時刻)`・`SetCycle(true/false)`・`SetDayMinutes(分)`・`SetClouds(0〜1)`・`SetCloudSpeed(m/s)`・`SetShoreWaves(m)`・`SetSeaWaves(0〜1)`・`SetRippleSpeed(倍率)`・`ResetAll()` を呼びます。どれも全員に同期します。
 
 ### 一緒に変わるもの
 

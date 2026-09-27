@@ -12,7 +12,8 @@ using VRC.SDKBase;
 /// opens: its owner shares the server time it started at, so everyone who joins later sees the same hour. The hour, the
 /// day going by and the clouds can be changed while the world runs (SetHour, SetCycle, SetClouds; ClearwaterSkyPanel
 /// is a panel for them): whoever changes them takes the sky over and shares them. So can the sea's waves (SetShoreWaves,
-/// SetSeaWaves), shared along with the sky and set on the water through the controller. Brightness is as the eye sees it: it adapts to the dark, so a
+/// SetSeaWaves, SetRippleSpeed), shared along with the sky and set on the water through the controller; ResetAll puts
+/// everything back as the world was built. Brightness is as the eye sees it: it adapts to the dark, so a
 /// moonlit night shows dim and blue (nightBrightness) instead of black, and the light of the fixed sky (the sun 31
 /// degrees up) is kept exactly at that elevation.
 /// </summary>
@@ -104,10 +105,19 @@ public class ClearwaterSky : UdonSharpBehaviour
     // the shore waves' height (m) and the sea's small waves' strength set while the world runs (below 0: the water's own)
     [UdonSynced] float _shoreWaves = -1f;
     [UdonSynced] float _seaWaves = -1f;
+    [UdonSynced] float _rippleSpeed = -1f; // (as against as built)
     bool _started;
+
+    // The hour, the day going by and the length of the day as set in the Inspector, for ResetAll to go back to (the
+    // synced fields above them change while the world runs). The editor copies them in whenever the scene is saved;
+    // not yet (below 0), this instance's own at Start.
+    [HideInInspector] public float startHour = -1f;
+    [HideInInspector] public int startCycle = -1;
+    [HideInInspector] public float startDayMinutes = -1f;
 
     void Start()
     {
+        if (startHour < 0f) { startHour = timeOfDay; startCycle = cycle ? 1 : 0; startDayMinutes = dayMinutes; }
         if (Networking.IsOwner(gameObject))
         {
             _start = Networking.GetServerTimeInSeconds();
@@ -196,6 +206,33 @@ public class ClearwaterSky : UdonSharpBehaviour
         ApplyShared();
     }
 
+    /// <summary>Sets how fast the sea's small waves go, as against as built (1; 0 = still), for everyone.</summary>
+    public void SetRippleSpeed(float speed)
+    {
+        TakeOver();
+        _rippleSpeed = Mathf.Max(speed, 0f);
+        Share();
+        ApplyShared();
+    }
+
+    /// <summary>Puts everything back as the world was built, for everyone: the hour, the day going by and its length as
+    /// set in the Inspector, and the clouds and the waves as the materials had them.</summary>
+    public void ResetAll()
+    {
+        TakeOver();
+        timeOfDay = Mathf.Repeat(Mathf.Max(startHour, 0f), 24f);
+        cycle = startCycle == 1;
+        if (startDayMinutes > 0f) dayMinutes = startDayMinutes;
+        _start = Networking.GetServerTimeInSeconds();
+        _clouds = -1f; _cloudSpeed = -1f; _shoreWaves = -1f; _seaWaves = -1f; _rippleSpeed = -1f;
+        Share();
+        ApplyShared();
+        ShowHour(Hours());
+    }
+
+    /// <summary>How fast the sea's small waves go now, as against as built.</summary>
+    public float RippleSpeed() { return _rippleSpeed >= 0f || controller == null ? Mathf.Max(_rippleSpeed, 0f) : controller.RippleSpeed(); }
+
     /// <summary>The shore waves' height now (m): as set while the world runs, or the water's.</summary>
     public float ShoreWaves() { return _shoreWaves >= 0f || controller == null ? Mathf.Max(_shoreWaves, 0f) : controller.ShoreWaveHeight(); }
 
@@ -222,14 +259,16 @@ public class ClearwaterSky : UdonSharpBehaviour
         RequestSerialization();
     }
 
-    // what was set while the world runs, on the sky and the water (through the controller)
+    // what was set while the world runs, on the sky and the water (through the controller); below 0: as built (after a
+    // ResetAll, which each of them goes back to)
     void ApplyShared()
     {
         if (controller == null) return;
-        if (_clouds >= 0f) controller.SetCloudCover(_clouds);
-        if (_cloudSpeed >= 0f) controller.SetCloudSpeed(_cloudSpeed);
-        if (_shoreWaves >= 0f) controller.SetShoreWaveHeight(_shoreWaves);
-        if (_seaWaves >= 0f) controller.SetSeaWaves(_seaWaves);
+        controller.SetCloudCover(_clouds);
+        controller.SetCloudSpeed(_cloudSpeed);
+        controller.SetShoreWaveHeight(_shoreWaves);
+        controller.SetSeaWaves(_seaWaves);
+        controller.SetRippleSpeed(_rippleSpeed);
     }
 
     void Update()

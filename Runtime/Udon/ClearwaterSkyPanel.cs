@@ -4,10 +4,10 @@ using UnityEngine.UI;
 
 /// <summary>
 /// A panel in the world for the sky and the sea: the hour, the clouds, how fast they drift and the length of the day on
-/// sliders, the day going by on a toggle, and the hour it is now; the shore waves' height and the sea's small waves on
-/// sliders. Anyone can use it; what they set goes to everyone (ClearwaterSky shares it). Tools > Clearwater > Add Sky
-/// Control Panel makes one; the UI calls OnHour, OnClouds, OnCloudSpeed, OnDayLength, OnCycle, OnShoreWaves and
-/// OnSeaWaves.
+/// sliders, the day going by on a toggle, and the hour it is now; the shore waves' height, the sea's small waves and how
+/// fast they go on sliders; a button that puts it all back as the world was built. Anyone can use it; what they set goes
+/// to everyone (ClearwaterSky shares it). Tools > Clearwater > Add Sky Control Panel makes one; the UI calls OnHour,
+/// OnClouds, OnCloudSpeed, OnDayLength, OnCycle, OnShoreWaves, OnSeaWaves, OnRippleSpeed and OnReset.
 /// </summary>
 [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
 public class ClearwaterSkyPanel : UdonSharpBehaviour
@@ -26,6 +26,8 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
     public Slider shoreWaveSlider;
     [Tooltip("The sea's small waves, 0 (calm) to 1 (as built)")]
     public Slider seaWaveSlider;
+    [Tooltip("How fast the sea's small waves go, 0 (still) to 2 (twice as built)")]
+    public Slider rippleSpeedSlider;
     [Tooltip("Shows the hour it is now")]
     public Text hourLabel;
     public Text cloudLabel;
@@ -33,6 +35,7 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
     public Text dayLengthLabel;
     public Text shoreWaveLabel;
     public Text seaWaveLabel;
+    public Text rippleSpeedLabel;
 
     bool _showing; // (while the panel shows the sky's state: the UI's events it sets off are not the viewer's)
     float _nextShow;
@@ -96,6 +99,20 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
         Show();
     }
 
+    public void OnRippleSpeed()
+    {
+        if (_showing || sky == null || rippleSpeedSlider == null) return;
+        sky.SetRippleSpeed(rippleSpeedSlider.value);
+        Show();
+    }
+
+    public void OnReset()
+    {
+        if (sky == null) return;
+        sky.ResetAll();
+        Show();
+    }
+
     // the sky's state on the panel: the hour moves on while the day goes by
     void Show()
     {
@@ -121,6 +138,9 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
         if (seaWaveSlider != null && Mathf.Abs(seaWaveSlider.value - sw) > 0.001f) seaWaveSlider.value = sw;
         if (shoreWaveLabel != null) shoreWaveLabel.text = "Shore waves  " + (sh < 0.005f ? "none" : Mathf.RoundToInt(sh * 100f) + " cm");
         if (seaWaveLabel != null) seaWaveLabel.text = "Ripples  " + Mathf.RoundToInt(sw * 100f) + "%";
+        float rv = sky.RippleSpeed();
+        if (rippleSpeedSlider != null && Mathf.Abs(rippleSpeedSlider.value - rv) > 0.001f) rippleSpeedSlider.value = rv;
+        if (rippleSpeedLabel != null) rippleSpeedLabel.text = "Ripple speed  " + Mathf.RoundToInt(rv * 100f) + "%";
         _showing = false;
     }
 
