@@ -40,6 +40,7 @@ Shader "Clearwater/Water"
         [HideInInspector] _CloudSize ("Clouds: size (m)", Float) = 900
         [HideInInspector] _CloudSpeed ("Clouds: drift (m/s)", Float) = 8
         [HideInInspector] _CloudDir ("Clouds: drift direction (deg)", Float) = 60
+        [HideInInspector] _CloudShift ("Clouds: drift so far (m)", Float) = 0
         [HideInInspector] _LandCover ("Distant land: share of the horizon (copied from the sky)", Range(0, 1)) = 0.5
         [HideInInspector] _SeaDir ("Which way the sea is (world xz, set by the coast bake)", Vector) = (0, 1, 0, 0)
         [Toggle(_CW_TONEMAP)] _Tonemap ("Tone map in shader (turn off when using post-process tone mapping)", Float) = 1

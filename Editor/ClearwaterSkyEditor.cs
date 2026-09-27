@@ -103,7 +103,7 @@ public static class ClearwaterSkySetup
         ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanel.cs");
         ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanelOpener.cs");
 
-        // in front of the spawn, at chest height, facing it
+        // by the spawn: the pebble lies in front of it, the panel above the pebble
         Vector3 at = Vector3.zero; Quaternion facing = Quaternion.identity;
         var desc = Object.FindObjectOfType<VRC.SDK3.Components.VRCSceneDescriptor>();
         if (desc != null && desc.spawns != null && desc.spawns.Length > 0 && desc.spawns[0] != null)
@@ -111,25 +111,23 @@ public static class ClearwaterSkySetup
             at = desc.spawns[0].position; facing = Quaternion.Euler(0f, desc.spawns[0].eulerAngles.y, 0f);
         }
         Vector3 spawn = at; Quaternion spawnFacing = facing;
-        at += facing * new Vector3(0f, 1.3f, 1.5f);
         Transform parent = null;
         var old = Object.FindObjectOfType<ClearwaterSkyPanel>(true);
         if (old != null)
         {
-            at = old.transform.position; facing = old.transform.rotation; parent = old.transform.parent;
+            parent = old.transform.parent;
             Undo.DestroyObjectImmediate(old.gameObject);
         }
         var root = new GameObject(PanelName);
         Undo.RegisterCreatedObjectUndo(root, "Clearwater sky panel");
         root.layer = WalkthroughLayer; // (VRCUiShape's collider is on it: avatars walk through the panel)
         root.transform.SetParent(parent, false);
-        root.transform.SetPositionAndRotation(at, facing);
         var canvas = root.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         root.AddComponent<GraphicRaycaster>();
         var rt = (RectTransform)root.transform;
-        rt.sizeDelta = new Vector2(420f, 295f);
-        rt.localScale = Vector3.one * 0.0015f; // (63 x 44 cm)
+        rt.sizeDelta = new Vector2(420f, 360f);
+        rt.localScale = Vector3.one * 0.0015f; // (63 x 54 cm)
         root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
         // what shows sits in a canvas of its own on the UI layer, which VRChat's camera leaves out (unless its UI is
         // on); the shape stays on the root's layer, as VRChat's pointer passes by UI-layer shapes while its menu is shut
@@ -178,15 +176,18 @@ public static class ClearwaterSkySetup
         var hour = MakeSlider("Hour", -62f, 24f);
         var cloudLabel = Label("Clouds", -100f);
         var clouds = MakeSlider("Clouds", -132f, 1f);
-        var dayLabel = Label("A day in", -170f);
-        var dayLength = MakeSlider("Day length", -202f, ClearwaterSkyPanel.DayLengths().Length - 1);
+        var speedLabel = Label("Cloud drift", -170f);
+        var speed = MakeSlider("Cloud drift", -202f, 60f);
+        speed.wholeNumbers = true;
+        var dayLabel = Label("A day in", -240f);
+        var dayLength = MakeSlider("Day length", -272f, ClearwaterSkyPanel.DayLengths().Length - 1);
         dayLength.wholeNumbers = true;
         var toggleGo = DefaultControls.CreateToggle(res);
         toggleGo.name = "Day goes by";
         toggleGo.transform.SetParent(face.transform, false);
         var tr = (RectTransform)toggleGo.transform;
         tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 1f);
-        tr.sizeDelta = new Vector2(380f, 30f); tr.anchoredPosition = new Vector2(0f, -250f);
+        tr.sizeDelta = new Vector2(380f, 30f); tr.anchoredPosition = new Vector2(0f, -320f);
         var toggle = toggleGo.GetComponent<Toggle>();
         var toggleText = toggleGo.GetComponentInChildren<Text>();
         toggleText.font = font; toggleText.fontSize = 24; toggleText.color = Color.white; toggleText.text = "Day goes by";
@@ -198,23 +199,31 @@ public static class ClearwaterSkySetup
         panel.sky = sky;
         panel.hourSlider = hour; panel.cloudSlider = clouds; panel.cycleToggle = toggle;
         panel.hourLabel = hourLabel; panel.cloudLabel = cloudLabel;
+        panel.cloudSpeedSlider = speed; panel.cloudSpeedLabel = speedLabel;
         panel.dayLengthSlider = dayLength; panel.dayLengthLabel = dayLabel;
         EditorUtility.SetDirty(panel);
         // the UI tells the panel's Udon program (VRChat lets UI events call SendCustomEvent)
         var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(panel);
         UnityEventTools.AddStringPersistentListener(hour.onValueChanged, udon.SendCustomEvent, "OnHour");
         UnityEventTools.AddStringPersistentListener(clouds.onValueChanged, udon.SendCustomEvent, "OnClouds");
+        UnityEventTools.AddStringPersistentListener(speed.onValueChanged, udon.SendCustomEvent, "OnCloudSpeed");
         UnityEventTools.AddStringPersistentListener(dayLength.onValueChanged, udon.SendCustomEvent, "OnDayLength");
         UnityEventTools.AddStringPersistentListener(toggle.onValueChanged, udon.SendCustomEvent, "OnCycle");
         foreach (var t in face.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
+        speed.value = sky.controller != null ? sky.controller.CloudSpeed() : 0f;
         dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
         var stone = AddStone(root, spawn, spawnFacing);
+        // above the pebble, facing away from the spawn (the pebble puts it there again, facing whoever uses it)
+        Vector3 away = stone.transform.position - spawn;
+        away.y = 0f;
+        root.transform.SetPositionAndRotation(stone.transform.position + Vector3.up * 1.3f,
+            away.sqrMagnitude > 1e-4f ? Quaternion.LookRotation(away, Vector3.up) : spawnFacing);
         root.SetActive(false); // (the stone shows it)
         Selection.activeGameObject = stone;
         EditorSceneManager.MarkSceneDirty(root.scene);
-        Debug.Log("[Clearwater] Sky control panel added in front of the spawn, shown by using the pebble beside it: move them where you like.");
+        Debug.Log("[Clearwater] Sky control panel added, shown above the pebble in front of the spawn when it is used: move the pebble where you like.");
     }
 
     /// <summary>A pebble on the ground by the spawn that shows the panel (ClearwaterSkyPanelOpener); one made before

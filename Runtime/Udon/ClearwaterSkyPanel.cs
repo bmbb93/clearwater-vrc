@@ -3,9 +3,10 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// A panel in the world for the sky: the hour, the clouds and the length of the day on sliders, the day going by on a
-/// toggle, and the hour it is now. Anyone can use it; what they set goes to everyone (ClearwaterSky shares it).
-/// Tools > Clearwater > Add Sky Control Panel makes one; the UI calls OnHour, OnClouds, OnDayLength and OnCycle.
+/// A panel in the world for the sky: the hour, the clouds, how fast they drift and the length of the day on sliders,
+/// the day going by on a toggle, and the hour it is now. Anyone can use it; what they set goes to everyone
+/// (ClearwaterSky shares it). Tools > Clearwater > Add Sky Control Panel makes one; the UI calls OnHour, OnClouds,
+/// OnCloudSpeed, OnDayLength and OnCycle.
 /// </summary>
 [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
 public class ClearwaterSkyPanel : UdonSharpBehaviour
@@ -15,12 +16,15 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
     public Slider hourSlider;
     [Tooltip("The cloud cover, 0 to 1")]
     public Slider cloudSlider;
+    [Tooltip("How fast the clouds drift, m/s")]
+    public Slider cloudSpeedSlider;
     [Tooltip("The length of the day: whole steps along DayLengths")]
     public Slider dayLengthSlider;
     public Toggle cycleToggle;
     [Tooltip("Shows the hour it is now")]
     public Text hourLabel;
     public Text cloudLabel;
+    public Text cloudSpeedLabel;
     public Text dayLengthLabel;
 
     bool _showing; // (while the panel shows the sky's state: the UI's events it sets off are not the viewer's)
@@ -49,6 +53,13 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
         Show();
     }
 
+    public void OnCloudSpeed()
+    {
+        if (_showing || sky == null || cloudSpeedSlider == null) return;
+        sky.SetCloudSpeed(cloudSpeedSlider.value);
+        Show();
+    }
+
     public void OnDayLength()
     {
         if (_showing || sky == null || dayLengthSlider == null) return;
@@ -73,12 +84,15 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
         if (hourSlider != null && Mathf.Abs(hourSlider.value - h) > 0.01f) hourSlider.value = h;
         float c = sky.Clouds();
         if (cloudSlider != null && Mathf.Abs(cloudSlider.value - c) > 0.001f) cloudSlider.value = c;
+        float v = sky.CloudSpeed();
+        if (cloudSpeedSlider != null && Mathf.Abs(cloudSpeedSlider.value - v) > 0.01f) cloudSpeedSlider.value = v;
         if (cycleToggle != null && cycleToggle.isOn != sky.cycle) cycleToggle.isOn = sky.cycle;
         int step = NearestDayLength(sky.dayMinutes);
         if (dayLengthSlider != null && Mathf.RoundToInt(dayLengthSlider.value) != step) dayLengthSlider.value = step;
         int hh = Mathf.FloorToInt(h) % 24, mm = Mathf.FloorToInt((h - Mathf.Floor(h)) * 60f);
         if (hourLabel != null) hourLabel.text = "Time  " + hh.ToString("00") + ":" + mm.ToString("00");
         if (cloudLabel != null) cloudLabel.text = "Clouds  " + Mathf.RoundToInt(c * 100f) + "%";
+        if (cloudSpeedLabel != null) cloudSpeedLabel.text = "Cloud drift  " + Mathf.RoundToInt(v) + " m/s";
         if (dayLengthLabel != null) dayLengthLabel.text = "A day in  " + Duration(sky.dayMinutes);
         _showing = false;
     }

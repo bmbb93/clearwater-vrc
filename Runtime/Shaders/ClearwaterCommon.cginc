@@ -116,6 +116,7 @@ float _CloudCover; // 0..1, how much of the sky they cover (0: none)
 float _CloudSize;  // m across a typical cloud
 float _CloudSpeed; // m/s the layer drifts
 float _CloudDir;   // degrees, the way it drifts: clockwise from world +z
+float _CloudShift; // m the layer has drifted on top of _CloudSpeed * time (the speed changed while the world ran)
 
 #define CW_CLOUD_H 1500.0
 
@@ -129,7 +130,7 @@ float2 cwCloudUV(float3 d, float fwE, out float fp)
     fp = fwE * CW_CLOUD_H * (length(d.xz) + y) / (y * y) * s;
     float a = radians(_CloudDir);
     float t = _Time.y;
-    float2 q = p - float2(sin(a), -cos(a)) * (_CloudSpeed * s * t);
+    float2 q = p - float2(sin(a), -cos(a)) * ((_CloudSpeed * t + _CloudShift) * s);
     // a slow warp of its own, so they grow, shrink and part rather than slide past like a picture
     float tw = t * 0.012;
     q += 0.45 * float2(cwNoise(q * 0.7 + float2(tw, 3.1)), cwNoise(q * 0.7 + float2(5.7, -tw))) - 0.225;

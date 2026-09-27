@@ -125,6 +125,7 @@ public class ClearwaterController : UdonSharpBehaviour
             underwaterMaterial.SetFloat("_SwashHeight", waterMaterial.GetFloat("_SwashHeight"));
             underwaterMaterial.SetFloat("_SwashRunup", waterMaterial.GetFloat("_SwashRunup"));
         }
+        if (skyMaterial != null) skyMaterial.SetFloat("_CloudShift", 0f); // (none left over from the editor's play)
         CopyClouds(waterMaterial);
         CopyClouds(seabedMaterial);
         for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
@@ -139,6 +140,7 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetFloat("_CloudSize", skyMaterial.GetFloat("_CloudSize"));
         m.SetFloat("_CloudSpeed", skyMaterial.GetFloat("_CloudSpeed"));
         m.SetFloat("_CloudDir", skyMaterial.GetFloat("_CloudDir"));
+        m.SetFloat("_CloudShift", skyMaterial.GetFloat("_CloudShift"));
         m.SetFloat("_LandCover", skyMaterial.GetFloat("_LandCover"));
         m.SetVector("_SeaDir", skyMaterial.GetVector("_SeaDir"));
     }
@@ -154,6 +156,23 @@ public class ClearwaterController : UdonSharpBehaviour
     }
 
     public float CloudCover() { return skyMaterial != null ? skyMaterial.GetFloat("_CloudCover") : 0f; }
+
+    /// <summary>How fast the clouds drift (m/s), on the sky, the water, the seabed and the pools at once
+    /// (ClearwaterSky.SetCloudSpeed). They go on from where they are.</summary>
+    public void SetCloudSpeed(float speed)
+    {
+        if (skyMaterial == null) return;
+        float was = skyMaterial.GetFloat("_CloudSpeed");
+        if (was == speed) return;
+        // the shaders put the layer at speed * time + shift (time since the scene loaded): keep that where it is now
+        skyMaterial.SetFloat("_CloudShift", skyMaterial.GetFloat("_CloudShift") + (was - speed) * Time.timeSinceLevelLoad);
+        skyMaterial.SetFloat("_CloudSpeed", speed);
+        CopyClouds(waterMaterial);
+        CopyClouds(seabedMaterial);
+        for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
+    }
+
+    public float CloudSpeed() { return skyMaterial != null ? skyMaterial.GetFloat("_CloudSpeed") : 0f; }
 
     public override void OnPlayerJoined(VRCPlayerApi player) { RefreshPlayers(); }
     public override void OnPlayerLeft(VRCPlayerApi player) { RefreshPlayers(); }

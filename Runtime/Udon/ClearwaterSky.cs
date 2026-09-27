@@ -96,6 +96,7 @@ public class ClearwaterSky : UdonSharpBehaviour
     // set while the world runs (below 0: the sky material's own)
     [UdonSynced] double _start;
     [UdonSynced] float _clouds = -1f;
+    [UdonSynced] float _cloudSpeed = -1f; // (below 0: the sky material's own)
     bool _started;
 
     void Start()
@@ -161,6 +162,21 @@ public class ClearwaterSky : UdonSharpBehaviour
         if (reflectionProbe != null) reflectionProbe.RenderProbe();
     }
 
+    /// <summary>Sets how fast the clouds drift (m/s), for everyone; they go on from where they are.</summary>
+    public void SetCloudSpeed(float speed)
+    {
+        TakeOver();
+        _cloudSpeed = Mathf.Max(speed, 0f);
+        Share();
+        ApplyClouds();
+    }
+
+    /// <summary>How fast the clouds drift now (m/s): as set while the world runs, or the sky material's.</summary>
+    public float CloudSpeed()
+    {
+        return _cloudSpeed >= 0f || controller == null ? Mathf.Max(_cloudSpeed, 0f) : controller.CloudSpeed();
+    }
+
     /// <summary>The cloud cover now: as set while the world runs, or the sky material's.</summary>
     public float Clouds() { return _clouds >= 0f || controller == null ? Mathf.Max(_clouds, 0f) : controller.CloudCover(); }
 
@@ -178,6 +194,7 @@ public class ClearwaterSky : UdonSharpBehaviour
     void ApplyClouds()
     {
         if (controller != null && _clouds >= 0f) controller.SetCloudCover(_clouds);
+        if (controller != null && _cloudSpeed >= 0f) controller.SetCloudSpeed(_cloudSpeed);
     }
 
     void Update()
