@@ -5,14 +5,17 @@ using UnityEngine.UI;
 /// <summary>
 /// A panel in the world for the sky and the sea: the hour, the clouds, how fast they drift and the length of the day on
 /// sliders, the day going by on a toggle, and the hour it is now; the shore waves' height, the sea's small waves and how
-/// fast they go on sliders; a button that puts it all back as the world was built. Anyone can use it; what they set goes
-/// to everyone (ClearwaterSky shares it). Tools > Clearwater > Add Sky Control Panel makes one; the UI calls OnHour,
+/// fast they go on sliders; a button that puts it all back as the world starts. Anyone can use it; what they set goes
+/// to everyone (the hour, the day going by and its length through ClearwaterSky, the clouds and the waves through
+/// ClearwaterSettings, which holds their start values). Tools > Clearwater > Add Sky Control Panel makes one; the UI calls OnHour,
 /// OnClouds, OnCloudSpeed, OnDayLength, OnCycle, OnShoreWaves, OnSeaWaves, OnRippleSpeed and OnReset.
 /// </summary>
 [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
 public class ClearwaterSkyPanel : UdonSharpBehaviour
 {
     public ClearwaterSky sky;
+    [Tooltip("The panel's settings: the clouds and the waves, their start values, and Reset all")]
+    public ClearwaterSettings settings;
     [Tooltip("The hour, 0 to 24")]
     public Slider hourSlider;
     [Tooltip("The cloud cover, 0 to 1")]
@@ -58,15 +61,15 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
 
     public void OnClouds()
     {
-        if (_showing || sky == null || cloudSlider == null) return;
-        sky.SetClouds(cloudSlider.value);
+        if (_showing || settings == null || cloudSlider == null) return;
+        settings.SetClouds(cloudSlider.value);
         Show();
     }
 
     public void OnCloudSpeed()
     {
-        if (_showing || sky == null || cloudSpeedSlider == null) return;
-        sky.SetCloudSpeed(cloudSpeedSlider.value);
+        if (_showing || settings == null || cloudSpeedSlider == null) return;
+        settings.SetCloudDrift(cloudSpeedSlider.value);
         Show();
     }
 
@@ -87,60 +90,65 @@ public class ClearwaterSkyPanel : UdonSharpBehaviour
 
     public void OnShoreWaves()
     {
-        if (_showing || sky == null || shoreWaveSlider == null) return;
-        sky.SetShoreWaves(shoreWaveSlider.value);
+        if (_showing || settings == null || shoreWaveSlider == null) return;
+        settings.SetShoreWaves(shoreWaveSlider.value);
         Show();
     }
 
     public void OnSeaWaves()
     {
-        if (_showing || sky == null || seaWaveSlider == null) return;
-        sky.SetSeaWaves(seaWaveSlider.value);
+        if (_showing || settings == null || seaWaveSlider == null) return;
+        settings.SetRipples(seaWaveSlider.value);
         Show();
     }
 
     public void OnRippleSpeed()
     {
-        if (_showing || sky == null || rippleSpeedSlider == null) return;
-        sky.SetRippleSpeed(rippleSpeedSlider.value);
+        if (_showing || settings == null || rippleSpeedSlider == null) return;
+        settings.SetRippleSpeed(rippleSpeedSlider.value);
         Show();
     }
 
     public void OnReset()
     {
-        if (sky == null) return;
-        sky.ResetAll();
+        if (settings == null) return;
+        settings.ResetAll();
         Show();
     }
 
-    // the sky's state on the panel: the hour moves on while the day goes by
+    // the state of the moment on the panel: the hour moves on while the day goes by
     void Show()
     {
-        if (sky == null) return;
         _showing = true;
-        float h = sky.Hours();
-        if (hourSlider != null && Mathf.Abs(hourSlider.value - h) > 0.01f) hourSlider.value = h;
-        float c = sky.Clouds();
-        if (cloudSlider != null && Mathf.Abs(cloudSlider.value - c) > 0.001f) cloudSlider.value = c;
-        float v = sky.CloudSpeed();
-        if (cloudSpeedSlider != null && Mathf.Abs(cloudSpeedSlider.value - v) > 0.01f) cloudSpeedSlider.value = v;
-        if (cycleToggle != null && cycleToggle.isOn != sky.cycle) cycleToggle.isOn = sky.cycle;
-        int step = NearestDayLength(sky.dayMinutes);
-        if (dayLengthSlider != null && Mathf.RoundToInt(dayLengthSlider.value) != step) dayLengthSlider.value = step;
-        int hh = Mathf.FloorToInt(h) % 24, mm = Mathf.FloorToInt((h - Mathf.Floor(h)) * 60f);
-        if (hourLabel != null) hourLabel.text = "Time  " + hh.ToString("00") + ":" + mm.ToString("00");
-        if (cloudLabel != null) cloudLabel.text = "Clouds  " + Mathf.RoundToInt(c * 100f) + "%";
-        if (cloudSpeedLabel != null) cloudSpeedLabel.text = "Cloud drift  " + Mathf.RoundToInt(v) + " m/s";
-        if (dayLengthLabel != null) dayLengthLabel.text = "A day in  " + Duration(sky.dayMinutes);
-        float sh = sky.ShoreWaves();
-        if (shoreWaveSlider != null && Mathf.Abs(shoreWaveSlider.value - sh) > 0.001f) shoreWaveSlider.value = sh;
-        float sw = sky.SeaWaves();
-        if (seaWaveSlider != null && Mathf.Abs(seaWaveSlider.value - sw) > 0.001f) seaWaveSlider.value = sw;
-        if (shoreWaveLabel != null) shoreWaveLabel.text = "Shore waves  " + (sh < 0.005f ? "none" : Mathf.RoundToInt(sh * 100f) + " cm");
-        if (seaWaveLabel != null) seaWaveLabel.text = "Ripples  " + Mathf.RoundToInt(sw * 100f) + "%";
-        float rv = sky.RippleSpeed();
-        if (rippleSpeedSlider != null && Mathf.Abs(rippleSpeedSlider.value - rv) > 0.001f) rippleSpeedSlider.value = rv;
-        if (rippleSpeedLabel != null) rippleSpeedLabel.text = "Ripple speed  " + Mathf.RoundToInt(rv * 100f) + "%";
+        if (sky != null)
+        {
+            float h = sky.Hours();
+            if (hourSlider != null && Mathf.Abs(hourSlider.value - h) > 0.01f) hourSlider.value = h;
+            if (cycleToggle != null && cycleToggle.isOn != sky.cycle) cycleToggle.isOn = sky.cycle;
+            int step = NearestDayLength(sky.dayMinutes);
+            if (dayLengthSlider != null && Mathf.RoundToInt(dayLengthSlider.value) != step) dayLengthSlider.value = step;
+            int hh = Mathf.FloorToInt(h) % 24, mm = Mathf.FloorToInt((h - Mathf.Floor(h)) * 60f);
+            if (hourLabel != null) hourLabel.text = "Time  " + hh.ToString("00") + ":" + mm.ToString("00");
+            if (dayLengthLabel != null) dayLengthLabel.text = "A day in  " + Duration(sky.dayMinutes);
+        }
+        if (settings != null)
+        {
+            float c = settings.Clouds();
+            if (cloudSlider != null && Mathf.Abs(cloudSlider.value - c) > 0.001f) cloudSlider.value = c;
+            float v = settings.CloudDrift();
+            if (cloudSpeedSlider != null && Mathf.Abs(cloudSpeedSlider.value - v) > 0.01f) cloudSpeedSlider.value = v;
+            if (cloudLabel != null) cloudLabel.text = "Clouds  " + Mathf.RoundToInt(c * 100f) + "%";
+            if (cloudSpeedLabel != null) cloudSpeedLabel.text = "Cloud drift  " + Mathf.RoundToInt(v) + " m/s";
+            float sh = settings.ShoreWaves();
+            if (shoreWaveSlider != null && Mathf.Abs(shoreWaveSlider.value - sh) > 0.001f) shoreWaveSlider.value = sh;
+            float sw = settings.Ripples();
+            if (seaWaveSlider != null && Mathf.Abs(seaWaveSlider.value - sw) > 0.001f) seaWaveSlider.value = sw;
+            if (shoreWaveLabel != null) shoreWaveLabel.text = "Shore waves  " + (sh < 0.005f ? "none" : Mathf.RoundToInt(sh * 100f) + " cm");
+            if (seaWaveLabel != null) seaWaveLabel.text = "Ripples  " + Mathf.RoundToInt(sw * 100f) + "%";
+            float rv = settings.RippleSpeed();
+            if (rippleSpeedSlider != null && Mathf.Abs(rippleSpeedSlider.value - rv) > 0.001f) rippleSpeedSlider.value = rv;
+            if (rippleSpeedLabel != null) rippleSpeedLabel.text = "Ripple speed  " + Mathf.RoundToInt(rv * 100f) + "%";
+        }
         _showing = false;
     }
 

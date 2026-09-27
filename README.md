@@ -294,12 +294,13 @@ Inspector で値を動かすと、Scene ビューと Game ビューにすぐ映�
 - 岸の波の高さ（Shore waves）は、0 から作ったときの 2 倍（30 cm 未満なら 30 cm）までです。砕ける波・打ち上げ・泡・濡れた砂と波音の大きさがまとめて変わります。0 にすると、Coast の `Shore waves` をオフにしたときと同じ静かな水際になります（泡や濡れた砂も消えます）
 - 沖のさざ波（Ripples）は、海の水面の揺れと水底の光の模様の強さです。0% で鏡のような凪になります。プールの水面は変わりません
 - さざ波の速さ（Ripple speed）は 0〜200% です。変えても模様は飛ばず、今の形から新しい速さで動きます。水面の波はプールと共通なので、プールの波も同じ速さになります
-- パネルの初期値（ワールドの開始時と Reset all で戻る値）は、Sun の Clearwater Sky の Inspector でまとめて変えられます。時刻・Day goes by・1 日の長さはいちばん上の欄、雲の量・雲の流れ・岸の波・さざ波・さざ波の速さは下の「Start values」の欄です。雲と波は空と水のマテリアルの値そのものなので、この欄から変えると、関係するマテリアル（水面・水底・水中など）にまとめて入り、Scene ビューの見た目もすぐ変わります
-- Reset all は、時刻・Day goes by・1 日の長さを Inspector で設定した値に、雲と波をワールドを作ったときの値に、全員まとめて戻します（戻す時刻は、シーンを保存したときの Clearwater Sky の値です）
+- パネルの初期値（ワールドの開始時と Reset all で戻る値）は、パネルと一緒に作られる「Sky & Waves Settings (Clearwater)」の Inspector でまとめて変えられます。時刻・Day goes by・1 日の長さ（実体は Sun の Clearwater Sky の値）、雲の量・雲の流れ・岸の波・さざ波・さざ波の速さです。雲と波は、変えるとその場で関係するマテリアル（空・水面・水底・水中など）にも書き込まれるので、Scene ビューの見た目もすぐ変わります
+- Reset all は、この初期値に全員まとめて戻します（戻す時刻は、シーンを保存したときの Clearwater Sky の値です）
+- 時刻の同期は Clearwater Sky が、雲と波の同期は Sky & Waves Settings が受け持ちます（同期するオブジェクトが 2 つなので、ネットワーク ID も 2 つ使います）
 - パネルの見た目（子の Face）と小石の見た目（子の Look）は UI レイヤーに置くので、VRChat のカメラ（写真・配信用）には写りません。カメラの設定で UI を表示したときだけ写ります。操作を受ける親（パネルの VRC Ui Shape、小石の当たり判定）は UI レイヤーにしません。UI レイヤーのものは、VRChat のメニューを開いている間しか触れないためです
 - パネルの親と小石は Walkthrough レイヤーに置くので、アバターはぶつからずに通り抜けます
 
-自分の Udon から変えるときは、Clearwater Sky の `SetHour(時刻)`・`SetCycle(true/false)`・`SetDayMinutes(分)`・`SetClouds(0〜1)`・`SetCloudSpeed(m/s)`・`SetShoreWaves(m)`・`SetSeaWaves(0〜1)`・`SetRippleSpeed(倍率)`・`ResetAll()` を呼びます。どれも全員に同期します。
+自分の Udon から変えるときは、Clearwater Sky の `SetHour(時刻)`・`SetCycle(true/false)`・`SetDayMinutes(分)`・`ResetTime()` と、Sky & Waves Settings（`ClearwaterSettings`）の `SetClouds(0〜1)`・`SetCloudDrift(m/s)`・`SetShoreWaves(m)`・`SetRipples(0〜1)`・`SetRippleSpeed(倍率)`・`ResetAll()` を呼びます。どれも全員に同期します。
 
 ### 一緒に変わるもの
 

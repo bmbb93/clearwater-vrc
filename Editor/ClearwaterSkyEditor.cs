@@ -66,7 +66,6 @@ public static class ClearwaterSkySetup
         Fill(sky);
         if (made) sky.north = DefaultNorth(sky.timeOfDay, sky.latitude, sky.dayOfYear);
         sky.sunLight = sun;
-        if (sky.controller == null) sky.controller = Object.FindObjectOfType<ClearwaterController>(true);
 
         var probe = sky.reflectionProbe;
         if (probe == null)
@@ -123,9 +122,7 @@ public static class ClearwaterSkySetup
     /// returns the pebble.</summary>
     internal static GameObject AddPanel(ClearwaterSky sky)
     {
-        Undo.RecordObject(sky, "Clearwater sky panel");
-        if (sky.controller == null) sky.controller = Object.FindObjectOfType<ClearwaterController>(true);
-        EditorUtility.SetDirty(sky);
+        var settings = EnsureSettings(sky);
         ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanel.cs");
         ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanelOpener.cs");
 
@@ -235,8 +232,8 @@ public static class ClearwaterSkySetup
         var box = (RectTransform)toggleGo.transform.Find("Background");
         box.sizeDelta = new Vector2(26f, 26f);
 
-        // the sea: the shore waves up to twice as built (at least 30 cm)
-        float builtWaves = sky.controller != null ? sky.controller.ShoreWaveHeight() : 0.14f;
+        // the sea: the shore waves up to twice their start height (at least 30 cm)
+        float builtWaves = settings.shoreWaves;
         var shoreLabel = Label("Shore waves", SeaX, -75f);
         var shoreWaves = MakeSlider("Shore waves", SeaX, -107f, Mathf.Max(0.3f, 2f * builtWaves));
         var seaLabel = Label("Ripples", SeaX, -145f);
@@ -257,6 +254,7 @@ public static class ClearwaterSkySetup
 
         var panel = UdonSharpUndo.AddComponent<ClearwaterSkyPanel>(root);
         panel.sky = sky;
+        panel.settings = settings;
         panel.hourSlider = hour; panel.cloudSlider = clouds; panel.cycleToggle = toggle;
         panel.hourLabel = hourLabel; panel.cloudLabel = cloudLabel;
         panel.cloudSpeedSlider = speed; panel.cloudSpeedLabel = speedLabel;
@@ -279,12 +277,12 @@ public static class ClearwaterSkySetup
         UnityEventTools.AddStringPersistentListener(reset.onClick, udon.SendCustomEvent, "OnReset");
         foreach (var t in face.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
-        clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
-        speed.value = sky.controller != null ? sky.controller.CloudSpeed() : 0f;
+        clouds.value = settings.clouds;
+        speed.value = settings.cloudDrift;
         dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
-        shoreWaves.value = builtWaves;
-        seaWaves.value = sky.controller != null ? sky.controller.SeaWaves() : 1f;
-        rippleSpeed.value = 1f;
+        shoreWaves.value = settings.shoreWaves;
+        seaWaves.value = settings.ripples;
+        rippleSpeed.value = settings.rippleSpeed;
         var stone = AddStone(root, spawn, spawnFacing);
         // above the pebble, facing away from the spawn (the pebble puts it there again, facing whoever uses it)
         Vector3 away = stone.transform.position - spawn;
@@ -294,6 +292,39 @@ public static class ClearwaterSkySetup
         root.SetActive(false); // (the stone shows it)
         EditorSceneManager.MarkSceneDirty(root.scene);
         return stone;
+    }
+
+    const string SettingsName = "Sky & Waves Settings (Clearwater)";
+
+    /// <summary>The panel's settings (ClearwaterSettings) in the scene: the one there, or a new one by the panel, its start
+    /// values taken from the materials as they are (so a scene looks as before it had one).</summary>
+    internal static ClearwaterSettings EnsureSettings(ClearwaterSky sky)
+    {
+        ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSettings.cs");
+        var settings = Object.FindObjectOfType<ClearwaterSettings>(true);
+        var ctl = Object.FindObjectOfType<ClearwaterController>(true);
+        if (settings == null)
+        {
+            var go = new GameObject(SettingsName);
+            Undo.RegisterCreatedObjectUndo(go, "Clearwater settings");
+            var old = Object.FindObjectOfType<ClearwaterSkyPanel>(true);
+            if (old != null) go.transform.SetParent(old.transform.parent, false);
+            settings = UdonSharpUndo.AddComponent<ClearwaterSettings>(go);
+            if (ctl != null)
+            {
+                if (ctl.skyMaterial != null) { settings.clouds = ctl.skyMaterial.GetFloat("_CloudCover"); settings.cloudDrift = ctl.skyMaterial.GetFloat("_CloudSpeed"); }
+                if (ctl.waterMaterial != null) { settings.shoreWaves = ctl.waterMaterial.GetFloat("_SwashHeight"); settings.ripples = 1f - ctl.waterMaterial.GetFloat("_Calm"); }
+            }
+            settings.rippleSpeed = 1f;
+        }
+        else Undo.RecordObject(settings, "Clearwater settings");
+        settings.sky = sky;
+        if (settings.controller == null) settings.controller = ctl;
+        UdonSharpEditorUtility.CopyProxyToUdon(settings);
+        // (shared with everyone: as its class says, set now so a scene saved at once has it)
+        UdonSharpEditorUtility.GetBackingUdonBehaviour(settings).SyncMethod = VRC.SDKBase.Networking.SyncType.Manual;
+        EditorUtility.SetDirty(settings);
+        return settings;
     }
 
     /// <summary>A pebble on the ground by the spawn that shows the panel (ClearwaterSkyPanelOpener); one made before
@@ -495,72 +526,5 @@ public class ClearwaterSkyEditor : Editor
             EditorUtility.SetDirty(sky);
             ClearwaterSkySetup.Show(sky);
         }
-        StartValuesGUI(sky);
-    }
-
-    // What the sky and wave panel starts from, and its Reset all goes back to, in one place: the hour, Day goes by and
-    // the day's length are the fields above; the clouds and the waves are the materials' own values, shown and set
-    // here (in every material that holds them, so the Scene view shows them too); the ripples' speed is the sky's.
-    static void StartValuesGUI(ClearwaterSky sky)
-    {
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Start values (the sky and wave panel, and its Reset all)", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox("What the world starts with and Reset all on the panel goes back to: the hour, Day goes by and " +
-            "the day's length above, and these. The clouds and the waves are set in the sky's and the water's materials.",
-            MessageType.None);
-        var ctl = sky.controller;
-        if (ctl == null)
-        {
-            EditorGUILayout.HelpBox("No Clearwater Controller set on the sky: the clouds and the waves have no materials to set.", MessageType.Warning);
-            return;
-        }
-        Material skyM = ctl.skyMaterial, water = ctl.waterMaterial;
-        if (skyM != null)
-        {
-            EditorGUI.BeginChangeCheck();
-            float cover = EditorGUILayout.Slider("Clouds", skyM.GetFloat("_CloudCover"), 0f, 1f);
-            float drift = EditorGUILayout.Slider("Cloud drift (m/s)", skyM.GetFloat("_CloudSpeed"), 0f, 60f);
-            if (EditorGUI.EndChangeCheck())
-                SetAll(Mats(skyM, ctl.waterMaterial, ctl.seabedMaterial, ctl.poolWaterMaterials), "Clouds",
-                    m => { m.SetFloat("_CloudCover", cover); m.SetFloat("_CloudSpeed", drift); });
-        }
-        if (water != null)
-        {
-            EditorGUI.BeginChangeCheck();
-            float height = EditorGUILayout.Slider("Shore waves (m)", water.GetFloat("_SwashHeight"), 0f, 0.5f);
-            if (EditorGUI.EndChangeCheck())
-                SetAll(Mats(water, ctl.seabedMaterial, ctl.underwaterMaterial, ctl.userBeachMaterial), "Shore waves",
-                    m => m.SetFloat("_SwashHeight", height));
-            EditorGUI.BeginChangeCheck();
-            float ripples = EditorGUILayout.Slider("Ripples", 1f - water.GetFloat("_Calm"), 0f, 1f);
-            if (EditorGUI.EndChangeCheck())
-                SetAll(Mats(water, ctl.seabedMaterial, ctl.underwaterMaterial, ctl.avatarCausticsMaterial), "Ripples",
-                    m => m.SetFloat("_Calm", 1f - ripples));
-        }
-        EditorGUI.BeginChangeCheck();
-        float speed = EditorGUILayout.Slider("Ripple speed", sky.startRippleSpeed, 0f, 2f);
-        if (EditorGUI.EndChangeCheck())
-        {
-            Undo.RecordObject(sky, "Ripple speed");
-            sky.startRippleSpeed = speed;
-            UdonSharpEditorUtility.CopyProxyToUdon(sky);
-            EditorUtility.SetDirty(sky);
-        }
-    }
-
-    static Material[] Mats(Material a, Material b, Material c, Material[] more)
-    {
-        var list = new System.Collections.Generic.List<Material> { a, b, c };
-        if (more != null) list.AddRange(more);
-        list.RemoveAll(m => m == null);
-        return list.ToArray();
-    }
-
-    static Material[] Mats(Material a, Material b, Material c, Material d) { return Mats(a, b, c, new[] { d }); }
-
-    static void SetAll(Material[] mats, string what, System.Action<Material> set)
-    {
-        Undo.RecordObjects(mats, what);
-        foreach (var m in mats) { set(m); EditorUtility.SetDirty(m); }
     }
 }

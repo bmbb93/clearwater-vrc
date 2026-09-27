@@ -1,6 +1,6 @@
 # Clearwater Coast の仕組み
 
-この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.46 時点のものです。
+この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.47 時点のものです。
 
 **読み方**。1 章（全体像）と 2 章（用語）で全体の流れをつかめば、あとはどの章からでも読めます。4〜8 章は水の見た目、9〜10 章は焼き込みとプール、13〜14 章は空、15 章以降は調べるときに引く参照用です。Unity に詳しくない人は、2 章の用語表から読んでください。パッケージに手を入れるときは、19 章のテストも見てください。用語の定義は [CONTEXT.md](../CONTEXT.md)、後から変えにくい決定は [docs/adr](adr/) にまとめてあります。
 
@@ -522,7 +522,7 @@ sequenceDiagram
   participant J as 後から入った人
   participant P as パネルを操作した人
   O->>O: Start：起点 = 今のサーバー時刻
-  O->>V: 同期（時刻・起点・Cycle・1 日の長さ・雲）
+  O->>V: 同期（時刻・起点・Cycle・1 日の長さ）
   V-->>J: 入ったときに受け取る
   J->>J: 今の時刻 = 時刻 + 経過 ÷ 1 日の長さ × 24
   P->>P: SetHour など：オーナーになり<br/>今の時刻を新しい起点にする
@@ -538,13 +538,18 @@ sequenceDiagram
 | `SetHour(時刻)` | 時刻。進めているときは、その時刻から進み直す |
 | `SetCycle(true/false)` | 時刻を進めるか。今の時刻から進める・止める |
 | `SetDayMinutes(分)` | 1 日の長さ。今の時刻から新しい速さで進む |
+| `ResetTime()` | 時刻・時刻を進めるか・1 日の長さを、シーンを保存したときにエディターが控えた Inspector の値（`startHour` など。同期する欄は実行中に変わるため）に戻す |
+
+パネルで変える雲と波は、別のオブジェクト「Sky & Waves Settings (Clearwater)」（`ClearwaterSettings`、Manual 同期）が同期します。役割は、Clearwater Sky が空の時計、Settings がメニューの初期値と同期、コントローラーが水の描画と音です。Settings は、実行中に誰も変えていない項目（同期値が負）には Inspector の初期値を使い、起動時と同期を受けたときにコントローラー経由でマテリアルに入れます。
+
+| Settings の呼び出し | 何が変わるか |
+| --- | --- |
 | `SetClouds(0〜1)` | 雲の量 |
-| `SetCloudSpeed(m/s)` | 雲の流れる速さ。今の位置から新しい速さで流れる |
+| `SetCloudDrift(m/s)` | 雲の流れる速さ。今の位置から新しい速さで流れる |
 | `SetShoreWaves(m)` | 岸の波の高さ（砕ける波の高さ、`_SwashHeight`）。水面・水底・水中・自分の地形の浜のマテリアルに入れる。波音は作ったときの高さとの比の平方根で大きくなる。0 では `_ShoreWaves` も 0 にして、岸の波のない水際にする |
 | `SetRippleSpeed(倍率)` | さざ波の速さ（1 = 作ったとき）。波の模様の時計は `(時間 × 倍率 + ずれ) × Time scale` で、倍率を変えるときは今の時計が変わらないようにずれを足す（グローバル `_Udon_CWRipple`）。水面の波はプールと共通 |
-| （初期値の置き場所） | Clearwater Sky の Inspector の「Start values」に集めてある。雲の量・流れは空のマテリアル（と水面・水底・プールの写し）、岸の波は水面・水底・水中・自分の地形の浜の `_SwashHeight`、さざ波は海の水面・水底・水中・アバターの光の模様の `_Calm` をその場で書き換える（Undo 可）。さざ波の速さだけはマテリアルに置き場がないので Clearwater Sky の `startRippleSpeed` に持ち、起動時と `ResetAll` で使う |
-| `ResetAll()` | 全部を初期状態に戻す。時刻・時刻を進めるか・1 日の長さは、シーンを保存したときにエディターが控えた Inspector の値（`startHour` など。同期する欄は実行中に変わるため）、雲と波はコントローラーが最初に覚えたマテリアルの値 |
-| `SetSeaWaves(0〜1)` | 沖のさざ波の強さ。海の水面・水底・水中・アバターの光の模様のマテリアルの `_Calm`（= 1 − 強さ）に入れる。プールの `_Calm` はプールごとの値のまま |
+| `ResetAll()` | 雲と波を Settings の初期値に戻し、Clearwater Sky の `ResetTime()` も呼ぶ |
+| `SetRipples(0〜1)` | 沖のさざ波の強さ。海の水面・水底・水中・アバターの光の模様のマテリアルの `_Calm`（= 1 − 強さ）に入れる。プールの `_Calm` はプールごとの値のまま |
 
 **負荷**。空・水面・水底は、見る方向ごとに表を 1 回引きます。太陽と月のどちらかの空が他方の 1000 分の 1 に満たないときは、その分は引きません。見えない星の計算も飛ばします（値をちょうど 0 にして、シェーダーの分岐で飛ばします。昼の星を小さな値のまま残すと、1080p で +0.2 ms かかりました）。1920×1080 の 1 画面で、時刻のない空と比べて、昼は +0.05 ms、夜空を見上げたときは +0.15 ms でした。
 
@@ -582,14 +587,16 @@ sequenceDiagram
 | スライダー・トグル | 範囲 | 呼ぶもの |
 | --- | --- | --- |
 | 時刻（Time） | 0〜24 時 | `SetHour` |
-| 雲の量（Clouds） | 0〜100% | `SetClouds` |
-| 雲の流れ（Cloud drift） | 0〜60 m/s | `SetCloudSpeed` |
+| 雲の量（Clouds） | 0〜100% | Settings の `SetClouds` |
+| 雲の流れ（Cloud drift） | 0〜60 m/s | Settings の `SetCloudDrift` |
 | 1 日の長さ（A day in） | 1 分〜24 時間の 17 段階 | `SetDayMinutes` |
 | 時刻を進める（Day goes by） | オン / オフ | `SetCycle` |
-| 岸の波の高さ（Shore waves） | 0〜作ったときの 2 倍（最低 30 cm） | `SetShoreWaves` |
-| 沖のさざ波（Ripples） | 0〜100% | `SetSeaWaves` |
-| さざ波の速さ（Ripple speed） | 0〜200% | `SetRippleSpeed` |
-| 初期状態に戻す（Reset all ボタン） | — | `ResetAll` |
+| 岸の波の高さ（Shore waves） | 0〜初期値の 2 倍（最低 30 cm） | Settings の `SetShoreWaves` |
+| 沖のさざ波（Ripples） | 0〜100% | Settings の `SetRipples` |
+| さざ波の速さ（Ripple speed） | 0〜200% | Settings の `SetRippleSpeed` |
+| 初期状態に戻す（Reset all ボタン） | — | Settings の `ResetAll` |
+
+**初期値の置き場所**。Sky & Waves Settings の Inspector に集めてあります。時刻・Day goes by・1 日の長さは Clearwater Sky の値をそのまま表示・編集し、雲の量・流れ・岸の波・さざ波・さざ波の速さは Settings の値です。雲と波は、変えるとその場で関係するマテリアル（空と水面・水底・プールの雲の写し、水面・水底・水中・自分の地形の浜の `_SwashHeight`、海の水面・水底・水中・アバターの光の模様の `_Calm`）にも書き込み、Scene ビューを実行時の見た目と揃えます（Undo 可）。Add Sky Control Panel は、Settings がなければ作り、そのときの初期値はマテリアルの今の値から取ります。
 
 パネルが値を表示し直すとき、スライダーを動かすと UI のイベントが起きます。パネルは表示し直している間の印（`_showing`）を持ち、その間のイベントは見ている人の操作として扱いません。パネルを出すか隠すかは見ている人ごとで、同期しません。
 

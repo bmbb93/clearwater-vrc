@@ -90,12 +90,10 @@ public class ClearwaterController : UdonSharpBehaviour
     [Tooltip("Length of the break timing track (= the shore loop)")]
     public float swashLoop = 90f;
     float _submerged;
-    // the settings as the world was built, for the panel's Reset and the surf's loudness: the shore waves' breaker
-    // height (m; the surf is as loud as built at it), whether the coast has shore waves (the materials' _ShoreWaves), the
-    // clouds' cover and speed, the sea's calm
+    // the shore waves as the world was built: the breaker height (m; the surf is as loud as built at it) and whether the
+    // coast has shore waves at all (the materials' _ShoreWaves)
     float _builtHeight = -1f;
     float _builtShore = -1f;
-    float _builtCloud, _builtCloudSpeed, _builtCalm;
     // how fast the sea's small waves go as against as built, and the shift that keeps them where they are when it
     // changes (the spectrum's clock is (time * speed + shift) * its time scale: _Udon_CWRipple)
     float _rippleSpeed = 1f, _rippleShift;
@@ -137,7 +135,7 @@ public class ClearwaterController : UdonSharpBehaviour
             if (seabedMaterial != null) seabedMaterial.SetFloat("_SwellDepth", swell);
             if (userBeachMaterial != null) userBeachMaterial.SetFloat("_SwellDepth", swell);
         }
-        // the waves' clock as built, unless the sky's shared settings came first (a value left over from the editor's
+        // the waves' clock as built, unless the panel's settings came first (a value left over from the editor's
         // last play otherwise stays: shader globals outlive it)
         if (_rippleSpeed == 1f && _rippleShift == 0f)
             VRCShader.SetGlobalVector(VRCShader.PropertyToID("_Udon_CWRipple"), new Vector4(1f, 0f, 0f, 1f));
@@ -168,13 +166,10 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetVector("_SeaDir", skyMaterial.GetVector("_SeaDir"));
     }
 
-    /// <summary>The clouds' cover (0..1) on the sky, the water, the seabed and the pools at once (ClearwaterSky.SetClouds);
-    /// below 0: as built.</summary>
+    /// <summary>The clouds' cover (0..1) on the sky, the water, the seabed and the pools at once (ClearwaterSettings).</summary>
     public void SetCloudCover(float cover)
     {
         if (skyMaterial == null) return;
-        RememberBuilt();
-        if (cover < 0f) cover = _builtCloud;
         skyMaterial.SetFloat("_CloudCover", cover);
         CopyClouds(waterMaterial);
         CopyClouds(seabedMaterial);
@@ -184,12 +179,10 @@ public class ClearwaterController : UdonSharpBehaviour
     public float CloudCover() { return skyMaterial != null ? skyMaterial.GetFloat("_CloudCover") : 0f; }
 
     /// <summary>How fast the clouds drift (m/s), on the sky, the water, the seabed and the pools at once
-    /// (ClearwaterSky.SetCloudSpeed); below 0: as built. They go on from where they are.</summary>
+    /// (ClearwaterSettings). They go on from where they are.</summary>
     public void SetCloudSpeed(float speed)
     {
         if (skyMaterial == null) return;
-        RememberBuilt();
-        if (speed < 0f) speed = _builtCloudSpeed;
         float was = skyMaterial.GetFloat("_CloudSpeed");
         if (was == speed) return;
         // the shaders put the layer at speed * time + shift (time since the scene loaded): keep that where it is now
@@ -204,12 +197,12 @@ public class ClearwaterController : UdonSharpBehaviour
 
     /// <summary>How high the shore waves are (m, the breaker height; 0 = none): their breaking, run-up, foam and wet
     /// sand, on the water, the seabed, the underwater view and the user terrain's beach at once, the surf's sound louder
-    /// or softer with them (ClearwaterSky.SetShoreWaves); below 0: as built.</summary>
+    /// or softer with them (ClearwaterSettings).</summary>
     public void SetShoreWaveHeight(float height)
     {
         if (waterMaterial == null) return;
         RememberBuilt();
-        if (height < 0f) height = _builtHeight;
+        height = Mathf.Max(height, 0f);
         // none at all: still water at the shore, as a coast built without shore waves (no foam or wet sand left at the
         // water's edge, and none of their work for the shaders)
         float shore = height > 0.005f ? _builtShore : 0f;
@@ -219,14 +212,12 @@ public class ClearwaterController : UdonSharpBehaviour
         SetShore(userBeachMaterial, height, shore);
     }
 
-    // the settings as built, before anything sets them (the sky's shared settings can come before Start)
+    // the shore waves as built, before anything sets them (the panel's settings can come before Start)
     void RememberBuilt()
     {
         if (_builtHeight >= 0f || waterMaterial == null) return;
         _builtHeight = waterMaterial.GetFloat("_SwashHeight");
         _builtShore = waterMaterial.GetFloat("_ShoreWaves");
-        _builtCalm = waterMaterial.GetFloat("_Calm");
-        if (skyMaterial != null) { _builtCloud = skyMaterial.GetFloat("_CloudCover"); _builtCloudSpeed = skyMaterial.GetFloat("_CloudSpeed"); }
     }
 
     void SetShore(Material m, float height, float shore)
@@ -240,11 +231,10 @@ public class ClearwaterController : UdonSharpBehaviour
 
     /// <summary>How strong the sea's small waves are, 0 (a glassy calm: no light patterns on the floor) to 1 (as built),
     /// on the sea's water, seabed, underwater view and the light patterns on avatars at once; the pools keep their own
-    /// (ClearwaterSky.SetSeaWaves); below 0: as built.</summary>
+    /// (ClearwaterSettings).</summary>
     public void SetSeaWaves(float strength)
     {
-        RememberBuilt();
-        float calm = strength < 0f ? _builtCalm : 1f - Mathf.Clamp01(strength);
+        float calm = 1f - Mathf.Clamp01(strength);
         if (waterMaterial != null) waterMaterial.SetFloat("_Calm", calm);
         if (seabedMaterial != null) seabedMaterial.SetFloat("_Calm", calm);
         if (underwaterMaterial != null) underwaterMaterial.SetFloat("_Calm", calm);
@@ -254,10 +244,10 @@ public class ClearwaterController : UdonSharpBehaviour
     public float SeaWaves() { return waterMaterial != null ? 1f - waterMaterial.GetFloat("_Calm") : 1f; }
 
     /// <summary>How fast the sea's small waves go, as against as built (1; 0 = still), for the pools too: they share the
-    /// one surface. They go on from the shape they have (ClearwaterSky.SetRippleSpeed); below 0: as built.</summary>
+    /// one surface. They go on from the shape they have (ClearwaterSettings).</summary>
     public void SetRippleSpeed(float speed)
     {
-        speed = speed < 0f ? 1f : speed;
+        speed = Mathf.Max(speed, 0f);
         if (speed == _rippleSpeed) return;
         _rippleShift += (_rippleSpeed - speed) * Time.timeSinceLevelLoad; // (the clock where it is now)
         _rippleSpeed = speed;
