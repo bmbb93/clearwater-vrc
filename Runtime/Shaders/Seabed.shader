@@ -192,8 +192,7 @@ Shader "Clearwater/Seabed"
                     [branch] if (max(e.x, e.y) > _SeaHalfSize)
                     {
                         float3 vh = cwToJS(i.wpos - _WorldSpaceCameraPos);
-                        float mh = max(dot(normalize(float3(vh.x, 0.0, vh.z) + 1e-5), sun), 0.0);
-                        float3 hz = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(mh, 6.0) + 0.3 * pow(mh, 64.0));
+                        float3 hz = cwHazeColor(vh, sun);
                         return float4(cwTonemap(hz * 0.95), 1.0);
                     }
                     return float4(shadow, 1, 0, 0);
@@ -287,9 +286,8 @@ Shader "Clearwater/Seabed"
                 {
                     float3 vd = cwToJS(i.wpos - _WorldSpaceCameraPos);
                     float dist = length(vd);
-                    float muh = max(dot(normalize(float3(vd.x, 0.0, vd.z) + 1e-5), sun), 0.0);
-                    float3 hazeC = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(muh, 6.0) + 0.3 * pow(muh, 64.0));
                     float hazeW = (1.0 - exp(-dist * 0.004)) * 0.8;
+                    float3 hazeC = cwHazeAt(vd, sun, hazeW / 0.8);
                     L = lerp(L, hazeC * 0.95, hazeW);
                     spec *= 1.0 - hazeW;
                 }

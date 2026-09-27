@@ -532,11 +532,10 @@ float4 fragSide(v2f i)
 
     // distant haze over the water
     float haze = 1.0 - exp(-dist * 0.004);
-    float muh = max(dot(normalize(float3(wd.x, 0.0, wd.z)), uSun), 0.0);
-    float3 hazeC = float3(0.60, 0.71, 0.82) + float3(1.0, 0.86, 0.66) * (0.22 * pow(muh, 6.0) + 0.3 * pow(muh, 64.0));
     // ...and all the way into it over the outer half of the plane, so a small sea shows no edge (the sky
     // below the horizon is the same haze)
     float edge = smoothstep(0.5, 1.0, max(abs(P.x), abs(P.z)) / _SeaHalfSize);
+    float3 hazeC = cwHazeAt(wd, uSun, max(haze, edge));
     col = lerp(col, hazeC * 0.95, max(haze * 0.8, edge));
 
     // sky above the horizon (only reached at grazing angles, so only evaluated there)

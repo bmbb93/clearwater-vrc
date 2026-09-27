@@ -62,12 +62,14 @@ static const float3 SIG_A = float3(0.40, 0.074, 0.088);
 static const float3 SIG_S = float3(0.028, 0.052, 0.068);
 static const float3 SIG_T = SIG_A + SIG_S;
 
-inline float3 cwSunColor() { return float3(1.0, 0.90, 0.74) * _SunIntensity * (1.0 - _Indoor); } // (none indoors)
+// the light that shades (none indoors): the time of day's (the sun, or the moon at night; Sun intensity scales it as
+// against its 6), or the fixed sky's sun
+inline float3 cwSunColor() { return (CW_TOD ? cwKeyColor() * (_SunIntensity / 6.0) : float3(1.0, 0.90, 0.74) * _SunIntensity) * (1.0 - _Indoor); }
 // the light from the whole sky on a level surface (indoors: from the room, the probe's broadest look upward)
 inline float3 cwSkyIrr()
 {
     [branch] if (_Indoor > 0.5) return cwRoom(float3(0, 1, 0), 1.0) * CW_PI;
-    return float3(0.62, 0.70, 0.78) * CW_PI * 0.22;
+    return cwAmbientIrr();
 }
 
 // polynomial smooth min / max: blends two lines over a width k with no kink (k/4 rounding at the crossing)

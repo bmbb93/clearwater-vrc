@@ -100,6 +100,14 @@ Shader "Clearwater/AvatarCaustics"
                 // lit side only; the lines only form a little below the surface
                 float facing = saturate(dot(n, -sunT));
                 float w = _Strength * facing * smoothstep(0.03, 0.5, depth) * CW_WAVE * (1.0 - _Indoor); // (a pool's: calmer; none indoors)
+                // (the sky of the time of day: only as strong as the sun's or the moon's share of the light, the fixed
+                // sky's share at the reference: none at dusk, when the sky alone lights the water)
+                [branch] if (CW_TOD)
+                {
+                    const float3 Y = float3(0.2126, 0.7152, 0.0722);
+                    float key = dot(cwKeyColor(), Y), amb = dot(cwAmbientIrr(), Y);
+                    w *= saturate(key / max(key + amb, 1e-6) / 0.92);
+                }
                 float3 m = lerp(1.0, caus, w);
                 return float4(saturate(0.5 * m), 1.0);
             }

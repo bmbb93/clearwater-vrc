@@ -257,7 +257,7 @@ public static class ClearwaterSetup
         return a;
     }
 
-    static Vector3 SunVector()
+    internal static Vector3 SunVector()
     {
         float el = SunEl * Mathf.Deg2Rad, az = SunAz * Mathf.Deg2Rad;
         // the demo's (sin az cos el, sin el, -cos az cos el), with z flipped into Unity space
@@ -619,7 +619,7 @@ public static class ClearwaterSetup
         }
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-        // sun + environment
+        // sun + environment: the sky of the time of day on the sun
         var sun = CreateSun("Sun");
         RenderSettings.skybox = a.sky;
         RenderSettings.sun = sun;
@@ -627,6 +627,7 @@ public static class ClearwaterSetup
         RenderSettings.fog = false;
 
         CreateRig(a, sun);
+        ClearwaterSkySetup.Install(sun);
 
         // VRChat world descriptor, spawn facing +z (toward the sun), reference camera
         var refGo = new GameObject("Reference Camera");
@@ -786,6 +787,10 @@ public static class ClearwaterSetup
         return water;
     }
 
+    /// <summary>The fixed sky's sunlight (the sky of the time of day keeps it with the sun 31 degrees up).</summary>
+    internal static readonly Color SunColor = new Color(1.0f, 0.93f, 0.82f);
+    internal const float SunIntensity = 1.3f;
+
     /// <summary>The Clearwater sun: warm white, 31 deg up, straight ahead of the default spawn, soft shadows (the water
     /// reads the camera depth texture, which VRChat only renders while the directional light casts shadows).</summary>
     static Light CreateSun(string name)
@@ -793,8 +798,8 @@ public static class ClearwaterSetup
         var sunGo = new GameObject(name);
         var sun = sunGo.AddComponent<Light>();
         sun.type = LightType.Directional;
-        sun.color = new Color(1.0f, 0.93f, 0.82f);
-        sun.intensity = 1.3f;
+        sun.color = SunColor;
+        sun.intensity = SunIntensity;
         sun.shadows = LightShadows.Soft;
         sunGo.transform.rotation = Quaternion.LookRotation(-SunVector());
         return sun;
@@ -803,9 +808,10 @@ public static class ClearwaterSetup
     const string ClearwaterSunName = "Sun (Clearwater)";
 
     /// <summary>Gives the open scene the Clearwater sky and sun, as Build Scene does: a "Sun (Clearwater)" light
-    /// (made once, reused after), the Clearwater skybox, ambient light from it, and the controller pointed at the
-    /// sun. The world's other directional lights are switched off (their Light components; the objects, their children
-/// and other components are left alone), not deleted: two suns would double the light.</summary>
+    /// (made once, reused after; in a scene Build Scene made, its own sun), the Clearwater skybox, the sky of the time
+    /// of day on the sun (ClearwaterSky) with the ambient light it sets, and the controller pointed at the sun. The
+    /// world's other directional lights are switched off (their Light components; the objects, their children and
+    /// other components are left alone), not deleted: two suns would double the light.</summary>
     [MenuItem("Tools/Clearwater/Use Clearwater Sky and Sun")]
     public static void UseSkyAndSun()
     {
@@ -813,7 +819,10 @@ public static class ClearwaterSetup
         if (sky == null) sky = BuildAssets().sky;
         Light sun = null;
         foreach (var l in Object.FindObjectsOfType<Light>(true))
-            if (l.type == LightType.Directional && l.name == ClearwaterSunName) { sun = l; break; }
+            if (l.type == LightType.Directional && (l.name == ClearwaterSunName || l.GetComponent<ClearwaterSky>() != null)) { sun = l; break; }
+        var built = Object.FindObjectOfType<ClearwaterController>();
+        if (sun == null && built != null && built.sun != null && built.sun.type == LightType.Directional && built.sun.name == "Sun")
+            sun = built.sun; // (Build Scene's)
         if (sun == null)
         {
             sun = CreateSun(ClearwaterSunName);
@@ -836,7 +845,6 @@ public static class ClearwaterSetup
             }
         RenderSettings.skybox = sky;
         RenderSettings.sun = sun;
-        RenderSettings.ambientMode = AmbientMode.Skybox;
         var ctl = Object.FindObjectOfType<ClearwaterController>();
         if (ctl != null)
         {
@@ -844,7 +852,7 @@ public static class ClearwaterSetup
             ctl.sun = sun;
             EditorUtility.SetDirty(ctl);
         }
-        DynamicGI.UpdateEnvironment();
+        ClearwaterSkySetup.Install(sun); // (the sky of the time of day, and the ambient light it sets)
         EditorSceneManager.MarkSceneDirty(sun.gameObject.scene);
         Debug.Log("[Clearwater] Clearwater sky and sun set." + (off.Count > 0 ? " Switched off the light of: " + string.Join(", ", off) + " (tick their Light components to undo)." : ""));
     }
@@ -879,8 +887,8 @@ public static class ClearwaterSetup
             var sunGo = new GameObject("Sun");
             sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.color = new Color(1.0f, 0.93f, 0.82f);
-            sun.intensity = 1.3f;
+            sun.color = SunColor;
+            sun.intensity = SunIntensity;
             sunGo.transform.rotation = Quaternion.LookRotation(-SunVector());
             RenderSettings.sun = sun;
         }
@@ -1028,7 +1036,7 @@ public static class ClearwaterSetup
         return rig;
     }
 
-    static void EnsureProgramAsset(string scriptPath)
+    internal static void EnsureProgramAsset(string scriptPath)
     {
         string assetPath = Path.ChangeExtension(scriptPath, ".asset");
         if (AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(assetPath) != null) return;
