@@ -81,10 +81,11 @@ public static class ClearwaterSkySetup
     }
 
     const string PanelName = "Sky Control Panel (Clearwater)";
+    const int UILayer = 5;
 
     /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
     /// sliders, the day going by on a toggle; anyone can use it and what they set goes to everyone. Placed in front of the
-    /// spawn, facing it; one made before is replaced where it stands.</summary>
+    /// spawn, facing it, on the UI layer (out of VRChat's camera); one made before is replaced where it stands.</summary>
     [MenuItem("Tools/Clearwater/Add Sky Control Panel")]
     public static void AddPanel()
     {
@@ -192,6 +193,8 @@ public static class ClearwaterSkySetup
         UnityEventTools.AddStringPersistentListener(clouds.onValueChanged, udon.SendCustomEvent, "OnClouds");
         UnityEventTools.AddStringPersistentListener(dayLength.onValueChanged, udon.SendCustomEvent, "OnDayLength");
         UnityEventTools.AddStringPersistentListener(toggle.onValueChanged, udon.SendCustomEvent, "OnCycle");
+        // on the UI layer: the players see it and use it, VRChat's camera leaves it out (unless its Show UI is on)
+        foreach (var t in root.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
         dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
