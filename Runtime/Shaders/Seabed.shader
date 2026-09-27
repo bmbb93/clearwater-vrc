@@ -131,7 +131,10 @@ Shader "Clearwater/Seabed"
 
             struct appdata { float4 vertex : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
             // (the sun's shadows on the dry beach: avatars and whatever stands on it)
-            struct v2f { float4 pos : SV_POSITION; float3 wpos : TEXCOORD0; SHADOW_COORDS(1) UNITY_VERTEX_OUTPUT_STEREO };
+            // (wpos at the centroid: with MSAA a pixel only partly on a triangle is shaded at its centre, and the
+            // grid's far triangles, slivers along the horizon, put that centre well off them: shaded as ground that
+            // is not there, at dusk it lit up in the low sun's red, dots flickering along the headland's foot)
+            struct v2f { float4 pos : SV_POSITION; float3 wpos : TEXCOORD0_centroid; SHADOW_COORDS(1) UNITY_VERTEX_OUTPUT_STEREO };
 
             float _BedGloss;
             float4 _LightColor0;
