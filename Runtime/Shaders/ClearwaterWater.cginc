@@ -87,13 +87,13 @@ float sceneDistance(float2 uvD, float3 rdWorld)
 // the shadow a grab pixel carries: 0 (shadowed) to 1, or -1 where none is known
 float cwShadowOf(float4 px)
 {
-    // (alpha 0 and green 0: nothing drawn there, such as a VR eye's masked-off corners)
-    return px.a < 0.25 ? (px.g > 0.5 ? px.r : -1.0) : px.a < 0.4 ? 1.0 : saturate((px.a - 0.5) / 0.5);
+    // (the seabed's marked pixels 0.04 to 0.2; alpha 0: nothing drawn there, such as a VR eye's masked-off corners)
+    return px.a < 0.25 ? (px.a > 0.02 ? saturate((px.a - 0.04) / 0.16) : -1.0) : px.a < 0.4 ? 1.0 : saturate((px.a - 0.5) / 0.5);
 }
 
 // The sun's shadow on the floor at FP (water space round origin: the floor the water traces, depth under the still
-// water): the seabed mesh drawn under the water leaves its straight shadow on screen for the water - in the red of
-// the pixels it marks with alpha 0, and where it draws the ground under thin water itself, in its alpha from 0.5 to
+// water): the seabed mesh drawn under the water leaves its straight shadow on screen for the water - in the alpha of
+// the pixels it marks (0.04 to 0.2), and where it draws the ground under thin water itself, in its alpha from 0.5 to
 // 1 - read where the waves call for (cwShadowReadXZ). 1 (lit) where the screen shows something else there (alpha 1:
 // an avatar, the user terrain in its own material, with its own shadows).
 // Where that is off screen (looking down, the refracted floor lies nearer than the pixel: the screen's last rows
@@ -429,7 +429,7 @@ float4 fragSide(v2f i)
         if (dOff < 0.0 || dOff > sv - 0.06) off = 0;
         float4 objG = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, uvG + float2(off.x, off.y * gsign));
         if (objG.a < 0.25) objG = UNITY_SAMPLE_SCREENSPACE_TEXTURE(_CWGrabWater, uvG);
-        // alpha 0 = skipped seabed (its coarse mesh can sit in front of the traced floor at rock edges)
+        // alpha under 0.25 = skipped seabed (its coarse mesh can sit in front of the traced floor at rock edges)
         if (objG.a >= 0.25)
         {
             under = cwInvTonemap(objG.rgb) * exp(-SIG_T * dObj) + cwInscatter(depthHere, dObj, tr, uSun);

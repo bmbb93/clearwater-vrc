@@ -178,10 +178,12 @@ Shader "Clearwater/Seabed"
                 float shadow = SHADOW_ATTENUATION(i); // (the sun's shadows: avatars' and whatever stands here)
                 // Seen from above the water, submerged ground is always covered by the water surface, which traces
                 // the floor itself — skip it. The margin keeps the waterline (waves, ripples) fully shaded.
-                // Alpha 0 marks these pixels for the water, so it never mistakes them for a submerged object; their red
-                // is the sun's shadow here, for the water to darken the floor it traces with (an avatar's in the shallows;
-                // shallower, the alpha carries it: see the end), their green 1 tells them from pixels nothing was drawn
-                // on (a VR eye's masked-off corners are black, alpha 0 too).
+                // An alpha under 0.25 marks these pixels for the water, so it never mistakes them for a submerged object:
+                // 0.04 to 0.2 for the sun's shadow here, for the water to darken the floor it traces with (an avatar's in
+                // the shallows; shallower, the alpha carries it: see the end), told from pixels nothing was drawn on (a VR
+                // eye's masked-off corners: alpha 0). Their colour is the far water's haze: where the water leaves a
+                // sample of them uncovered (it decides per pixel, antialiasing per sample: at the far shore, round an
+                // avatar in the water) that is what blends in, not a colour of data.
                 // (a camera at the waterline decides per pixel: the part of its view that starts under the water
                 // sees the ground directly, with the underwater fog over it)
                 bool under = cwPixelUnder(normalize(i.wpos - _WorldSpaceCameraPos), _WaterOrigin.xyz);
@@ -195,7 +197,8 @@ Shader "Clearwater/Seabed"
                         float3 hz = cwHazeColor(vh, sun);
                         return float4(cwTonemap(hz * 0.95), 1.0);
                     }
-                    return float4(shadow, 1, 0, 0);
+                    float3 far = CW_TOD ? _Udon_CWHorizon.rgb : float3(0.60, 0.71, 0.82);
+                    return float4(cwTonemap(far * 0.95), 0.04 + 0.16 * shadow);
                 }
                 float hgt, rockM;
                 float3 alb = cwFloorAlbedo(p, dpdx, dpdy, hgt, rockM);

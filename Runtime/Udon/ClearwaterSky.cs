@@ -166,7 +166,7 @@ public class ClearwaterSky : UdonSharpBehaviour
         // the fixed sky's: its sun, its light from the whole sky, its mean brightness (ClearwaterCommon.cginc)
         Vector3 fixedSun = new Vector3(6.0f, 5.4f, 4.44f);
         Vector3 fixedAmb = new Vector3(0.62f, 0.70f, 0.78f) * (Mathf.PI * 0.22f);
-        const float FixedSkyMean = 0.4397f;
+        const float FixedSkyMean = 0.4397f, FixedSkyHorizon = 0.595f; // (its mean luminance; all round, 5 degrees up)
         // the white balance and the exposure, one for all the light: the sun exactly the fixed sky's. The light in the
         // shade (the sky's, and what the ground gives back) and the sky itself as bright as the fixed sky's, in their
         // own colours
@@ -174,7 +174,12 @@ public class ClearwaterSky : UdonSharpBehaviour
         _wb = _sunScale / Lum(_sunScale); // (the white balance alone)
         Vector3 ambRef = Vector3.Scale(e + Bounce * (d * sinR + e), _sunScale);
         _ambScale = Lum(fixedAmb) / Mathf.Max(Lum(ambRef), 1e-20f);
-        _skyScale = FixedSkyMean / Mathf.Max(mean, 1e-20f);
+        // the sky itself: halfway (in log terms) between as bright as the fixed sky on the whole and as bright low
+        // round the horizon. The real sky is brighter there (the haze) and darker overhead than the fixed one: matched
+        // on the whole, its horizon ran into white; matched there, its zenith went dark
+        float onWhole = FixedSkyMean / Mathf.Max(mean, 1e-20f);
+        float onHorizon = FixedSkyHorizon / Mathf.Max(Lum(Vector3.Scale(h, _sunScale / Lum(_sunScale))), 1e-20f);
+        _skyScale = Mathf.Sqrt(onWhole * onHorizon);
         _yRef = Seen(d, sinR) + Lum(e);
         _meanRef = mean;
         float xn = -Mathf.Log(MoonlitNight), nb = -Mathf.Log(Mathf.Clamp(nightBrightness, 0.005f, 0.9f));
