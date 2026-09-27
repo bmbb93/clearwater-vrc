@@ -34,20 +34,33 @@ v2f vertSide(appdata v)
     o.origin = mul(unity_ObjectToWorld, float4(0, 0, 0, 1)).xyz;
     // Seen from above, the plane is raised to the highest the run-up reaches: at the still-water height the beach face
     // above it hid it, so the sheet running up the beach was never drawn, only the wet sand it leaves (two layers
-    // meeting at a fixed line). The fragment traces the true surface and drops the dry beach itself. (Also for a
-    // camera at the waterline, up to its near clip below: held at the still water there, the sheet was lost to a
-    // wet-sand band whenever the eye came within the band's 60 cm.)
+    // meeting at a fixed line). The fragment traces the true surface and drops the dry beach itself.
     float reach = (CW_WATER_BELOW == 0 && _ShoreWaves > 0.5) ? _SwashHeight * _SwashRunup * 1.2 + _FoamLift + 0.05 : 0.0;
-    if (cwCameraNearSurface(o.origin.y))
+    float camY = _WorldSpaceCameraPos.y - o.origin.y;
+    // the plane stays this far under the camera: clear of its near clip plane
+    float off = cwCameraNearSurface(o.origin.y) ? 0.1 + 4.0 * _ProjectionParams.y : 0.2;
+    if (CW_WATER_BELOW != 0)
     {
         // a camera at the waterline draws both passes, each keeping its own pixels (fragSide); the plane only
         // marks where to shade, so it is moved clear of the near clip plane, to the camera's side of the surface
         // that the pass looks at (the fragment traces the true surface from the camera)
-        float off = 0.1 + 4.0 * _ProjectionParams.y;
-        o.wpos.y = (CW_WATER_BELOW != 0) ? max(o.wpos.y, _WorldSpaceCameraPos.y + off) : min(o.wpos.y + reach, _WorldSpaceCameraPos.y - off);
+        if (cwCameraNearSurface(o.origin.y)) o.wpos.y = max(o.wpos.y, _WorldSpaceCameraPos.y + off);
     }
     else
-        o.wpos.y += min(reach, max(_WorldSpaceCameraPos.y - o.origin.y - 0.2, 0.0));
+    {
+        float lift = min(reach, camY - off);
+        // A camera lower than that (an eye near the water) holds the plane under it, and the beach face hid the sheet
+        // above it again: a band of wet sand along the waterline. There the plane follows the ground instead, a
+        // little over it (more than the sheet's thickness, and the error of the ground between the plane's vertices),
+        // up to where the run-up reaches - and near the camera, under it all the same.
+        [branch] if (reach > 0.0 && lift < reach)
+        {
+            float3 u = cwToJS(o.wpos - o.origin);
+            float over = min(min(-cwFloorDepth(u.xz) + 0.25, reach), camY - off + 0.05 * length(o.wpos.xz - _WorldSpaceCameraPos.xz));
+            lift = max(lift, over);
+        }
+        o.wpos.y += lift;
+    }
     o.pos = UnityWorldToClipPos(o.wpos);
     if (!cwCameraNearSurface(o.origin.y) && (_WorldSpaceCameraPos.y < o.origin.y) != (CW_WATER_BELOW != 0))
         o.pos = float4(-2, -2, -2, 1); // the other side's pass
@@ -199,6 +212,8 @@ float4 fragSide(v2f i)
         clip(below == (CW_WATER_BELOW != 0) ? 1.0 : -1.0);
         uCam = cwToJS(cwNearPoint(rdWorld) - i.origin);
     }
+    // (from above, the plane following the beach over a low camera's eye: the view up to it is not traced)
+    if (!below) clip(-rdWorld.y);
     if (below) { wd.y = max(wd.y, 0.0015); } else { wd.y = min(wd.y, -0.0015); }
     wd = normalize(wd);
     float2 ripC = _RipCenter.xy;
