@@ -158,25 +158,18 @@ public static class ClearwaterToneMapping
     static Vector3 Tonemap(Vector3 c, float exposure)
     {
         c *= exposure;
-        const float a = 2.51f, b = 0.03f, cc = 2.43f, d = 0.59f, e = 0.14f, Knee = 0.8f;
-        float m = Mathf.Max(c.x, Mathf.Max(c.y, c.z));
-        var y = c;
-        for (int i = 0; i < 3; i++) y[i] = Mathf.Clamp01((c[i] * (a * c[i] + b)) / (c[i] * (cc * c[i] + d) + e));
-        if (m > Knee) // (highlights: their hue kept, a longer tail)
+        const float a = 2.51f, b = 0.03f, cc = 2.43f, d = 0.59f, e = 0.14f, Knee = 0.8f, White = 0.9f;
+        for (int i = 0; i < 3; i++)
         {
-            float u = 1.2617f * (m - Knee), s = 0.7523f + 0.2477f * u / (1f + u);
-            var h = c * (s / m);
-            h = Vector3.Lerp(h, new Vector3(s, s, s), 0.7f * SmoothStep(4f, 40f, m));
-            y = Vector3.Lerp(y, h, SmoothStep(Knee, 1.3f, m));
+            float x = c[i];
+            if (x <= Knee) c[i] = (x * (a * x + b)) / (x * (cc * x + d) + e);
+            else { float u = 0.3125f / (White - 0.7523f) * (x - Knee); c[i] = 0.7523f + (White - 0.7523f) * u / (1f + u); } // (the long tail to a soft white)
         }
-        c = y;
         float lum = Vector3.Dot(c, new Vector3(0.2126f, 0.7152f, 0.0722f));
         c = Vector3.Lerp(new Vector3(lum, lum, lum), c, 0.90f);
         float t = Mathf.Clamp01(lum / 0.35f); t = t * t * (3f - 2f * t);
         return Vector3.Lerp(Vector3.Scale(c, new Vector3(0.96f, 1.0f, 1.05f)), c, t);
     }
-
-    static float SmoothStep(float a, float b, float x) { float t = Mathf.Clamp01((x - a) / (b - a)); return t * t * (3f - 2f * t); }
 
     /// <summary>The shaders' tone curve as a 33^3 LUT over LogC-encoded HDR, for post-processing's External mode:
     /// the post pass then gives exactly the look the shaders do (its own ACES shapes highlights differently: whiter

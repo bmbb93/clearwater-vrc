@@ -274,33 +274,23 @@ float cwTransmitK(float k)
 
 // The demo's tone curve (exposure, ACES fit, slight desaturation, cool shadows). Output is display-referred;
 // Unity's linear->sRGB framebuffer encode stands in for the demo's pow(1/2.2).
-// Highlights (a channel over 0.8 once exposed) go over to a curve of their own: taken on the brightest channel with
-// the others kept in proportion, so their hue stays instead of each channel running into white, and with a longer
-// tail than the ACES fit's (which puts everything from 2.5 up within a few percent of white): the glare round the sun
-// and the silver edges of the clouds keep their gradation. Only the very brightest fade to white. (Editor/
+// Highlights (each channel over 0.8 once exposed) go on along a tail of their own: the ACES fit's value and slope at
+// 0.8, then slowly on to 0.9 - never the full white, which glared, and with gradation left where the ACES fit puts
+// everything from 2.5 up within a few percent of it (the glare round the sun, the clouds' silver edges). Channel by
+// channel, as film: a bright sunset shifts to yellow and white rather than keeping its deep red. (Editor/
 // ClearwaterToneMapping.cs bakes the same curve for post-processing: keep the two in step.)
 float _Exposure;
 #define CW_TONE_KNEE 0.8
-float cwToneShoulder(float m)
-{
-    // from the knee on, the ACES fit's value and slope there (0.7523, 0.3125), then slowly on to 1
-    float u = 1.2617 * (m - CW_TONE_KNEE);
-    return 0.7523 + 0.2477 * u / (1.0 + u);
-}
+#define CW_TONE_WHITE 0.9
 float3 cwTonemap(float3 c)
 {
 #if defined(_CW_TONEMAP)
     c *= _Exposure;
     const float a = 2.51, b = 0.03, cc = 2.43, d = 0.59, e = 0.14;
-    float m = max(c.r, max(c.g, c.b));
-    float3 y = saturate((c * (a * c + b)) / (c * (cc * c + d) + e));
-    [branch] if (m > CW_TONE_KNEE)
-    {
-        float s = cwToneShoulder(m);
-        float3 h = c * (s / m);
-        h = lerp(h, s.xxx, 0.7 * smoothstep(4.0, 40.0, m));
-        y = lerp(y, h, smoothstep(CW_TONE_KNEE, 1.3, m));
-    }
+    float3 aces = (c * (a * c + b)) / (c * (cc * c + d) + e);
+    float3 u = 0.3125 / (CW_TONE_WHITE - 0.7523) * max(c - CW_TONE_KNEE, 0.0);
+    float3 tail = 0.7523 + (CW_TONE_WHITE - 0.7523) * u / (1.0 + u);
+    float3 y = c > CW_TONE_KNEE ? tail : aces;
     c = y;
     float lum = dot(c, float3(0.2126, 0.7152, 0.0722));
     c = lerp(lum.xxx, c, 0.90);
@@ -310,15 +300,18 @@ float3 cwTonemap(float3 c)
     return c;
 }
 
-// Approximate inverse of cwTonemap (exact for the ACES fit, ignores the small grade), used to bring already
+// Approximate inverse of cwTonemap (exact for the curve, the ACES fit and its tail; ignores the small grade), used to bring already
 // rendered scene colours (avatars, the seabed mesh) back to scene radiance before water attenuates them.
 float3 cwInvTonemap(float3 y)
 {
 #if defined(_CW_TONEMAP)
-    y = clamp(y, 0.0, 0.985);
+    y = clamp(y, 0.0, CW_TONE_WHITE - 0.005);
     const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
     float3 A = y * c - a, B = y * d - b, Cc = y * e;
     float3 x = (-B - sqrt(max(B * B - 4.0 * A * Cc, 0.0))) / (2.0 * A);
+    float3 t = (y - 0.7523) / (CW_TONE_WHITE - 0.7523); // (the tail's)
+    float3 xt = CW_TONE_KNEE + t / (1.0 - t) * (CW_TONE_WHITE - 0.7523) / 0.3125;
+    x = y > 0.7523 ? xt : x;
     return x / max(_Exposure, 1e-4);
 #else
     // Already linear HDR (tone mapping in post-processing). Capped where the in-shader curve tops out (its inverse
