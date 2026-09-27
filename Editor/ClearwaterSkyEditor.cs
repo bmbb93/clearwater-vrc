@@ -85,7 +85,7 @@ public static class ClearwaterSkySetup
 
     /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
     /// sliders, the day going by on a toggle; anyone can use it and what they set goes to everyone. Placed in front of the
-    /// spawn, facing it, on the UI layer (out of VRChat's camera); one made before is replaced where it stands.</summary>
+    /// spawn, facing it, what shows on the UI layer (out of VRChat's camera); one made before is replaced in place.</summary>
     [MenuItem("Tools/Clearwater/Add Sky Control Panel")]
     public static void AddPanel()
     {
@@ -126,6 +126,14 @@ public static class ClearwaterSkySetup
         rt.sizeDelta = new Vector2(420f, 295f);
         rt.localScale = Vector3.one * 0.0015f; // (63 x 44 cm)
         root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
+        // what shows sits in a canvas of its own on the UI layer, which VRChat's camera leaves out (unless its UI is
+        // on); the shape stays on the root's layer, as VRChat's pointer passes by UI-layer shapes while its menu is shut
+        var face = new GameObject("Face", typeof(RectTransform));
+        face.transform.SetParent(root.transform, false);
+        var fr = (RectTransform)face.transform;
+        fr.anchorMin = Vector2.zero; fr.anchorMax = Vector2.one; fr.sizeDelta = Vector2.zero;
+        face.AddComponent<Canvas>();
+        face.AddComponent<GraphicRaycaster>();
 
         var res = new DefaultControls.Resources
         {
@@ -135,13 +143,13 @@ public static class ClearwaterSkySetup
             checkmark = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Checkmark.psd"),
         };
         var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        var bg = root.AddComponent<Image>();
+        var bg = face.AddComponent<Image>();
         bg.sprite = res.background; bg.type = Image.Type.Sliced; bg.color = new Color(0.08f, 0.10f, 0.14f, 0.82f);
 
         Text Label(string text, float y)
         {
             var go = new GameObject("Label", typeof(RectTransform));
-            go.transform.SetParent(root.transform, false);
+            go.transform.SetParent(face.transform, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
             r.sizeDelta = new Vector2(380f, 32f); r.anchoredPosition = new Vector2(0f, y);
@@ -153,7 +161,7 @@ public static class ClearwaterSkySetup
         {
             var go = DefaultControls.CreateSlider(res);
             go.name = name;
-            go.transform.SetParent(root.transform, false);
+            go.transform.SetParent(face.transform, false);
             var r = (RectTransform)go.transform;
             r.anchorMin = r.anchorMax = new Vector2(0.5f, 1f);
             r.sizeDelta = new Vector2(380f, 24f); r.anchoredPosition = new Vector2(0f, y);
@@ -170,7 +178,7 @@ public static class ClearwaterSkySetup
         dayLength.wholeNumbers = true;
         var toggleGo = DefaultControls.CreateToggle(res);
         toggleGo.name = "Day goes by";
-        toggleGo.transform.SetParent(root.transform, false);
+        toggleGo.transform.SetParent(face.transform, false);
         var tr = (RectTransform)toggleGo.transform;
         tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 1f);
         tr.sizeDelta = new Vector2(380f, 30f); tr.anchoredPosition = new Vector2(0f, -250f);
@@ -193,8 +201,7 @@ public static class ClearwaterSkySetup
         UnityEventTools.AddStringPersistentListener(clouds.onValueChanged, udon.SendCustomEvent, "OnClouds");
         UnityEventTools.AddStringPersistentListener(dayLength.onValueChanged, udon.SendCustomEvent, "OnDayLength");
         UnityEventTools.AddStringPersistentListener(toggle.onValueChanged, udon.SendCustomEvent, "OnCycle");
-        // on the UI layer: the players see it and use it, VRChat's camera leaves it out (unless its Show UI is on)
-        foreach (var t in root.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
+        foreach (var t in face.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = UILayer;
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
         dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
