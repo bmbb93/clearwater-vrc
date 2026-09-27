@@ -495,5 +495,72 @@ public class ClearwaterSkyEditor : Editor
             EditorUtility.SetDirty(sky);
             ClearwaterSkySetup.Show(sky);
         }
+        StartValuesGUI(sky);
+    }
+
+    // What the sky and wave panel starts from, and its Reset all goes back to, in one place: the hour, Day goes by and
+    // the day's length are the fields above; the clouds and the waves are the materials' own values, shown and set
+    // here (in every material that holds them, so the Scene view shows them too); the ripples' speed is the sky's.
+    static void StartValuesGUI(ClearwaterSky sky)
+    {
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Start values (the sky and wave panel, and its Reset all)", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox("What the world starts with and Reset all on the panel goes back to: the hour, Day goes by and " +
+            "the day's length above, and these. The clouds and the waves are set in the sky's and the water's materials.",
+            MessageType.None);
+        var ctl = sky.controller;
+        if (ctl == null)
+        {
+            EditorGUILayout.HelpBox("No Clearwater Controller set on the sky: the clouds and the waves have no materials to set.", MessageType.Warning);
+            return;
+        }
+        Material skyM = ctl.skyMaterial, water = ctl.waterMaterial;
+        if (skyM != null)
+        {
+            EditorGUI.BeginChangeCheck();
+            float cover = EditorGUILayout.Slider("Clouds", skyM.GetFloat("_CloudCover"), 0f, 1f);
+            float drift = EditorGUILayout.Slider("Cloud drift (m/s)", skyM.GetFloat("_CloudSpeed"), 0f, 60f);
+            if (EditorGUI.EndChangeCheck())
+                SetAll(Mats(skyM, ctl.waterMaterial, ctl.seabedMaterial, ctl.poolWaterMaterials), "Clouds",
+                    m => { m.SetFloat("_CloudCover", cover); m.SetFloat("_CloudSpeed", drift); });
+        }
+        if (water != null)
+        {
+            EditorGUI.BeginChangeCheck();
+            float height = EditorGUILayout.Slider("Shore waves (m)", water.GetFloat("_SwashHeight"), 0f, 0.5f);
+            if (EditorGUI.EndChangeCheck())
+                SetAll(Mats(water, ctl.seabedMaterial, ctl.underwaterMaterial, ctl.userBeachMaterial), "Shore waves",
+                    m => m.SetFloat("_SwashHeight", height));
+            EditorGUI.BeginChangeCheck();
+            float ripples = EditorGUILayout.Slider("Ripples", 1f - water.GetFloat("_Calm"), 0f, 1f);
+            if (EditorGUI.EndChangeCheck())
+                SetAll(Mats(water, ctl.seabedMaterial, ctl.underwaterMaterial, ctl.avatarCausticsMaterial), "Ripples",
+                    m => m.SetFloat("_Calm", 1f - ripples));
+        }
+        EditorGUI.BeginChangeCheck();
+        float speed = EditorGUILayout.Slider("Ripple speed", sky.startRippleSpeed, 0f, 2f);
+        if (EditorGUI.EndChangeCheck())
+        {
+            Undo.RecordObject(sky, "Ripple speed");
+            sky.startRippleSpeed = speed;
+            UdonSharpEditorUtility.CopyProxyToUdon(sky);
+            EditorUtility.SetDirty(sky);
+        }
+    }
+
+    static Material[] Mats(Material a, Material b, Material c, Material[] more)
+    {
+        var list = new System.Collections.Generic.List<Material> { a, b, c };
+        if (more != null) list.AddRange(more);
+        list.RemoveAll(m => m == null);
+        return list.ToArray();
+    }
+
+    static Material[] Mats(Material a, Material b, Material c, Material d) { return Mats(a, b, c, new[] { d }); }
+
+    static void SetAll(Material[] mats, string what, System.Action<Material> set)
+    {
+        Undo.RecordObjects(mats, what);
+        foreach (var m in mats) { set(m); EditorUtility.SetDirty(m); }
     }
 }

@@ -114,10 +114,14 @@ public class ClearwaterSky : UdonSharpBehaviour
     [HideInInspector] public float startHour = -1f;
     [HideInInspector] public int startCycle = -1;
     [HideInInspector] public float startDayMinutes = -1f;
+    // how fast the sea's small waves go to start with and after a ResetAll, as against as built (the other start values
+    // of the clouds and the waves are the materials' own: the Inspector shows and sets them all together)
+    [HideInInspector] public float startRippleSpeed = 1f;
 
     void Start()
     {
         if (startHour < 0f) { startHour = timeOfDay; startCycle = cycle ? 1 : 0; startDayMinutes = dayMinutes; }
+        if (controller != null && _rippleSpeed < 0f) controller.SetRippleSpeed(startRippleSpeed);
         if (Networking.IsOwner(gameObject))
         {
             _start = Networking.GetServerTimeInSeconds();
@@ -268,7 +272,7 @@ public class ClearwaterSky : UdonSharpBehaviour
         controller.SetCloudSpeed(_cloudSpeed);
         controller.SetShoreWaveHeight(_shoreWaves);
         controller.SetSeaWaves(_seaWaves);
-        controller.SetRippleSpeed(_rippleSpeed);
+        controller.SetRippleSpeed(_rippleSpeed >= 0f ? _rippleSpeed : startRippleSpeed);
     }
 
     void Update()
