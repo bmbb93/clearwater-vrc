@@ -11,9 +11,8 @@ using Object = UnityEngine.Object;
 /// stepped revetment, a ramp, a pier on piles), a swimming pool (a user terrain with still water), a resort (the sea
 /// and two pools at other heights) and a beach made with a Unity Terrain. Tools > Clearwater > Demo Scenes > Build Demo
 /// Scenes makes them in Assets/Clearwater/Demo (the scenes, and their meshes, textures and materials, all made here);
-/// each is a new Clearwater scene with its own ground, and nothing else in the project is changed. Clearwater keeps one
-/// set of baked data per project, so a demo is baked again whenever it is opened from the menu (and your own scene
-/// needs its coast baked again after: Back to the Clearwater Scene, or the Coast's Bake).
+/// each is a new Clearwater scene with its own ground, its bakes in a folder of its own in Generated like any scene's
+/// (ADR 0003), and nothing else in the project is changed.
 /// </summary>
 public static class ClearwaterDemoScenes
 {
@@ -40,19 +39,18 @@ public static class ClearwaterDemoScenes
             BuildTerrain();
         }
         finally { _assets = null; }
-        Debug.Log("[Clearwater] demo scenes built in " + Dir + " (Tools > Clearwater > Demo Scenes). The Unity Terrain demo " +
-                  "is open. Your own scene's coast needs baking again when you go back to it.");
+        Debug.Log("[Clearwater] demo scenes built in " + Dir + " (Tools > Clearwater > Demo Scenes). The Unity Terrain demo is open.");
     }
 
-    [MenuItem(Menu + "Open Cove (a mesh as the ground)", false, 200)] static void OpenCove() => OpenAndBake(Dir + "/Demo_Cove.unity");
-    [MenuItem(Menu + "Open Harbor (a quay and a pier)", false, 201)] static void OpenHarbor() => OpenAndBake(Dir + "/Demo_Harbor.unity");
-    [MenuItem(Menu + "Open Pool (still water only)", false, 202)] static void OpenPool() => OpenAndBake(Dir + "/Demo_Pool.unity");
-    [MenuItem(Menu + "Open Resort (the sea and two pools)", false, 203)] static void OpenResort() => OpenAndBake(Dir + "/Demo_Resort.unity");
-    [MenuItem(Menu + "Open Terrain (a Unity Terrain)", false, 204)] static void OpenTerrainScene() => OpenAndBake(Dir + "/Demo_Terrain.unity");
-    [MenuItem(Menu + "Back to the Clearwater Scene", false, 300)] static void OpenMain() => OpenAndBake(ClearwaterSetup.ScenePath);
+    [MenuItem(Menu + "Open Cove (a mesh as the ground)", false, 200)] static void OpenCove() => Open(Dir + "/Demo_Cove.unity");
+    [MenuItem(Menu + "Open Harbor (a quay and a pier)", false, 201)] static void OpenHarbor() => Open(Dir + "/Demo_Harbor.unity");
+    [MenuItem(Menu + "Open Pool (still water only)", false, 202)] static void OpenPool() => Open(Dir + "/Demo_Pool.unity");
+    [MenuItem(Menu + "Open Resort (the sea and two pools)", false, 203)] static void OpenResort() => Open(Dir + "/Demo_Resort.unity");
+    [MenuItem(Menu + "Open Terrain (a Unity Terrain)", false, 204)] static void OpenTerrainScene() => Open(Dir + "/Demo_Terrain.unity");
+    [MenuItem(Menu + "Back to the Clearwater Scene", false, 300)] static void OpenMain() => Open(ClearwaterSetup.ScenePath);
 
-    /// <summary>Opens a scene and bakes its coast (the baked data is shared by every scene in the project).</summary>
-    public static void OpenAndBake(string path, bool ask = true)
+    /// <summary>Opens a scene (each keeps its own bakes: nothing to bake again).</summary>
+    public static void Open(string path, bool ask = true)
     {
         if (!File.Exists(path))
         {
@@ -62,9 +60,6 @@ public static class ClearwaterDemoScenes
         }
         if (ask && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
         EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
-        var coast = Object.FindObjectOfType<ClearwaterCoast>();
-        if (coast != null) ClearwaterCoastBake.Bake(coast);
-        EditorSceneManager.SaveOpenScenes();
     }
 
     // ------------------------------------------------------------------ scenes
@@ -329,7 +324,12 @@ public static class ClearwaterDemoScenes
     static (ClearwaterCoast, GameObject) Clone(string name)
     {
         string path = Dir + "/" + name + ".unity";
-        AssetDatabase.DeleteAsset(path);
+        // made again from scratch in the same file (the same GUID, so the same folder of its own: emptied first)
+        if (File.Exists(path))
+        {
+            string own = ClearwaterSetup.Gen + "/" + ClearwaterSetup.SceneDir(path, name).TrimEnd('/');
+            if (AssetDatabase.IsValidFolder(own)) AssetDatabase.DeleteAsset(own);
+        }
         ClearwaterSetup.CreateScene(_assets ?? ClearwaterSetup.BuildAssets(), path, false);
         var coast = Object.FindObjectOfType<ClearwaterCoast>();
         var root = new GameObject("User Terrain (" + name + ")");

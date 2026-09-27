@@ -32,6 +32,13 @@ public static class ClearwaterCoastBake
             Debug.LogError("[Clearwater] Bake: the coast needs at least two points.");
             return;
         }
+        if (string.IsNullOrEmpty(ctl.gameObject.scene.path))
+        {
+            Debug.LogError("[Clearwater] Bake: save the scene first (what is baked for it goes in a folder named after it).");
+            return;
+        }
+        ClearwaterSetup.OwnSceneAssets(ctl);
+        string own = ClearwaterSetup.SceneDir(ctl.gameObject.scene); // (where its bakes go)
         var waterRenderer = ctl.water.GetComponent<MeshRenderer>(); // (a scene made before it was drawn first)
         if (waterRenderer != null && waterRenderer.sortingOrder != ClearwaterSetup.WaterSortingOrder)
         {
@@ -54,7 +61,7 @@ public static class ClearwaterCoastBake
 
         // the user terrain: its heights, and the waterline found on it in place of the line through the walkable area
         var user = ClearwaterUserTerrain.Bake(ctl, coast);
-        if (user != null) user.tex = ClearwaterSetup.Save(user.tex, "UserTerrain.asset");
+        if (user != null) user.tex = ClearwaterSetup.Save(user.tex, own + "UserTerrain.asset");
         var notes = new List<(string text, List<Vector3> at)>(); // (what is wrong with the user terrain, and where)
         if (user != null && !coast.closed)
         {
@@ -84,20 +91,20 @@ public static class ClearwaterCoastBake
         for (int i = 0; i < pts.Length; i++) pts[i].z -= v0;
         float size = Mathf.Max(coast.areaSize, 1f);
         int res = Mathf.Clamp(coast.resolution, 64, 4096);
-        var field = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, centre, size, res, TextureFormat.RGFloat), "CoastField.asset");
+        var field = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, centre, size, res, TextureFormat.RGFloat), own + "CoastField.asset");
         // the same over the whole sea, coarse: the coast drawn outside the detailed square
         float seaSize = Mathf.Max(coast.seaSize, size);
         int outerRes = Mathf.Clamp(coast.outerResolution, 64, 4096);
-        var farField = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, Vector2.zero, seaSize, outerRes, TextureFormat.RGHalf), "CoastFieldOuter.asset");
+        var farField = ClearwaterSetup.Save(BakeCoastField(pts, coast.closed, Vector2.zero, seaSize, outerRes, TextureFormat.RGHalf), own + "CoastFieldOuter.asset");
         farField.name = "CoastFieldOuter";
 
         // how exposed each stretch of shore is to the swell
         var (exposure, exposureV, expAt, expH, expD) = BakeExposure(coast, pts, centre);
-        exposure = ClearwaterSetup.Save(exposure, "ShoreExposure.asset");
+        exposure = ClearwaterSetup.Save(exposure, own + "ShoreExposure.asset");
 
         // cross-section
         var (profile, range) = BuildProfile(coast);
-        profile = ClearwaterSetup.Save(profile, "CoastProfile.asset");
+        profile = ClearwaterSetup.Save(profile, own + "CoastProfile.asset");
 
         // the beach face's slope over the height the swash climbs (it sets how long the swash takes: gravity along it)
         float swashSlope = SwashSlope(coast, range.z, ctl.waterMaterial.GetFloat("_SwashHeight") * ctl.waterMaterial.GetFloat("_SwashRunup"));
@@ -274,7 +281,7 @@ public static class ClearwaterCoastBake
         var stamps = Object.FindObjectsOfType<ClearwaterStamp>();
         if (stamps.Length == 0)
         {
-            AssetDatabase.DeleteAsset(ClearwaterSetup.Gen + "/StampHeights.asset");
+            AssetDatabase.DeleteAsset(ClearwaterSetup.Gen + "/" + ClearwaterSetup.SceneDir(ctl.gameObject.scene) + "StampHeights.asset");
             return (null, area);
         }
         ClearwaterSetup.NameLayer(PropsLayer, "ClearwaterProps");
@@ -336,7 +343,7 @@ public static class ClearwaterCoastBake
             name = "StampHeights", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear
         };
         tex.SetPixels(px); tex.Apply(false, false);
-        tex = ClearwaterSetup.Save(tex, "StampHeights.asset");
+        tex = ClearwaterSetup.Save(tex, ClearwaterSetup.SceneDir(ctl.gameObject.scene) + "StampHeights.asset");
         area.w = 1;
         return (tex, area);
     }
@@ -537,7 +544,7 @@ public static class ClearwaterCoastBake
         mesh.vertices = v;
         mesh.SetTriangles(idx, 0);
         mesh.bounds = new Bounds(Vector3.zero, new Vector3(2 * half, 12, 2 * half));
-        mesh = ClearwaterSetup.Save(mesh, "SeabedCollider.asset");
+        mesh = ClearwaterSetup.Save(mesh, ClearwaterSetup.SceneDir(ctl.gameObject.scene) + "SeabedCollider.asset");
 
         // (on a user terrain the ground to walk on is its own meshes' colliders: only the walls are made)
         var mc = groundTf.GetComponent<MeshCollider>();

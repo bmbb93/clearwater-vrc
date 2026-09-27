@@ -280,7 +280,7 @@ public static class ClearwaterUserTerrain
             beach = new Material(Shader.Find("Clearwater/UserBeach")) { name = "UserBeach" };
             beach.CopyPropertiesFromMaterial(ctl.seabedMaterial);
             beach.renderQueue = -1; // (the shader's, not the seabed's)
-            beach = ClearwaterSetup.Save(beach, "UserBeach.mat");
+            beach = ClearwaterSetup.Save(beach, ClearwaterSetup.SceneDir(ctl.gameObject.scene) + "UserBeach.mat");
         }
         if (ctl.userBeachMaterial != beach) { Undo.RecordObject(ctl, "User terrain beach"); ctl.userBeachMaterial = beach; EditorUtility.SetDirty(ctl); }
         Project(ctl, ProjectorName, d, mask, d != null ? ctl.avatarCausticsMaterial : null);

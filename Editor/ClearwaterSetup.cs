@@ -16,9 +16,18 @@ using VRC.SDK3.Components;
 public static class ClearwaterSetup
 {
     // what this world makes (materials, render textures, bakes, the scene) lives in the project; what every world
-    // shares (shaders, scripts, sounds, textures) comes from the package
+    // shares (shaders, scripts, sounds, textures) comes from the package. In the project, what each scene has of its
+    // own (its bakes, and the materials that read them) is in a folder of its own under Gen (SceneDir, ADR 0003); the
+    // rest of Gen is shared by every scene
     internal const string Root = "Assets/Clearwater";
     internal const string Gen = Root + "/Generated";
+    /// <summary>What a scene has of its own, in its folder (anything else in Generated is shared).</summary>
+    internal static readonly string[] SceneFiles =
+    {
+        "Water.mat", "Seabed.mat", "Underwater.mat", "AvatarCaustics.mat", "Sky.mat", "UserBeach.mat",
+        "WaterPlane.asset", "SeabedGrid.asset", "SeabedCollider.asset", "CoastField.asset", "CoastFieldOuter.asset",
+        "ShoreExposure.asset", "CoastProfile.asset", "StampHeights.asset", "UserTerrain.asset",
+    };
     internal const string ScenePath = Root + "/Scenes/Clearwater.unity";
     internal const string Pkg = "Packages/com.vbamboo.clearwater/Runtime";
 
@@ -50,9 +59,9 @@ public static class ClearwaterSetup
     const float SeabedFarPerSeaSize = 0.6f, SeabedGrowth = 1.08f; // then 8% larger each step out to the horizon
     static readonly Vector3 SpawnPos = new Vector3(0, 0.8f, -41f); // on the beach, facing the water and the sun
 
-    // Rebuilds everything in Generated/. The assets are updated in place (same files, same IDs), so an existing scene
-    // keeps pointing at them and is otherwise left alone: things placed or tuned by hand, and the uploaded world's
-    // ID, stay. Only a missing scene is created.
+    // Rebuilds the shared assets in Generated/ and the Clearwater scene's own. The assets are updated in place (same
+    // files, same IDs), so an existing scene keeps pointing at them and is otherwise left alone: things placed or tuned
+    // by hand, and the uploaded world's ID, stay. Only a missing scene is created.
     [MenuItem("Tools/Clearwater/Build Scene")]
     public static void BuildScene()
     {
@@ -101,6 +110,8 @@ public static class ClearwaterSetup
         var ctl = Object.FindObjectOfType<ClearwaterController>();
         if (ctl != null)
         {
+            OwnSceneAssets(ctl);
+            a = ForScene(a, scene);
             ctl.swashLoop = a.water.GetFloat("_SwashLoop");    // follows the wave audio
             EditorUtility.SetDirty(ctl);
         }
@@ -112,10 +123,18 @@ public static class ClearwaterSetup
         public Material water, sky, caustics, ripple, seabed, underwater, avatarCaustics;
         public RenderTexture causRT;
         public Mesh grid, plane, seabedGrid;
+        // (the shared ones the scene's materials read)
+        internal Texture surf, ripN;
+        internal Texture2D swashTrack, swashBreaks, swashIdx, rocks;
+        internal float swashLoop;
+        internal int swashCount;
+        internal Assets Copy() => (Assets)MemberwiseClone();
     }
 
     // ---------------------------------------------------------------- assets
 
+    /// <summary>The assets every scene shares (the waves, the ripples, the caustics, the swash's tables), made or
+    /// brought up to date in Generated/; the scene's own materials and meshes are left to ForScene.</summary>
     public static Assets BuildAssets()
     {
         // assets are updated in place (same GUIDs), so rebuilding with unchanged settings leaves git clean
@@ -175,8 +194,34 @@ public static class ClearwaterSetup
         a.grid = BuildGrid();
         a.grid = Save(a.grid, "CausticsGrid.asset");
 
+        a.surf = surf;
+        a.ripN = ripN;
+        var (track, loop) = BuildSwashTrack();
+        a.swashTrack = Save(track, "SwashTrack.asset");
+        a.swashLoop = loop;
+        var (breaks, idx, count) = BuildSwashBreaks();
+        a.swashBreaks = Save(breaks, "SwashBreaks.asset");
+        a.swashIdx = Save(idx, "SwashIdx.asset");
+        a.swashCount = count;
+        if (Rocks) a.rocks = Save(BakeRocks(), "RockHeight.asset");
+        else AssetDatabase.DeleteAsset(Gen + "/RockHeight.asset");
+
+        _made.Clear();
+        AssetDatabase.SaveAssets();
+        return a;
+    }
+
+    /// <summary>The scene's own materials and meshes (the water, the sky, the seabed, the underwater view, the caustics
+    /// on avatars, the water plane and the seabed's grid), made or brought up to date in its folder, with the shared
+    /// ones (from BuildAssets) handed to them. The scene must have been saved (its folder is named after it).</summary>
+    internal static Assets ForScene(Assets shared, UnityEngine.SceneManagement.Scene scene)
+    {
+        string dir = SceneDir(scene);
+        var a = shared.Copy();
+        var surf = a.surf; var ripN = a.ripN;
+
         // water + sky
-        a.water = Mat("Clearwater/Water", "Water");
+        a.water = Mat("Clearwater/Water", "Water", dir);
         a.water.SetTexture("_Surf", surf);
         a.water.SetTexture("_Caus", a.causRT);
         a.water.SetTexture("_Rip", ripN);
@@ -186,15 +231,15 @@ public static class ClearwaterSetup
         a.water.SetFloat("_RipSize", RSIZE);
         a.water.SetVector("_SunDir", SunVector());
         if (IsNew(a.water)) a.water.EnableKeyword("_CW_TONEMAP");
-        a.sky = Mat("Clearwater/Skybox", "Sky");
+        a.sky = Mat("Clearwater/Skybox", "Sky", dir);
         a.sky.SetVector("_SunDir", SunVector());
         if (IsNew(a.sky)) a.sky.EnableKeyword("_CW_TONEMAP");
         float seaSize = SceneSeaSize();
-        a.plane = Save(BuildPlane(seaSize), "WaterPlane.asset");
+        a.plane = Save(BuildPlane(seaSize), dir + "WaterPlane.asset");
         a.water.SetFloat("_SeaHalfSize", seaSize * 0.5f);
 
         // seabed / beach and the underwater view
-        a.seabed = Mat("Clearwater/Seabed", "Seabed");
+        a.seabed = Mat("Clearwater/Seabed", "Seabed", dir);
         a.seabed.SetFloat("_SeaHalfSize", seaSize * 0.5f);
         a.seabed.SetTexture("_Caus", a.causRT);
         a.seabed.SetTexture("_Rip", ripN);
@@ -211,7 +256,7 @@ public static class ClearwaterSetup
         a.seabed.SetVector("_SunDir", SunVector());
         a.seabed.SetVector("_WaterOrigin", Vector4.zero);
         if (IsNew(a.seabed)) a.seabed.EnableKeyword("_CW_TONEMAP");
-        a.underwater = Mat("Clearwater/Underwater", "Underwater");
+        a.underwater = Mat("Clearwater/Underwater", "Underwater", dir);
         a.underwater.SetVector("_SunDir", SunVector());
         a.underwater.SetFloat("_Depth", DEPTH);
         if (IsNew(a.underwater)) a.underwater.EnableKeyword("_CW_TONEMAP");
@@ -221,36 +266,28 @@ public static class ClearwaterSetup
         a.underwater.SetFloat("_PatchSize", L);
         a.underwater.SetFloat("_RipSize", RSIZE);
         // caustics projected on avatars in the water
-        a.avatarCaustics = Mat("Clearwater/AvatarCaustics", "AvatarCaustics");
+        a.avatarCaustics = Mat("Clearwater/AvatarCaustics", "AvatarCaustics", dir);
         a.avatarCaustics.SetTexture("_Caus", a.causRT);
         a.avatarCaustics.SetFloat("_PatchSize", L);
         a.avatarCaustics.SetFloat("_Depth", DEPTH);
         a.avatarCaustics.SetVector("_SunDir", SunVector());
         a.avatarCaustics.SetVector("_WaterOrigin", Vector4.zero);
-        var (track, loop) = BuildSwashTrack();
-        track = Save(track, "SwashTrack.asset");
-        var (breaks, idx, count) = BuildSwashBreaks();
-        breaks = Save(breaks, "SwashBreaks.asset");
-        idx = Save(idx, "SwashIdx.asset");
         foreach (var m in new[] { a.water, a.seabed, a.underwater })
         {
-            m.SetTexture("_SwashTrack", track);
-            m.SetFloat("_SwashLoop", loop);
-            m.SetTexture("_SwashBreaks", breaks);
-            m.SetTexture("_SwashIdx", idx);
-            m.SetFloat("_SwashCount", count);
+            m.SetTexture("_SwashTrack", a.swashTrack);
+            m.SetFloat("_SwashLoop", a.swashLoop);
+            m.SetTexture("_SwashBreaks", a.swashBreaks);
+            m.SetTexture("_SwashIdx", a.swashIdx);
+            m.SetFloat("_SwashCount", a.swashCount);
         }
         // (the coast textures, the walkable ground and the shore sound's path come from the scene's ClearwaterCoast:
         // BakeSceneCoast, after the scene exists)
-        Texture2D rocks = null;
-        if (Rocks) rocks = Save(BakeRocks(), "RockHeight.asset");
-        else AssetDatabase.DeleteAsset(Gen + "/RockHeight.asset");
         foreach (var m in new[] { a.water, a.seabed, a.avatarCaustics, a.underwater })
         {
-            m.SetTexture("_RockTex", rocks); // none = the shaders' default black: no rock anywhere
+            m.SetTexture("_RockTex", a.rocks); // none = the shaders' default black: no rock anywhere
             m.SetVector("_RockArea", new Vector4(0, 0, RockArea, 0));
         }
-        a.seabedGrid = Save(BuildFarGrid("SeabedGrid", seaSize * SeabedFarPerSeaSize), "SeabedGrid.asset");
+        a.seabedGrid = Save(BuildFarGrid("SeabedGrid", seaSize * SeabedFarPerSeaSize), dir + "SeabedGrid.asset");
 
         _made.Clear();
         AssetDatabase.SaveAssets();
@@ -270,18 +307,19 @@ public static class ClearwaterSetup
     static readonly HashSet<Material> _made = new HashSet<Material>();
     static bool IsNew(Material m) => _made.Contains(m);
 
-    static Material Mat(string shader, string name)
+    // (dir: a scene's folder, SceneDir; none: the shared ones)
+    static Material Mat(string shader, string name, string dir = "")
     {
         var s = Shader.Find(shader);
         if (s == null) throw new System.Exception("Shader not found: " + shader);
-        var existing = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/" + name + ".mat");
+        var existing = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/" + dir + name + ".mat");
         if (existing != null)
         {
             if (existing.shader != s) existing.shader = s;
             EditorUtility.SetDirty(existing);
             return existing;
         }
-        var m = Save(new Material(s) { name = name }, name + ".mat");
+        var m = Save(new Material(s) { name = name }, dir + name + ".mat");
         _made.Add(m);
         return m;
     }
@@ -309,8 +347,9 @@ public static class ClearwaterSetup
 
     static string Dir(string path) => System.IO.Path.GetDirectoryName(path).Replace('\\', '/');
 
-    /// <summary>Stores o at Generated/file. If that asset already exists its content is overwritten in place,
-    /// keeping its GUID (and every reference to it); returns the object that now lives in the asset.</summary>
+    /// <summary>Stores o at Generated/file (file may start with a folder: a scene's, SceneDir, or one in it). If that
+    /// asset already exists its content is overwritten in place, keeping its GUID (and every reference to it); returns
+    /// the object that now lives in the asset.</summary>
     internal static T Save<T>(T o, string file) where T : Object
     {
         string path = Gen + "/" + file;
@@ -318,10 +357,7 @@ public static class ClearwaterSetup
         var existing = AssetDatabase.LoadAssetAtPath<T>(path);
         if (existing == null || existing.GetType() != o.GetType())
         {
-            // (a file in a sub-folder, a pool's: the folders made as needed)
-            var missing = new System.Collections.Generic.Stack<string>();
-            for (string d = Dir(path); !AssetDatabase.IsValidFolder(d); d = Dir(d)) missing.Push(d);
-            while (missing.Count > 0) { string d = missing.Pop(); AssetDatabase.CreateFolder(Dir(d), System.IO.Path.GetFileName(d)); }
+            MakeFolders(Dir(path)); // (a file in a sub-folder, a scene's or a pool's)
             if (AssetDatabase.LoadMainAssetAtPath(path) != null) AssetDatabase.DeleteAsset(path);
             AssetDatabase.CreateAsset(o, path);
             return o;
@@ -332,6 +368,118 @@ public static class ClearwaterSetup
         EditorUtility.SetDirty(existing);
         Object.DestroyImmediate(o);
         return existing;
+    }
+
+    static void MakeFolders(string folder)
+    {
+        var missing = new Stack<string>();
+        for (string d = folder; !AssetDatabase.IsValidFolder(d); d = Dir(d)) missing.Push(d);
+        while (missing.Count > 0) { string d = missing.Pop(); AssetDatabase.CreateFolder(Dir(d), Path.GetFileName(d)); }
+    }
+
+    // ---------------------------------------------------------------- each scene's own (ADR 0003)
+
+    /// <summary>The folder of what the scene has of its own, under Generated and ending in a slash: its bakes and the
+    /// materials that read them. Named after the scene and the start of its asset GUID; the GUID says whose it is, so
+    /// the folder is still found after the scene has been renamed. The scene must have been saved.</summary>
+    internal static string SceneDir(UnityEngine.SceneManagement.Scene scene) => SceneDir(scene.path, scene.name);
+
+    /// <summary>The folder of the scene at path (SceneDir).</summary>
+    internal static string SceneDir(string path, string name)
+    {
+        string guid = AssetDatabase.AssetPathToGUID(path, AssetPathToGUIDOptions.OnlyExistingAssets);
+        if (string.IsNullOrEmpty(guid))
+            throw new System.InvalidOperationException("[Clearwater] Save the scene first: what is baked for it goes in a folder named after it.");
+        string tag = "_" + guid.Substring(0, 8);
+        if (AssetDatabase.IsValidFolder(Gen))
+            foreach (var f in AssetDatabase.GetSubFolders(Gen))
+                if (f.EndsWith(tag)) return f.Substring(Gen.Length + 1) + "/";
+        return SafeName(name) + tag + "/";
+    }
+
+    internal static string SafeName(string s)
+    {
+        foreach (char c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
+        return s.Replace('/', '_').Replace(' ', '_');
+    }
+
+    /// <summary>Makes what the scene draws with its own before anything is written into it (a bake, a bed look):
+    /// what an earlier version made in Generated itself is moved into the scene's folder (a move keeps the GUIDs, so
+    /// nothing that points at it is lost); materials in another scene's folder (the scene was copied, or shared them)
+    /// are copied into it, what was tuned on them kept, and the scene pointed at the copies. The bakes are not copied:
+    /// the next bake makes them in the scene's folder and hands them out.</summary>
+    internal static void OwnSceneAssets(ClearwaterController ctl)
+    {
+        var scene = ctl.gameObject.scene;
+        string dir = Gen + "/" + SceneDir(scene).TrimEnd('/');
+        MakeFolders(dir);
+        var used = new List<Object> { ctl.waterMaterial, ctl.seabedMaterial, ctl.underwaterMaterial, ctl.avatarCausticsMaterial,
+                                      ctl.skyMaterial, ctl.userBeachMaterial, RenderSettings.skybox };
+        if (ctl.water != null)
+        {
+            foreach (var mf in ctl.water.GetComponentsInChildren<MeshFilter>(true)) used.Add(mf.sharedMesh);
+            foreach (var mc in ctl.water.GetComponentsInChildren<MeshCollider>(true)) used.Add(mc.sharedMesh);
+        }
+        // those, and what the materials read (the bakes)
+        var paths = new List<string>();
+        foreach (var o in used)
+        {
+            string p = o != null ? AssetDatabase.GetAssetPath(o) : "";
+            if (p == "" || paths.Contains(p)) continue;
+            paths.Add(p);
+            foreach (var d in AssetDatabase.GetDependencies(p, false)) if (!paths.Contains(d)) paths.Add(d);
+        }
+        var copies = new Dictionary<Object, Object>();
+        foreach (var p in paths)
+        {
+            string file = Path.GetFileName(p), from = Dir(p);
+            bool generated = from == Gen || from.StartsWith(Gen + "/");
+            if (from == dir || !generated || System.Array.IndexOf(SceneFiles, file) < 0) continue;
+            string to = dir + "/" + file;
+            bool material = p.EndsWith(".mat");
+            if (AssetDatabase.LoadMainAssetAtPath(to) != null)
+            {
+                if (material) copies[AssetDatabase.LoadMainAssetAtPath(p)] = AssetDatabase.LoadMainAssetAtPath(to); // (one of its own already)
+            }
+            else if (from == Gen)
+            {
+                string error = AssetDatabase.MoveAsset(p, to);
+                if (!string.IsNullOrEmpty(error)) Debug.LogError("[Clearwater] Moving " + p + " into " + dir + ": " + error);
+            }
+            else if (material && AssetDatabase.CopyAsset(p, to))
+                copies[AssetDatabase.LoadMainAssetAtPath(p)] = AssetDatabase.LoadMainAssetAtPath(to);
+        }
+        if (copies.Count > 0)
+        {
+            Repoint(scene, copies);
+            Debug.Log("[Clearwater] " + scene.name + " now has materials of its own, copied into " + dir + ".");
+        }
+    }
+
+    // every reference in the scene to one of the keys made to its value (the renderers', the projectors', the
+    // controller's, the skybox)
+    static void Repoint(UnityEngine.SceneManagement.Scene scene, Dictionary<Object, Object> map)
+    {
+        foreach (var root in scene.GetRootGameObjects())
+            foreach (var c in root.GetComponentsInChildren<Component>(true))
+            {
+                if (c == null) continue; // (a missing script)
+                var so = new SerializedObject(c);
+                var it = so.GetIterator();
+                bool changed = false;
+                while (it.Next(true))
+                    if (it.propertyType == SerializedPropertyType.ObjectReference && it.objectReferenceValue != null &&
+                        map.TryGetValue(it.objectReferenceValue, out var to))
+                    {
+                        it.objectReferenceValue = to;
+                        changed = true;
+                    }
+                if (changed) so.ApplyModifiedProperties();
+            }
+        if (RenderSettings.skybox != null && map.TryGetValue(RenderSettings.skybox, out var sky) &&
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene() == scene)
+            RenderSettings.skybox = (Material)sky;
+        EditorSceneManager.MarkSceneDirty(scene);
     }
 
     // A mesh is rewritten through the Mesh API: copied serialized over one with another layout, the grids drew
@@ -480,13 +628,24 @@ public static class ClearwaterSetup
     internal static void ApplySeaSize(ClearwaterController ctl, float size)
     {
         size = Mathf.Max(size, 100f);
-        var plane = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/WaterPlane.asset");
+        string dir = SceneDir(ctl.gameObject.scene);
+        var plane = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/" + dir + "WaterPlane.asset");
         if (plane == null || !Mathf.Approximately(plane.bounds.extents.x, size * 0.5f) || plane.vertexCount < 100) // (or still the old single quad)
-            Save(BuildPlane(size), "WaterPlane.asset");
+            plane = Save(BuildPlane(size), dir + "WaterPlane.asset");
         float far = size * SeabedFarPerSeaSize;
-        var grid = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/SeabedGrid.asset");
+        var grid = AssetDatabase.LoadAssetAtPath<Mesh>(Gen + "/" + dir + "SeabedGrid.asset");
         if (grid == null || !Mathf.Approximately(grid.bounds.extents.x, 2 * far))
-            Save(BuildFarGrid("SeabedGrid", far), "SeabedGrid.asset");
+            grid = Save(BuildFarGrid("SeabedGrid", far), dir + "SeabedGrid.asset");
+        // (the scene's own: a scene that shared them, or was copied, is given its own here)
+        void Use(Transform t, Mesh mesh)
+        {
+            var mf = t != null ? t.GetComponent<MeshFilter>() : null;
+            if (mf == null || mf.sharedMesh == mesh) return;
+            Undo.RecordObject(mf, "Sea size");
+            mf.sharedMesh = mesh;
+        }
+        Use(ctl.water, plane);
+        Use(ctl.water != null ? ctl.water.Find("Seabed") : null, grid);
         foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial })
         {
             if (m == null) continue;
@@ -618,6 +777,10 @@ public static class ClearwaterSetup
             if (m.Success) worldId = m.Groups[1].Value;
         }
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        // saved at once: its own materials go in a folder named after it (the same folder when it is made again)
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        EditorSceneManager.SaveScene(scene, path);
+        a = ForScene(a, scene);
 
         // sun + environment: the sky of the time of day on the sun
         var sun = CreateSun("Sun");
@@ -661,7 +824,6 @@ public static class ClearwaterSetup
         prev.cullingMask = ~(1 << CausticsLayer);
         prev.depth = -1;
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path));
         EditorSceneManager.SaveScene(scene, path);
         if (main) EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(path, true) };
         BakeSceneCoast(); // the coast, the walkable ground and the shore sound's path
@@ -815,8 +977,16 @@ public static class ClearwaterSetup
     [MenuItem("Tools/Clearwater/Use Clearwater Sky and Sun")]
     public static void UseSkyAndSun()
     {
-        var sky = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/Sky.mat");
-        if (sky == null) sky = BuildAssets().sky;
+        var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        if (string.IsNullOrEmpty(scene.path))
+        {
+            EditorUtility.DisplayDialog("Clearwater", "Save the scene first.", "OK");
+            return;
+        }
+        var water = Object.FindObjectOfType<ClearwaterController>();
+        var sky = water != null ? water.skyMaterial : null;
+        if (sky == null) sky = AssetDatabase.LoadAssetAtPath<Material>(Gen + "/" + SceneDir(scene) + "Sky.mat");
+        if (sky == null) sky = ForScene(BuildAssets(), scene).sky;
         Light sun = null;
         foreach (var l in Object.FindObjectsOfType<Light>(true))
             if (l.type == LightType.Directional && (l.name == ClearwaterSunName || l.GetComponent<ClearwaterSky>() != null)) { sun = l; break; }
@@ -879,7 +1049,7 @@ public static class ClearwaterSetup
             "The world's directional lights are switched off (their Light components), not deleted.",
             "Clearwater sky and sun", "Cancel", "Keep the world's");
         if (choice == 1) return;
-        var a = BuildAssets();
+        var a = ForScene(BuildAssets(), scene);
         var sun = RenderSettings.sun;
         if (sun == null) foreach (var l in Object.FindObjectsOfType<Light>()) if (l.type == LightType.Directional) { sun = l; break; }
         if (sun == null)

@@ -8,7 +8,7 @@ using UnityEngine;
 /// pool's surface as the water level), and its water, underwater view and caustics as children of the pool, drawn
 /// with copies of the sea's materials (the same shaders and wave simulation; the floor theirs, no shore waves). Also
 /// cuts the pools out of the sea: its water, ground and caustics are not drawn in a basin (the pool mask).
-/// Assets go to Generated/Pools/(name)_(id).
+/// Assets go to Pools/(name)_(id) in the scene's folder (ClearwaterSetup.SceneDir).
 /// </summary>
 public static class ClearwaterPoolBake
 {
@@ -41,6 +41,8 @@ public static class ClearwaterPoolBake
     {
         var ctl = Object.FindObjectOfType<ClearwaterController>(true);
         if (ctl == null) { Debug.LogError("[Clearwater] Bake the pool: there is no Clearwater in the scene (Tools > Clearwater)."); return; }
+        if (string.IsNullOrEmpty(ctl.gameObject.scene.path)) { Debug.LogError("[Clearwater] Bake the pool: save the scene first."); return; }
+        ClearwaterSetup.OwnSceneAssets(ctl); // (the sea's materials are cut round it: the scene's own)
         var pools = All();
         BakeOne(ctl, pool, pools);
         ApplyMask(ctl, pools);
@@ -55,7 +57,7 @@ public static class ClearwaterPoolBake
         if (string.IsNullOrEmpty(pool.id) || pools.Exists(p => p != pool && p.id == pool.id && Safe(p.name) == Safe(pool.name)))
             // (new, or a copy of another with the same name: they would share a folder)
             pool.id = System.Guid.NewGuid().ToString("N").Substring(0, 8);
-        string folder = "Pools/" + Safe(pool.name) + "_" + pool.id + "/";
+        string poolsDir = ClearwaterSetup.SceneDir(ctl.gameObject.scene) + "Pools/", folder = poolsDir + Safe(pool.name) + "_" + pool.id + "/";
         var notes = new List<ClearwaterCoast.BakeNote>();
         void Note(string text, params Vector3[] at) => notes.Add(new ClearwaterCoast.BakeNote { text = text, at = at });
         var tf = pool.transform;
@@ -110,7 +112,7 @@ public static class ClearwaterPoolBake
         }
 
         // its materials: the sea's, with its own floor
-        var dry = DryProfile();
+        var dry = DryProfile(poolsDir);
         var waterMat = Copy(ctl.waterMaterial, folder + "Water.mat", "Pool Water");
         var fogMat = Copy(ctl.underwaterMaterial, folder + "Underwater.mat", "Pool Underwater");
         var causMat = Copy(ctl.avatarCausticsMaterial, folder + "Caustics.mat", "Pool Caustics");
@@ -215,12 +217,12 @@ public static class ClearwaterPoolBake
     }
 
     // the floor 1 m above the water everywhere (a table of one value)
-    static Texture2D DryProfile()
+    static Texture2D DryProfile(string poolsDir)
     {
         var t = new Texture2D(4, 1, TextureFormat.RGFloat, false, true) { name = "DryProfile", wrapMode = TextureWrapMode.Clamp };
         t.SetPixels(new[] { new Color(-1, 0, 0, 1), new Color(-1, 0, 0, 1), new Color(-1, 0, 0, 1), new Color(-1, 0, 0, 1) });
         t.Apply(false, false);
-        return ClearwaterSetup.Save(t, "Pools/DryProfile.asset");
+        return ClearwaterSetup.Save(t, poolsDir + "DryProfile.asset");
     }
 
     // a flat grid, Cell apart, centred, facing up
@@ -280,7 +282,7 @@ public static class ClearwaterPoolBake
             tex = new Texture2D(res, res, TextureFormat.RGFloat, false, true) { name = "PoolMask", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Point };
             tex.SetPixels(px);
             tex.Apply(false, false);
-            tex = ClearwaterSetup.Save(tex, "Pools/PoolMask.asset");
+            tex = ClearwaterSetup.Save(tex, ClearwaterSetup.SceneDir(ctl.gameObject.scene) + "Pools/PoolMask.asset");
             at = new Vector4(corner.x, corner.y, size, 1);
         }
         foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial, ctl.avatarCausticsMaterial, ctl.userBeachMaterial, ctl.underwaterMaterial })
@@ -378,11 +380,7 @@ public static class ClearwaterPoolBake
         return c != null ? c : t.gameObject.AddComponent<T>();
     }
 
-    static string Safe(string s)
-    {
-        foreach (char c in System.IO.Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
-        return s.Replace('/', '_').Replace(' ', '_');
-    }
+    static string Safe(string s) => ClearwaterSetup.SafeName(s);
 
     [MenuItem("Tools/Clearwater/Add Pool")]
     static void AddPool()

@@ -24,6 +24,7 @@ public static class ClearwaterBedLooks
         var look = Of(coast);
         var ctl = Object.FindObjectOfType<ClearwaterController>(true);
         if (look == null || ctl == null) return;
+        if (!string.IsNullOrEmpty(ctl.gameObject.scene.path)) ClearwaterSetup.OwnSceneAssets(ctl); // (not another scene's)
         foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial })
         {
             if (m == null) continue;
