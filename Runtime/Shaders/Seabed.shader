@@ -291,7 +291,16 @@ Shader "Clearwater/Seabed"
                     float3 vd = cwToJS(i.wpos - _WorldSpaceCameraPos);
                     float dist = length(vd);
                     float hazeW = cwHazeAmount(dist);
-                    L = lerp(L, cwHazeAt(vd, sun, hazeW), hazeW);
+                    float3 haze = cwHazeAt(vd, sun, hazeW);
+                    // no brighter than the sky low over it that way, as the headland over it: after sunset the
+                    // all-round horizon is mostly the glow on the sunset side, and the last km of the land, packed
+                    // into the row under the headland's foot, showed as a pale line along it
+                    [branch] if (CW_TOD && hazeW > 0.02)
+                    {
+                        float2 hz = normalize(vd.xz + float2(1e-6, 0.0));
+                        haze = min(haze, cwAtmosphere(normalize(float3(hz.x, 0.02, hz.y))));
+                    }
+                    L = lerp(L, haze, hazeW);
                     spec *= 1.0 - hazeW;
                 }
                 // (ground the water can cover, up to the run-up's reach, which the water draws over from this or from its
