@@ -164,7 +164,7 @@ Shader "Clearwater/UserBeach"
                 float fc = 0.45 * pow(b.film, 1.3) * cwFoamAlong(suv.y, _SwashClock) * smoothstep(0.05, 0.02, wetNow) * flat;
                 float runTop = _SwashHeight * _SwashRunup * cwSwashAmpVar(suv.y) / max(_SwashSlope, 0.02);
                 float foam = cwRunupFoam(suv, fc, runTop, 1.0, footprint);
-                float a = saturate(foam * 1.15) * 0.9;
+                float a = cwFoamAlpha(foam);
                 float3 foamCol = cwTonemap(cwFoamLit(foam, float2(0, 0), n, sun, v));
                 // the foam over it, the sheen on the darkened ground (the ground under the foam hidden)
                 return float4(foamCol * a + cwTonemap(sheen) * (1.0 - a), (1.0 - a) * m);

@@ -91,6 +91,40 @@ float3 cwHazeAt(float3 d, float3 sun, float far)
 }
 // the whole sky's light on level ground (the fixed sky's: float3(0.62, 0.70, 0.78) * pi * 0.22)
 inline float3 cwAmbientIrr() { return CW_TOD ? _Udon_CWAmbient.rgb : float3(0.62, 0.70, 0.78) * CW_PI * 0.22; }
+// How much of the view the air hides at dist m: a clear day, some 25 km of visibility (1/e of the light gets through
+// from 6 km off). With the haze thicker (1/e at 250 m) the far water faded into the sky's colour well before the
+// horizon, and sea and sky met in a broad pale band instead of a line.
+#define CW_HAZE_LENGTH 6000.0
+#define CW_HORIZON_DIST 4700.0 // (m to the sea's horizon from standing height)
+inline float cwHazeAmount(float dist) { return 1.0 - exp(-dist / CW_HAZE_LENGTH); }
+
+// the clear sky along d (JS space), without the clouds, the land or the glare round the sun: the time of day's, or
+// the fixed one's gradient
+float3 cwClearSky(float3 d, float3 sun)
+{
+    [branch] if (CW_TOD) return cwAtmosphere(d);
+    float mu = max(dot(d, sun), 0.0);
+    return lerp(float3(0.66, 0.78, 0.90), float3(0.11, 0.27, 0.62), pow(saturate(d.y), 0.42))
+         + float3(1.0, 0.86, 0.66) * (0.22 * pow(mu, 6.0) + 0.30 * pow(mu, 64.0));
+}
+
+// The open sea on to the horizon, past the water plane (its waves smaller than a pixel), before the haze: the wave
+// faces turned toward the eye reflect the sky a couple of degrees up, a little bluer and darker than it is at the
+// horizon, at the Fresnel of a grazing look, over the deep water's own faint blue. (Much higher, and at dusk the far
+// sea turned lavender under the glow the nearer water mirrors.) So the sea at the horizon is darker than the sky
+// just above it, and the two meet in a line, as over a real sea.
+float3 cwFarSea(float3 d, float3 sun)
+{
+    float2 h = normalize(d.xz + float2(1e-6, 0.0));
+    float3 sky = cwClearSky(normalize(float3(h.x, 0.04, h.y)), sun);
+    return sky * 0.8 + cwAmbientIrr() * float3(0.004, 0.010, 0.016);
+}
+// ...and as it shows at the horizon, through the haze of the km to it
+float3 cwFarSeaHazed(float3 d, float3 sun)
+{
+    float H = cwHazeAmount(CW_HORIZON_DIST);
+    return lerp(cwFarSea(d, sun), cwHazeAt(d, sun, H), H);
+}
 
 float cwHash12(float2 p) { float3 p3 = frac(p.xyx * .1031); p3 += dot(p3, p3.yzx + 33.33); return frac((p3.x + p3.y) * p3.z); }
 float cwNoise(float2 p)
@@ -255,7 +289,7 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
         c += float3(1.0, 0.86, 0.66) * (0.22 * pow(max(mu, 0.), 6.) + 0.30 * pow(max(mu, 0.), 64.) + 1.6 * pow(max(mu, 0.), 2400.));
     }
     c = cwCloudsOver(c, d, sun, mu, hor, fwE);
-    // distant headland: pine canopy, softened by ~2 km of air
+    // distant headland: pine canopy, some 2 km off
     float a = atan2(d.z, d.x);
     float landHere, r = cwHeadlandRidge(d, landHere);
     float back = smoothstep(-0.3, 0.95, dot(normalize(float2(d.x, d.z) + 1e-5), normalize(float2(sun.x, sun.z))));
@@ -266,7 +300,11 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
     land *= lerp(1.0, 0.45, back);                         // backlit toward the sun
     [branch] if (CW_TOD) // (in the light of the moment, as against the fixed sky's)
         land *= (cwAmbientIrr() + 0.3 * cwKeyColor()) / (float3(0.62, 0.70, 0.78) * CW_PI * 0.22 + 0.3 * float3(6.0, 5.4, 4.44));
-    land = lerp(land, hor * 0.92, 0.38 + 0.25 * back);      // aerial perspective
+    // aerial perspective: the air in front of it, lit by the sky all round, not by a low sun behind it (that air is in
+    // the land's shadow). (It was the horizon's own colour, which toward a low sun is the glow of a long way of sunlit
+    // air: at sunrise and sunset the land shone with it, as if lit from inside, instead of standing dark against it.)
+    float ha = cwHazeAmount(2000.0);
+    land = lerp(land, cwHazeAt(d, sun, 0.0), ha);
     float w = fwE * 1.2 + 2e-4;
     c = lerp(c, land, smoothstep(r + w, r - w, e) * step(-0.3, e) * saturate(landHere * 20.0));
     return c;

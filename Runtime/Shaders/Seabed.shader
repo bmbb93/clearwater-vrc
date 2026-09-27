@@ -192,14 +192,10 @@ Shader "Clearwater/Seabed"
                 bool under = cwPixelUnder(normalize(i.wpos - _WorldSpaceCameraPos), _WaterOrigin.xyz);
                 [branch] if (_WaterOrigin.y - i.wpos.y > 0.25 && !under)
                 {
-                    // past the water plane nothing covers it: the haze the water fades into at its edge
+                    // past the water plane nothing covers it: the open sea the water turns into at its edge
                     float2 e = abs(i.wpos.xz - _WaterOrigin.xz);
                     [branch] if (max(e.x, e.y) > _SeaHalfSize)
-                    {
-                        float3 vh = cwToJS(i.wpos - _WorldSpaceCameraPos);
-                        float3 hz = cwHazeColor(vh, sun);
-                        return float4(cwTonemap(hz * 0.95), 1.0);
-                    }
+                        return float4(cwTonemap(cwFarSeaHazed(cwToJS(i.wpos - _WorldSpaceCameraPos), sun)), 1.0);
                     float3 far = CW_TOD ? _Udon_CWHorizon.rgb : float3(0.60, 0.71, 0.82);
                     return float4(cwTonemap(far * 0.95), 0.04 + 0.16 * shadow);
                 }
@@ -284,7 +280,7 @@ Shader "Clearwater/Seabed"
                             fg = float2(cwRunupFoam(cwShoreUV(p + float2(e, 0)), fc, runTop, 1.0, footprint) - foam,
                                         cwRunupFoam(cwShoreUV(p + float2(0, e)), fc, runTop, 1.0, footprint) - foam) / e * reliefW;
                         }
-                        L = lerp(L, cwFoamLit(foam, fg, n, sun, v), saturate(foam * 1.15) * 0.9);
+                        L = lerp(L, cwFoamLit(foam, fg, n, sun, v), cwFoamAlpha(foam));
                     }
                 }
                 // distant land fades into the same haze as the distant water
@@ -292,9 +288,8 @@ Shader "Clearwater/Seabed"
                 {
                     float3 vd = cwToJS(i.wpos - _WorldSpaceCameraPos);
                     float dist = length(vd);
-                    float hazeW = (1.0 - exp(-dist * 0.004)) * 0.8;
-                    float3 hazeC = cwHazeAt(vd, sun, hazeW / 0.8);
-                    L = lerp(L, hazeC * 0.95, hazeW);
+                    float hazeW = cwHazeAmount(dist);
+                    L = lerp(L, cwHazeAt(vd, sun, hazeW), hazeW);
                     spec *= 1.0 - hazeW;
                 }
                 // (ground the water can cover, up to the run-up's reach, which the water draws over from this or from its

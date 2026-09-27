@@ -129,8 +129,14 @@ Shader "Clearwater/Skybox"
                     float disc = smoothstep(0.99996, 0.999985, dot(rd, sun));
                     [branch] if (disc > 0.0) c += float3(1.0, 0.90, 0.74) * _SunIntensity * 18.0 * disc * cwCloudSunT(rd) * (1.0 - cwHeadlandCover(rd, fwE));
                 }
-                // below the horizon: the far water's haze colour, so the plane's far edge blends away
-                [branch] if (rd.y < -0.0015) c = lerp(cwHazeColor(rd, sun) * 0.95, c, smoothstep(-0.02, -0.0015, rd.y));
+                // below the horizon: the open sea the water plane's far edge turns into, meeting the sky in a line a
+                // pixel wide; round the landward side the headland comes down to it
+                float hw = fwE + 1e-5;
+                [branch] if (rd.y < hw)
+                {
+                    float3 sea = cwFarSeaHazed(rd, sun);
+                    c = lerp(lerp(sea, c, saturate(cwLandHere(rd) * 20.0)), c, smoothstep(-hw, hw, rd.y));
+                }
                 return float4(cwTonemap(max(c, 0.0)), 1.0);
             }
             ENDCG

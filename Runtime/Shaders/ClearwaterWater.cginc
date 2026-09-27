@@ -156,8 +156,10 @@ float cwWhitewater(float2 xz, float cover, float cc, float run, float sheetW, fl
         foam = cwRunupFoam(suv, cover, run, sheetW, footprint);
     [branch] if (cc > 0.014)
     {
-        float2 cq = lerp(float2(suv.y, -suv.x + 0.4 * _SwashClock), xz * 1.3 + float2(0.0, 0.25 * _SwashClock), obst);
-        foam = max(foam, cwFoam(cq, saturate(cc), _SwashClock, lerp(max(footprint, 0.15), footprint, obst)) * saturate(cc * 1.6));
+        // (drawn out along the crest; with its lace and bubbles, like the run-up's: without them, held to a
+        // 15 cm footprint, it was a band of one flat white)
+        float2 cq = lerp(float2(suv.y * 0.7, (-suv.x + 0.4 * _SwashClock) * 1.3), xz * 1.3 + float2(0.0, 0.25 * _SwashClock), obst);
+        foam = max(foam, cwFoam(cq, saturate(cc), _SwashClock, footprint) * saturate(cc * 1.6));
     }
     return foam;
 }
@@ -347,7 +349,9 @@ float4 fragSide(v2f i)
 
     float nv = dot(n, v);
     if (nv < 0.02) { n = normalize(n + v * (0.02 - nv)); nv = dot(n, v); }
-    float F = cwFresnel(nv, CW_IOR);
+    // (the slopes smaller than the pixel, var, tilt its facets toward the eye: the filtered normal alone is flat far
+    // off, its Fresnel ran to 1 toward the horizon and the water there shone as bright as the sky)
+    float F = cwFresnel(sqrt(nv * nv + 2.0 * var), CW_IOR);
 
     // ---- reflection ----
     // Seen at grazing angles, the facets that face the viewer tilt the reflection upward, which squashed
@@ -461,7 +465,14 @@ float4 fragSide(v2f i)
         under += dot_ * fade * SUN * Ts * 0.022 * lerp(float3(0.9, 1.0, 0.95), float3(0.4, 0.35, 0.3), step(0.992, r));
     }
 
-    float3 col = F * refl + (1.0 - F) * under + spec;
+    float3 col = F * refl + (1.0 - F) * under;
+    // Far off, where the waves grow smaller than a pixel, the reflection taken toward the mirror direction (above)
+    // showed the pale sky at the horizon, as bright as the sky itself: the water goes over to the open sea's average
+    // (cwFarSea), darker than the sky above the horizon, as the sea there is. (The glints stay: the sun's path runs
+    // on to the horizon. Indoors there is no sky to take it from.)
+    float farW = smoothstep(15.0, 300.0, dist) * (1.0 - _Indoor);
+    [branch] if (farW > 0.0) col = lerp(col, cwFarSea(wd, uSun), farW);
+    col += spec;
 
     // ---- shoreline whitewater ----
     // (the grab read uses implicit derivatives, so it has to happen outside the branch or the compiler
@@ -511,12 +522,12 @@ float4 fragSide(v2f i)
         cover = min(cover, 0.65); // (never a solid slab: even the densest foam keeps its holes and lace)
         // pushed shoreward by the surge; the backwash drags it into streaks down the slope (foam laid out in shore
         // coordinates: along the shore, and up the beach)
-        // the breaking crest is a narrow band: soft whitewater only, no lace (it would shred into lines). Round an
-        // obstacle (where it, not the ground, makes the water shallow) the broken water is lace swirling round it.
+        // the breaking crest is a narrow band of whitewater, drawn out along it. Round an obstacle (where it, not the
+        // ground, makes the water shallow) the broken water is lace swirling round it.
         crestCover *= cwFoamAlong(suv.y, _SwashClock);
         float obst = saturate((fd.x - fd.y) * 3.0);
         float cc = crestCover * lerp(1.0, 0.7, obst);
-        cc = max(cc, boreBand); // the next bore running in: soft whitewater, like a breaking crest
+        cc = max(cc, boreBand); // the next bore running in: whitewater, like a breaking crest
         cover = max(cover, 0.6 * boreBand); // ...threaded with lace
         float foam = cwWhitewater(P.xz, cover, cc, run, shore.swash, obst, footprint);
         // relief: the density's slope from two samples beside the pixel (a pixel apart at least, so it never
@@ -529,8 +540,8 @@ float4 fragSide(v2f i)
             g = float2(cwWhitewater(P.xz + float2(e, 0), cover, cc, run, shore.swash, obst, footprint) - foam,
                        cwWhitewater(P.xz + float2(0, e), cover, cc, run, shore.swash, obst, footprint) - foam) / e * reliefW;
         }
-        // thin foam lets the water through; dense foam is brighter, its thin edges darker
-        col = lerp(col, cwFoamLit(foam, g, n, uSun, v), saturate(foam * 1.15) * 0.9);
+        // dense foam is brighter, its thin edges greyer; only its last wisps let the water through
+        col = lerp(col, cwFoamLit(foam, g, n, uSun, v), cwFoamAlpha(foam));
         // the last few millimetres of the sheet fade into the wet beach behind it, no hard clip line
         float3 behind = cwInvTonemap(behindGrab.rgb);
         // (only at the edge over sand: rock standing out of the water is cut by the depth buffer instead; and not
@@ -538,13 +549,13 @@ float4 fragSide(v2f i)
         col = lerp(behind, col, behindGrab.a < 0.25 ? 1.0 : smoothstep(0.0, 0.05, thickEdge) * 0.9 + 0.1 * saturate(thickEdge * 100.0));
     }
 
-    // distant haze over the water
-    float haze = 1.0 - exp(-dist * 0.004);
-    // ...and all the way into it over the outer half of the plane, so a small sea shows no edge (the sky
-    // below the horizon is the same haze)
+    // over the outer half of the plane the water becomes the open sea on past it, as the sky below the horizon draws
+    // it (cwFarSea), so a small sea shows no edge; and the haze of the air in front, as thick at the plane's edge as at
+    // the horizon
     float edge = smoothstep(0.5, 1.0, max(abs(P.x), abs(P.z)) / _SeaHalfSize);
-    float3 hazeC = cwHazeAt(wd, uSun, max(haze, edge));
-    col = lerp(col, hazeC * 0.95, max(haze * 0.8, edge));
+    col = lerp(col, cwFarSea(wd, uSun), edge);
+    float haze = lerp(cwHazeAmount(dist), cwHazeAmount(CW_HORIZON_DIST), edge);
+    col = lerp(col, cwHazeAt(wd, uSun, haze), haze);
 
     // sky above the horizon (only reached at grazing angles, so only evaluated there)
     float hz = smoothstep(-0.0005, 0.0015, rd.y);

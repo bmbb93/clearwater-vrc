@@ -332,25 +332,13 @@ float cwWetFilm(float2 xz, float yAbove)
     return film;
 }
 
-// distance to the nearest jittered cell point, and that point's random value
-float cwCellF1(float2 p, out float rnd)
-{
-    float2 i = floor(p), f = frac(p);
-    float d = 8.0; rnd = 0.0;
-    [unroll] for (int y = -1; y <= 1; y++)
-        [unroll] for (int x = -1; x <= 1; x++)
-        {
-            float2 g = float2(x, y);
-            float2 r = g + float2(cwHash12(i + g), cwHash12(i + g + 17.3)) - f;
-            float dd = dot(r, r);
-            if (dd < d) { d = dd; rnd = cwHash12(i + g + 41.7); }
-        }
-    return sqrt(d);
-}
-
-// Sea foam, 0..1: organic patches with holes of every size (domain-warped noise), threaded with lace, grained
-// with tiny bubbles. As coverage drops the holes grow and merge until only threads are left, the way foam breaks
-// up. footprint = metres per pixel: detail fades out before it would alias.
+// Sea foam, 0..1: organic patches with holes of every size (domain-warped noise), threaded with lace, riddled
+// with bubbles. As coverage drops the holes grow and merge until only threads are left, the way foam breaks up.
+// footprint = metres per pixel: detail fades out before it would alias.
+// Its density is its thickness: a patch has a crisp edge and thickens toward its middle, so the thick clumps
+// stand out bright from a thin veil round them (cwFoamLit greys thin foam). (With a soft edge over a quarter of the
+// field's range and every patch as dense as the next, the foam was a milky film of one flat white; the bubbles,
+// holes at the points of a cell pattern, showed as rows of dots.)
 float cwFoam(float2 p, float coverage, float t, float footprint)
 {
     float2 w = float2(cwFbm2(p * 1.9 + float2(0.0, t * 0.08)), cwFbm2(p * 1.9 + float2(5.2, 1.3) - t * 0.05));
@@ -361,11 +349,13 @@ float cwFoam(float2 p, float coverage, float t, float footprint)
     float lace = 1.0 - abs(2.0 * cwFbm2(q * 11.0 + 3.1) - 1.0);       // thin threads
     float field = S + 0.22 * lerp(0.5, lace, laceW);
     float th = lerp(0.9, 0.25, c);
-    // a density, not a cut-out: thick in the middle of a patch, thinning to nothing at its edge
-    float foam = smoothstep(th - 0.14, th + 0.1, field);
-    foam *= lerp(1.0, 0.45 + 0.55 * lace, laceW * (1.0 - 0.5 * foam));   // threads show where it is thin
-    float r; float f1 = cwCellF1(p * 38.0, r);                        // tiny bubbles
-    foam *= lerp(1.0, lerp(0.4, 1.0, smoothstep(0.1, 0.45, f1 + 0.25 * r)), fineW);
+    // (the edge sharpens only as far as the pixel allows: far off it stays soft rather than alias)
+    float soft = lerp(0.12, 0.05, laceW);
+    float foam = smoothstep(th - soft, th + soft, field) * saturate(0.5 + (field - th) * 1.6);
+    foam *= lerp(1.0, 0.45 + 0.55 * lace, laceW * (1.0 - 0.6 * foam)); // threads show where it is thin
+    // bubbles and the gaps between them: ragged holes, more of them where the foam is thin, and a finer grain
+    float hn = cwNoise(q * 29.0 + 7.3) + 0.45 * foam;
+    foam *= lerp(1.0, smoothstep(0.2, 0.42, hn) * (0.82 + 0.18 * cwNoise(q * 71.0)), fineW);
     return foam * smoothstep(0.02, 0.15, c);
 }
 
@@ -384,6 +374,11 @@ float cwRunupFoam(float2 suv, float cover, float run, float w, float footprint)
 // foam comes in broken patches along the beach (v = distance along the shore), not one continuous line
 inline float cwFoamAlong(float v, float t) { return lerp(0.45, 1.15, cwNoise(float2(v * 0.35, t * 0.09 + 4.0))); }
 
+// how much of what is under it foam of density foam hides: foam is opaque where it is at all (thin foam shows as
+// lace and holes, and greyer: cwFoamLit), only its last wisps let the water through. (As its density, the thin foam
+// round every patch was a translucent milky film.)
+inline float cwFoamAlpha(float foam) { return saturate(foam * 1.8) * 0.95; }
+
 // light off foam (scene-referred, like the water's other terms)
 float3 cwFoamRadiance(float3 n, float3 sun)
 {
@@ -398,8 +393,9 @@ float3 cwFoamLit(float foam, float2 g, float3 n, float3 sun, float3 v)
     float3 nf = normalize(n + float3(-g.x, 0.0, -g.y) * _FoamRelief);
     // foam is white but not a light: kept below clipping, with more of the light coming straight from the sun so
     // the faces turned away from it (the back of a lip or a roller) fall into the sky's bluish shade
+    // (thin foam greyer, the water's shade through it; thick clumps white)
     float3 c = 1.1 / CW_PI * (cwSunColor() * (0.1 + 0.9 * saturate(dot(nf, sun))) * saturate(sun.y * 2.0) + cwSkyIrr() * 1.4)
-             * 0.8 * (0.75 + 0.3 * foam);
+             * 0.8 * (0.6 + 0.48 * foam);
     float3 r = reflect(-sun, nf);
     c += cwSunColor() * pow(saturate(dot(r, v)), 60.0) * 0.35 * foam * saturate(sun.y * 2.0);
     return c;
