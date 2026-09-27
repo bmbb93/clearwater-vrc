@@ -24,7 +24,7 @@ public class ClearwaterSky : UdonSharpBehaviour
     [Tooltip("The hour (local solar time: the sun is highest at 12): the sky's, or the one the day starts from when it goes by")]
     [UdonSynced, Range(0f, 24f)] public float timeOfDay = 16.5f;
     [Tooltip("Real minutes a whole day takes when it goes by")]
-    public float dayMinutes = 24f;
+    [UdonSynced] public float dayMinutes = 24f;
 
     [Header("Place and season")]
     [Tooltip("Latitude (degrees, north +): how high the sun climbs, how long the day and the dusk are")]
@@ -134,6 +134,19 @@ public class ClearwaterSky : UdonSharpBehaviour
         timeOfDay = Hours();
         _start = Networking.GetServerTimeInSeconds();
         cycle = on;
+        Share();
+        ApplyNow();
+    }
+
+    /// <summary>Sets the real minutes a whole day takes, for everyone; the day goes on from the hour it is now.</summary>
+    public void SetDayMinutes(float minutes)
+    {
+        minutes = Mathf.Max(minutes, 0.1f);
+        if (minutes == dayMinutes) return;
+        TakeOver();
+        timeOfDay = Hours();
+        _start = Networking.GetServerTimeInSeconds();
+        dayMinutes = minutes;
         Share();
         ApplyNow();
     }

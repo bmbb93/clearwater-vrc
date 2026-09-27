@@ -82,8 +82,9 @@ public static class ClearwaterSkySetup
 
     const string PanelName = "Sky Control Panel (Clearwater)";
 
-    /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour and the clouds on sliders, the day going
-    /// by on a toggle; anyone can use it and what they set goes to everyone. Placed in front of the spawn, facing it.</summary>
+    /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
+    /// sliders, the day going by on a toggle; anyone can use it and what they set goes to everyone. Placed in front of the
+    /// spawn, facing it; one made before is replaced where it stands.</summary>
     [MenuItem("Tools/Clearwater/Add Sky Control Panel")]
     public static void AddPanel()
     {
@@ -105,15 +106,24 @@ public static class ClearwaterSkySetup
         {
             at = desc.spawns[0].position; facing = Quaternion.Euler(0f, desc.spawns[0].eulerAngles.y, 0f);
         }
+        at += facing * new Vector3(0f, 1.3f, 1.5f);
+        Transform parent = null;
+        var old = Object.FindObjectOfType<ClearwaterSkyPanel>(true);
+        if (old != null)
+        {
+            at = old.transform.position; facing = old.transform.rotation; parent = old.transform.parent;
+            Undo.DestroyObjectImmediate(old.gameObject);
+        }
         var root = new GameObject(PanelName);
         Undo.RegisterCreatedObjectUndo(root, "Clearwater sky panel");
-        root.transform.SetPositionAndRotation(at + facing * new Vector3(0f, 1.3f, 1.5f), facing);
+        root.transform.SetParent(parent, false);
+        root.transform.SetPositionAndRotation(at, facing);
         var canvas = root.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         root.AddComponent<GraphicRaycaster>();
         var rt = (RectTransform)root.transform;
-        rt.sizeDelta = new Vector2(420f, 230f);
-        rt.localScale = Vector3.one * 0.0015f; // (63 x 35 cm)
+        rt.sizeDelta = new Vector2(420f, 295f);
+        rt.localScale = Vector3.one * 0.0015f; // (63 x 44 cm)
         root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
 
         var res = new DefaultControls.Resources
@@ -154,12 +164,15 @@ public static class ClearwaterSkySetup
         var hour = MakeSlider("Hour", -62f, 24f);
         var cloudLabel = Label("Clouds", -100f);
         var clouds = MakeSlider("Clouds", -132f, 1f);
+        var dayLabel = Label("A day in", -170f);
+        var dayLength = MakeSlider("Day length", -202f, ClearwaterSkyPanel.DayLengths().Length - 1);
+        dayLength.wholeNumbers = true;
         var toggleGo = DefaultControls.CreateToggle(res);
         toggleGo.name = "Day goes by";
         toggleGo.transform.SetParent(root.transform, false);
         var tr = (RectTransform)toggleGo.transform;
         tr.anchorMin = tr.anchorMax = new Vector2(0.5f, 1f);
-        tr.sizeDelta = new Vector2(380f, 30f); tr.anchoredPosition = new Vector2(0f, -185f);
+        tr.sizeDelta = new Vector2(380f, 30f); tr.anchoredPosition = new Vector2(0f, -250f);
         var toggle = toggleGo.GetComponent<Toggle>();
         var toggleText = toggleGo.GetComponentInChildren<Text>();
         toggleText.font = font; toggleText.fontSize = 24; toggleText.color = Color.white; toggleText.text = "Day goes by";
@@ -171,14 +184,17 @@ public static class ClearwaterSkySetup
         panel.sky = sky;
         panel.hourSlider = hour; panel.cloudSlider = clouds; panel.cycleToggle = toggle;
         panel.hourLabel = hourLabel; panel.cloudLabel = cloudLabel;
+        panel.dayLengthSlider = dayLength; panel.dayLengthLabel = dayLabel;
         EditorUtility.SetDirty(panel);
         // the UI tells the panel's Udon program (VRChat lets UI events call SendCustomEvent)
         var udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(panel);
         UnityEventTools.AddStringPersistentListener(hour.onValueChanged, udon.SendCustomEvent, "OnHour");
         UnityEventTools.AddStringPersistentListener(clouds.onValueChanged, udon.SendCustomEvent, "OnClouds");
+        UnityEventTools.AddStringPersistentListener(dayLength.onValueChanged, udon.SendCustomEvent, "OnDayLength");
         UnityEventTools.AddStringPersistentListener(toggle.onValueChanged, udon.SendCustomEvent, "OnCycle");
         hour.value = sky.timeOfDay; toggle.isOn = sky.cycle;
         clouds.value = sky.controller != null ? sky.controller.CloudCover() : 0f;
+        dayLength.value = ClearwaterSkyPanel.NearestDayLength(sky.dayMinutes);
         Selection.activeGameObject = root;
         EditorSceneManager.MarkSceneDirty(root.scene);
         Debug.Log("[Clearwater] Sky control panel added in front of the spawn: move it where you like.");
