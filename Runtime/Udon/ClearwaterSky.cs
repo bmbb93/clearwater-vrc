@@ -260,7 +260,9 @@ public class ClearwaterSky : UdonSharpBehaviour
         }
         Vector3 keyC = byMoon ? moonC : sunC;
         // the clouds, a couple of km up, see the sun over a lower horizon: lit red a while after it has set below
-        Vector3 cloudC = Night(Vector3.Scale(Row(sunDirect, sEl + CloudDip), _sunScale) * adapt, night) + moonC;
+        Vector3 cloudSun = Night(Vector3.Scale(Row(sunDirect, sEl + CloudDip), _sunScale) * adapt, night);
+        Vector3 cloudC = cloudSun + moonC;
+        float cloudBySun = Lum(cloudSun) >= Lum(moonC) ? 1f : 0f; // (which way their light comes from)
 
         // ---- the shaders
         if (skyTable != null) VRCShader.SetGlobalTexture(_idLut, skyTable);
@@ -273,11 +275,11 @@ public class ClearwaterSky : UdonSharpBehaviour
         VRCShader.SetGlobalVector(_idSunColor, new Vector4(sunC.x, sunC.y, sunC.z, 1f));
         VRCShader.SetGlobalVector(_idMoonColor, new Vector4(moonC.x, moonC.y, moonC.z, moon && moonW.y > -0.01f ? 1f : 0f));
         // the disc: its radiance (its light over the sky it covers, 6.4e-5 sr: as bright as the day's sky), seen as
-        // the sky is, softly held under 2.5 so its maria still show once the eye has got used to the night; bright
+        // the sky is, softly held under 0.6 (well under the tone curve's shoulder: on screen it must read as far dimmer than the sun, its maria showing) once the eye has got used to the night; bright
         // enough for the eye to see its colour (no night vision on it)
         float discL = Lum(moonD) / 6.4e-5f * _skyScale * adapt;
         Vector3 discC = Vector3.Scale(moonD, _sunScale);
-        discC = discC / Mathf.Max(Lum(discC), 1e-30f) * (discL / (1f + discL / 2.5f));
+        discC = discC / Mathf.Max(Lum(discC), 1e-30f) * (discL / (1f + discL / 0.6f));
         VRCShader.SetGlobalVector(_idMoonDisc, new Vector4(discC.x, discC.y, discC.z, 0f));
         VRCShader.SetGlobalVector(_idKey, new Vector4(keyW.x, keyW.y, keyW.z, byMoon ? 1f : 0f));
         VRCShader.SetGlobalVector(_idAmbient, new Vector4(ambC.x, ambC.y, ambC.z, airglow));
@@ -285,7 +287,7 @@ public class ClearwaterSky : UdonSharpBehaviour
         float starSeen = stars * Mathf.Min(adapt / Adaptation(MoonlitNight), 4f);
         if (starSeen < 1e-3f) starSeen = 0f; // (not a star shows: the sky shader skips them)
         VRCShader.SetGlobalVector(_idNight, new Vector4(starSeen, night, adapt, 0f));
-        VRCShader.SetGlobalVector(_idCloud, new Vector4(cloudC.x, cloudC.y, cloudC.z, 0f));
+        VRCShader.SetGlobalVector(_idCloud, new Vector4(cloudC.x, cloudC.y, cloudC.z, cloudBySun));
         VRCShader.SetGlobalVector(_idHorizon, new Vector4(horC.x, horC.y, horC.z, 0f));
         // (worked out here once, not for every pixel: the bodies across the ground and their slices of the table)
         Vector2 sunH = Across(sunW), moonH = Across(moonW);

@@ -35,7 +35,8 @@ float4 _Udon_CWKey;           // xyz the light that shades (the sun, the moon at
 float4 _Udon_CWAmbient;       // rgb the whole sky's light on level ground; w the airglow's radiance (night's own faint light)
 float4 _Udon_CWStars;         // xyz the celestial pole, w the angle the stars have turned; (their brightness in _Udon_CWNight.x)
 float4 _Udon_CWNight;         // x how bright the stars show; y 0..1 night vision (colours fade and turn blue)
-float4 _Udon_CWCloudLight;    // rgb the light on the clouds: the sun's as it is a couple of km up (it sets later there), and the moon's
+float4 _Udon_CWCloudLight;    // rgb the light on the clouds: the sun's as it is a couple of km up (it sets later there), and the moon's;
+                              // w 1 while the sun's is the more (it lights them from its side, though the moon lights the ground)
 float4 _Udon_CWHorizon;       // rgb the sky low over the horizon, all round it
 float4 _Udon_CWBodies;        // the sun's and the moon's directions across the ground (JS space xz, normalised: sun xy, moon zw)
 float4 _Udon_CWSlices;        // x the sun's slice of the table, y the moon's (texel-centred coordinates)
@@ -172,6 +173,8 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
 {
     [branch] if (_CloudCover > 0.0 && d.y > 0.0)
     {
+        // (after sunset the sun still lights them from its side while the moon lights the ground)
+        [branch] if (CW_TOD && _Udon_CWCloudLight.w > 0.5) { sun = normalize(cwToJS(_Udon_CWSun.xyz)); mu = dot(d, sun); }
         float fp, coarse, tau; float2 q = cwCloudUV(d, fwE, fp);
         float dens = cwCloudDensity(q, fp, coarse, tau);
         [branch] if (dens > 0.0)
