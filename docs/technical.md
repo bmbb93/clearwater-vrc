@@ -1,6 +1,6 @@
 # Clearwater Coast の仕組み
 
-この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.53 時点のものです。
+この文書は、Clearwater Coast が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 0.15.54 時点のものです。
 
 **読み方**。1 章（全体像）と 2 章（用語）で全体の流れをつかめば、あとはどの章からでも読めます。4〜8 章は水の見た目、9〜10 章は焼き込みとプール、13〜14 章は空、15 章以降は調べるときに引く参照用です。Unity に詳しくない人は、2 章の用語表から読んでください。パッケージに手を入れるときは、19 章のテストも見てください。用語の定義は [CONTEXT.md](../CONTEXT.md)、後から変えにくい決定は [docs/adr](adr/) にまとめてあります。
 
@@ -718,7 +718,7 @@ Sky の雲と遠景の陸は、Inspector で変えると Water と Seabed にも
 | `Editor/ClearwaterSkyEditor.cs` | 時刻の空の設置と Inspector、Add Sky Control Panel |
 | `Editor/ClearwaterSkyGUI.cs` | Sky マテリアルの Inspector（雲と遠景の陸を水面と水底へコピー） |
 | `Editor/ClearwaterToneMapping.cs` | トーンマッピングの方式の切り替え（PPv2 の LUT） |
-| `Editor/ClearwaterDemoScenes.cs` | デモシーン 5 つ |
+| `Editor/ClearwaterDemoScenes.cs` | デモシーン 6 つ（Clearwater が作る地面の浜と、自分の地形・プールの例） |
 | `Tests/Editor/` | EditMode のテスト（19 章） |
 | `Tools~/make_wave_audio.sh`、`detect_wave_breaks.js`、`make_sand.py` | 波音の加工、波の崩れる瞬間の検出、砂の画像 |
 | `Documentation~/images/` | README の画像 |

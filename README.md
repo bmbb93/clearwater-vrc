@@ -53,10 +53,11 @@ ALCOM / VCC にこのパッケージのリポジトリを追加し、ワール�
 
 ### デモシーンで試す
 
-使い方の例になるシーンを 5 つ用意しています。`Tools > Clearwater > Demo Scenes > Build Demo Scenes` を実行すると、`Assets/Clearwater/Demo` にシーンとその地形・マテリアル・テクスチャが作られます（30 秒ほどかかります）。どれも Build Scene と同じ新しいシーンに地面を足したもので、開いているシーンは変えません。実行の前に、開いているシーンを保存するかを聞かれます。作り終えると Terrain のデモが開きます。どのデモにも、空のパネル（「時刻と空」の章）を出す小石をスポーン地点のそばに置いています（Pool ではプールの手前のデッキの上）。
+使い方の例になるシーンを 6 つ用意しています。`Tools > Clearwater > Demo Scenes > Build Demo Scenes` を実行すると、`Assets/Clearwater/Demo` にシーンとその地形・マテリアル・テクスチャが作られます（30 秒ほどかかります）。どれも Build Scene と同じ新しいシーンで、Beach はそのまま（Clearwater が作る地面）、ほかはそれに地面を足したものです。開いているシーンは変えません。実行の前に、開いているシーンを保存するかを聞かれます。作り終えると Beach のデモが開きます。どのデモにも、空のパネル（「時刻と空」の章）を出す小石をスポーン地点のそばに置いています（Pool ではプールの手前のデッキの上）。パネルは小石のところへ行かなくても、VR では左手のトリガー 2 回、デスクトップでは Tab キーで手元に呼び出せます。
 
 | シーン | 開くメニュー | 内容 | 詳しい章 |
 | --- | --- | --- | --- |
+| Demo_Beach | `Open Beach (Clearwater's own ground)` | Build Scene と同じ、Clearwater が作る地面の浜（まっすぐな海岸線、既定の断面と起伏）。まず試すならこれです | 海岸を描く |
 | Demo_Cove | `Open Cove (a mesh as the ground)` | メッシュで作った砂の入り江。外側の地面を「Match the user terrain」で同じ砂にしています | 自分の地形を使う |
 | Demo_Harbor | `Open Harbor (a quay and a pier)` | 垂直な岸壁、階段護岸、スロープ、杭で立つ桟橋。杭には Obstacle を付けています | 自分の地形を使う、物を置く |
 | Demo_Pool | `Open Pool (still water only)` | 海のない 25 m プール。深さは 0.5 m で、ジャンプすればプールサイドに上がれます。Pool を使わず、線を `Closed` にして囲み、打ち寄せる波をオフにしています | プールを置く（最初の段落） |

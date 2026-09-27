@@ -7,9 +7,11 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 
 /// <summary>
-/// Demo scenes, each showing a way to use Clearwater: a cove modelled as a mesh (user terrain), a harbour (a quay, a
-/// stepped revetment, a ramp, a pier on piles), a swimming pool (a user terrain with still water), a resort (the sea
-/// and two pools at other heights) and a beach made with a Unity Terrain. Tools > Clearwater > Demo Scenes > Build Demo
+/// Demo scenes, each showing a way to use Clearwater: the beach Clearwater makes itself (its own generated ground, as
+/// Build Scene's), a cove modelled as a mesh (user terrain), a harbour (a quay, a stepped revetment, a ramp, a pier on
+/// piles), a swimming pool (a user terrain with still water), a resort (the sea and two pools at other heights) and a
+/// beach made with a Unity Terrain. Each has the sky's panel, shown by a pebble by the spawn or called up anywhere
+/// (over the hand in VR, in front of the view on a desktop). Tools > Clearwater > Demo Scenes > Build Demo
 /// Scenes makes them in Assets/Clearwater/Demo (the scenes, and their meshes, textures and materials, all made here);
 /// each is a new Clearwater scene with its own ground, its bakes in a folder of its own in Generated like any scene's
 /// (ADR 0003), and nothing else in the project is changed.
@@ -37,11 +39,13 @@ public static class ClearwaterDemoScenes
             BuildPool();
             BuildResort();
             BuildTerrain();
+            BuildBeach(); // (last: the one left open)
         }
         finally { _assets = null; }
-        Debug.Log("[Clearwater] demo scenes built in " + Dir + " (Tools > Clearwater > Demo Scenes). The Unity Terrain demo is open.");
+        Debug.Log("[Clearwater] demo scenes built in " + Dir + " (Tools > Clearwater > Demo Scenes). The Beach demo (Clearwater's own ground) is open.");
     }
 
+    [MenuItem(Menu + "Open Beach (Clearwater's own ground)", false, 199)] static void OpenBeach() => Open(Dir + "/Demo_Beach.unity");
     [MenuItem(Menu + "Open Cove (a mesh as the ground)", false, 200)] static void OpenCove() => Open(Dir + "/Demo_Cove.unity");
     [MenuItem(Menu + "Open Harbor (a quay and a pier)", false, 201)] static void OpenHarbor() => Open(Dir + "/Demo_Harbor.unity");
     [MenuItem(Menu + "Open Pool (still water only)", false, 202)] static void OpenPool() => Open(Dir + "/Demo_Pool.unity");
@@ -63,6 +67,15 @@ public static class ClearwaterDemoScenes
     }
 
     // ------------------------------------------------------------------ scenes
+
+    // the beach as Build Scene makes it: Clearwater's own generated ground (a straight coast, its cross-section and
+    // relief), nothing added but the sky's panel
+    static void BuildBeach()
+    {
+        NewScene("Demo_Beach");
+        SkyPanel();
+        EditorSceneManager.SaveOpenScenes();
+    }
 
     // the natural cove: a sand mesh whose shore winds and has a cove, and a rock in the water
     static void BuildCove()
@@ -320,8 +333,8 @@ public static class ClearwaterDemoScenes
 
     static ClearwaterSetup.Assets _assets; // (the shared assets, made once per Build)
 
-    // a new Clearwater scene (the default beach), open, with an empty user terrain root at the coast object
-    static (ClearwaterCoast, GameObject) Clone(string name)
+    // a new Clearwater scene (the default beach, baked), open; returns its coast
+    static ClearwaterCoast NewScene(string name)
     {
         string path = Dir + "/" + name + ".unity";
         // made again from scratch in the same file (the same GUID, so the same folder of its own: emptied first)
@@ -331,7 +344,13 @@ public static class ClearwaterDemoScenes
             if (AssetDatabase.IsValidFolder(own)) AssetDatabase.DeleteAsset(own);
         }
         ClearwaterSetup.CreateScene(_assets ?? ClearwaterSetup.BuildAssets(), path, false);
-        var coast = Object.FindObjectOfType<ClearwaterCoast>();
+        return Object.FindObjectOfType<ClearwaterCoast>();
+    }
+
+    // a new Clearwater scene with an empty user terrain root at the coast object
+    static (ClearwaterCoast, GameObject) Clone(string name)
+    {
+        var coast = NewScene(name);
         var root = new GameObject("User Terrain (" + name + ")");
         root.transform.position = coast.transform.position;
         return (coast, root);
