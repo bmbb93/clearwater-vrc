@@ -61,6 +61,20 @@ float3 cwSkyTable(float3 d, float2 bh, float z, float scale)
     const float2 n = float2(CW_SKY_AZ, CW_SKY_EL);
     return tex3Dlod(_Udon_CWSkyLUT, float4((c * (n - 1.0) + 0.5) / n, z, 0.0)).rgb * scale;
 }
+// The eye's night vision (n 0..1) on the sky, as ClearwaterSky's Night() gives it to the lights: colours fade to a cool
+// grey. And the rods that see in the dark are blind to red, so warm light looks dimmer than its luminance says (the
+// scotopic luminance, Pattanaik et al. 2000, weighted so the night's blue comes out as bright either way): never
+// brighter. Only where the sky shows dim, as the in-shader tone curve's night vision (cwTonemap): what is bright the
+// eye still sees in colour (the afterglow over a set sun). (Without it the sky alone kept the day's colours: under a
+// low moon the horizon glowed orange, too bright.)
+float _Exposure;
+float3 cwNightVision(float3 c, float n)
+{
+    float lp = dot(c, float3(0.2126, 0.7152, 0.0722));
+    float ls = max(dot(c, float3(-0.0589, 0.5323, 0.3523)), 0.0);
+    float x = lp * _Exposure, y = x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14); // (as it shows: the ACES fit)
+    return lerp(c, float3(0.80, 1.02, 1.44) * min(lp, ls), 0.75 * n * (1.0 - smoothstep(0.25, 0.7, y)));
+}
 // the air's own light along d (JS space): the sunlit sky, the moonlit one, and the airglow
 // (either left out while it is lost in the other's: ClearwaterSky gives it no scale then)
 float3 cwAtmosphere(float3 d)
@@ -68,6 +82,7 @@ float3 cwAtmosphere(float3 d)
     float3 c = _Udon_CWAmbient.w * float3(0.35, 0.45, 0.75);
     [branch] if (_Udon_CWSun.w > 0.0) c += cwSkyTable(d, _Udon_CWBodies.xy, _Udon_CWSlices.x, _Udon_CWSun.w);
     [branch] if (_Udon_CWMoon.w > 0.0) c += cwSkyTable(d, _Udon_CWBodies.zw, _Udon_CWSlices.y, _Udon_CWMoon.w);
+    [branch] if (_Udon_CWNight.y > 0.0) c = cwNightVision(c, _Udon_CWNight.y);
     return c;
 }
 // the colour of the far haze at the horizon along d (JS space): the far water and land fade into it
@@ -345,7 +360,6 @@ float cwTransmitK(float k)
 // everything from 2.5 up within a few percent of it (the glare round the sun, the clouds' silver edges). Channel by
 // channel, as film: a bright sunset shifts to yellow and white rather than keeping its deep red. (Editor/
 // ClearwaterToneMapping.cs bakes the same curve for post-processing: keep the two in step.)
-float _Exposure;
 #define CW_TONE_KNEE 0.8
 #define CW_TONE_WHITE 0.9
 float3 cwTonemap(float3 c)
