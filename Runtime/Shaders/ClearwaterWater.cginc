@@ -145,15 +145,21 @@ float3 cwScreenTrace(float3 Pw, float3 dirW, float D, out float3 S, out float hi
     return cwInvTonemap(CW_GRAB_LOD(uvG).rgb);
 }
 
-// Whitewater density at xz (water space) for this pixel's shore state (cover, cc, run, sheetW, obst: see fragSide):
+// How much of the sheet's run (m) the patterns laid out in shore coordinates ride with at u: all of it on the beach,
+// less and less out to sea, over a span three times the run, so they are never drawn out more than about double down
+// the slope. (With the sheet's own weight, gone 1.5 m out, a run over 1.5 m held them still along the slope there, or
+// turned them over: the foam was drawn out into straight streaks down the slope, cut off along both edges of that band.)
+inline float cwFoamRide(float u, float run) { return 1.0 - smoothstep(0.0, max(1.5, 3.0 * abs(run)), u - cwWaterlineU()); }
+
+// Whitewater density at xz (water space) for this pixel's shore state (cover, cc, run, obst: see fragSide):
 // the run-up foam laid out in shore coordinates, pushed by the surge and dragged into streaks by the backwash, and
 // the breaking crest's foam (lace swirling round an obstacle). Also taken beside the pixel, for the foam's relief.
-float cwWhitewater(float2 xz, float cover, float cc, float run, float sheetW, float obst, float footprint)
+float cwWhitewater(float2 xz, float cover, float cc, float run, float obst, float footprint)
 {
     float2 suv = cwShoreUV(xz);
     float foam = 0.0;
     [branch] if (cover > 0.014) // (below that cwFoam is 0)
-        foam = cwRunupFoam(suv, cover, run, sheetW, footprint);
+        foam = cwRunupFoam(suv, cover, run, cwFoamRide(suv.x, run), footprint);
     [branch] if (cc > 0.014)
     {
         // (drawn out along the crest; with its lace and bubbles, like the run-up's: without them, held to a
@@ -515,7 +521,7 @@ float4 fragSide(v2f i)
             // thin here only in a trough, which the water's own trace draws)
             col = lerp(colThin, col, behindGrab.a < 0.25 ? 1.0 : smoothstep(0.05, 0.15, thickSand));
         }
-        float2 eq = float2(suv.y, -(suv.x + run * shore.swash)) * 3.0;
+        float2 eq = float2(suv.y, -(suv.x + run * cwFoamRide(suv.x, run))) * 3.0;
         float rag = saturate(cwFbm2(eq) * 1.4 - 0.35) * 0.03 + cwNoise(eq * 6.0) * 0.008;
         float thickEdge = thickSand - rag * saturate(1.5 - footprint * 15.0);
         cover += 0.55 * exp(-max(thickEdge, 0.0) / 0.006) * step(0.0, thickEdge) * edgeGate;
@@ -529,7 +535,7 @@ float4 fragSide(v2f i)
         float cc = crestCover * lerp(1.0, 0.7, obst);
         cc = max(cc, boreBand); // the next bore running in: whitewater, like a breaking crest
         cover = max(cover, 0.6 * boreBand); // ...threaded with lace
-        float foam = cwWhitewater(P.xz, cover, cc, run, shore.swash, obst, footprint);
+        float foam = cwWhitewater(P.xz, cover, cc, run, obst, footprint);
         // relief: the density's slope from two samples beside the pixel (a pixel apart at least, so it never
         // aliases), fading out before the bubbles get smaller than a pixel
         float2 g = 0;
@@ -537,8 +543,8 @@ float4 fragSide(v2f i)
         [branch] if (foam > 0.01 && _FoamRelief > 0.0 && reliefW > 0.0)
         {
             float e = max(0.04, footprint);
-            g = float2(cwWhitewater(P.xz + float2(e, 0), cover, cc, run, shore.swash, obst, footprint) - foam,
-                       cwWhitewater(P.xz + float2(0, e), cover, cc, run, shore.swash, obst, footprint) - foam) / e * reliefW;
+            g = float2(cwWhitewater(P.xz + float2(e, 0), cover, cc, run, obst, footprint) - foam,
+                       cwWhitewater(P.xz + float2(0, e), cover, cc, run, obst, footprint) - foam) / e * reliefW;
         }
         // dense foam is brighter, its thin edges greyer; only its last wisps let the water through
         col = lerp(col, cwFoamLit(foam, g, n, uSun, v), cwFoamAlpha(foam));
