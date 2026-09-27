@@ -142,7 +142,8 @@ public static class ClearwaterDemoScenes
         coast.shoreWaves = false;
         coast.points = Loop(pool);
         coast.groundHalfSize = half;
-        Finish(coast, root, true);
+        // (the pebble on the deck by the pool's near edge: in front of the spawn is the water)
+        Finish(coast, root, true, coast.transform.position + new Vector3(1.5f, 0f, -hz - 0.8f));
     }
 
     // a resort by the sea (the default beach): a building on the land with an indoor pool on its ground
@@ -208,6 +209,7 @@ public static class ClearwaterDemoScenes
         probe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.OnAwake;
         probe.boxProjection = true;
         ClearwaterCoastBake.Bake(coast); // (bakes the pools too, and cuts the sea round them)
+        SkyPanel();
         EditorSceneManager.SaveOpenScenes();
     }
 
@@ -335,7 +337,7 @@ public static class ClearwaterDemoScenes
         return (coast, root);
     }
 
-    static void Finish(ClearwaterCoast coast, GameObject root, bool keepLine)
+    static void Finish(ClearwaterCoast coast, GameObject root, bool keepLine, Vector3? stoneAt = null)
     {
         coast.terrainSource = ClearwaterCoast.TerrainSource.User;
         coast.userTerrain = root;
@@ -344,7 +346,24 @@ public static class ClearwaterDemoScenes
         coast.shape = ClearwaterCoast.LineShape.Straight;
         coast.handleIn = null; coast.handleOut = null; coast.corner = null;
         ClearwaterCoastBake.Bake(coast);
+        SkyPanel(stoneAt);
         EditorSceneManager.SaveOpenScenes();
+    }
+
+    // the sky's panel and the pebble that shows it, by the spawn or at stoneAt (on the ground just baked)
+    static void SkyPanel(Vector3? stoneAt = null)
+    {
+        var sky = Object.FindObjectOfType<ClearwaterSky>(true);
+        if (sky == null) return;
+        var stone = ClearwaterSkySetup.AddPanel(sky);
+        if (stoneAt == null) return;
+        Vector3 at = stoneAt.Value;
+        Physics.SyncTransforms();
+        if (Physics.Raycast(at + Vector3.up * 3f, Vector3.down, out var hit, 10f, ~0, QueryTriggerInteraction.Ignore))
+            at.y = hit.point.y - 0.01f; // (settled, as AddPanel's)
+        Vector3 moved = at - stone.transform.position;
+        stone.transform.position = at;
+        stone.GetComponent<ClearwaterSkyPanelOpener>().panel.transform.position += moved;
     }
 
     // the line drawn to meet the ground's shore (z = shore(x)) at the walkable area's edges, on out straight past them

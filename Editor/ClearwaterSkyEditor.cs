@@ -97,6 +97,14 @@ public static class ClearwaterSkySetup
             EditorUtility.DisplayDialog("Clearwater", "This scene has no sky of the day: use Tools > Clearwater > Use Clearwater Sky and Sun first.", "OK");
             return;
         }
+        Selection.activeGameObject = AddPanel(sky);
+        Debug.Log("[Clearwater] Sky control panel added, shown above the pebble in front of the spawn when it is used: move the pebble where you like.");
+    }
+
+    /// <summary>The panel for this sky and the pebble that shows it (AddPanel's work, without asking or telling);
+    /// returns the pebble.</summary>
+    internal static GameObject AddPanel(ClearwaterSky sky)
+    {
         Undo.RecordObject(sky, "Clearwater sky panel");
         if (sky.controller == null) sky.controller = Object.FindObjectOfType<ClearwaterController>(true);
         EditorUtility.SetDirty(sky);
@@ -221,9 +229,8 @@ public static class ClearwaterSkySetup
         root.transform.SetPositionAndRotation(stone.transform.position + Vector3.up * 1.3f,
             away.sqrMagnitude > 1e-4f ? Quaternion.LookRotation(away, Vector3.up) : spawnFacing);
         root.SetActive(false); // (the stone shows it)
-        Selection.activeGameObject = stone;
         EditorSceneManager.MarkSceneDirty(root.scene);
-        Debug.Log("[Clearwater] Sky control panel added, shown above the pebble in front of the spawn when it is used: move the pebble where you like.");
+        return stone;
     }
 
     /// <summary>A pebble on the ground by the spawn that shows the panel (ClearwaterSkyPanelOpener); one made before
