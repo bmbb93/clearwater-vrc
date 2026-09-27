@@ -1,4 +1,4 @@
-// Clearwater: the demo's sky (gradient, sun halo, distant pine-and-limestone headland) as a Unity skybox,
+// Clearwater: the sky (the time of day's, or the demo's fixed one; the distant pine-covered land) as a Unity skybox,
 // so the world sky matches what the water reflects.
 Shader "Clearwater/Skybox"
 {
@@ -11,6 +11,9 @@ Shader "Clearwater/Skybox"
         _CloudSize ("Size (m across a cloud)", Float) = 900
         _CloudSpeed ("Drift speed (m/s, 0 = still)", Float) = 8
         _CloudDir ("Drift direction (degrees clockwise from +Z)", Range(0, 360)) = 60
+        [Header(Distant land (copied to the water and the seabed as well))]
+        _LandCover ("How much of the horizon (0 = open sea all round, 1 = all round; round the side away from the sea)", Range(0, 1)) = 0.5
+        [HideInInspector] _SeaDir ("Which way the sea is (world xz, set by the coast bake)", Vector) = (0, 1, 0, 0)
         [Toggle(_CW_TONEMAP)] _Tonemap ("Tone map in shader", Float) = 1
         _Exposure ("Exposure", Float) = 0.63
     }

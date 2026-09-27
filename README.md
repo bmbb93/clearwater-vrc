@@ -239,6 +239,7 @@ Bake で見つかった問題は、Pool の Inspector に番号付きの警告�
   - `Cover`（0 = なし、初期値）、大きさ、流れる速さと向きを決めます
   - 水面の反射、水中から見上げたときに空が見える丸い範囲、濡れた砂の映り込みにも同じ雲が出ます。Inspector で変えると、水面と Seabed のマテリアルにも自動でコピーされます
   - 雲が流れるのはワールドの実行中です（Scene ビューでは Always Refresh をオン）
+- 遠景の陸：空のマテリアル（Sky）の `Distant land`。水平線のどれだけを陸（松林の岬）が占めるかを 0〜1 で決めます（0 = 一周すべて海、1 = 一周すべて陸、初期値 0.5）。陸は海と反対側を中心に広がり、端は海面までなだらかに下がります。どちらが海かは、Coast の Bake がうねりの来る向きから決めます（海岸がなければ +Z 側）。雲と同じく、水面と Seabed のマテリアルにもコピーされます
 - 波紋・波音の音量：シーンの「Clearwater Controller」
 - 水中の見え方：水中のマテリアル（Underwater）の `Fog density`（見通し。1 で水面から見た水と同じ濃さ、小さいほど遠くまで見える。初期値 0.2）/ `Fog saturation`（遠くで行き着く水の色の濃さ。初期値 0.7）/ `Fog brightness`（その色の明るさ。初期値 1）。水面から見た水の色は変わりません
 
@@ -299,7 +300,7 @@ Inspector で値を動かすと、Scene ビューと Game ビューにすぐ映�
 
 ポストプロセスへは `Tools > Clearwater > Tone Mapping > In Post-processing (PPv2)` で切り替えます（`In Shaders` で元に戻ります）。切り替えると、Clearwater のマテリアルの `Tone map in shader` がオフになります。グローバルな Post-process Volume は「PostProcessing」レイヤーに追加されます。このレイヤーがなければ、空いているユーザーレイヤーを「PostProcessing」にします。ワールドの Reference Camera には Post-process Layer が付きます。
 
-プロファイルは `Assets/Clearwater/Generated/ClearwaterPost.asset` で、中身はシェーダーと同じトーンカーブを焼いた LUT（`ClearwaterToneLut.asset`、Color Grading の External モード）と、弱いブルームです。色は、シェーダー内でトーンマップしたときと比べて平均 1/255 以下の差に収まります。
+プロファイルは `Assets/Clearwater/Generated/ClearwaterPost.asset` で、中身はシェーダーと同じトーンカーブを焼いた LUT（`ClearwaterToneLut.asset`、Color Grading の External モード）と、弱いブルーム（強さ 0.15、しきい値 2。太陽やそのきらめきのような本当に明るい所だけがうっすらにじみます）です。色は、シェーダー内でトーンマップしたときと比べて平均 1/255 以下の差に収まります。
 
 - 明るさはプロファイルの `Post-exposure`、ブルームもここで調整できます。切り替え直してもプロファイルは上書きしません
 - マテリアルの `Exposure` を変えたときは、もう一度 `In Post-processing` を選ぶと LUT が焼き直されます

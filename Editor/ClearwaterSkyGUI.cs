@@ -1,11 +1,11 @@
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>Inspector for the Clearwater sky material: its clouds are copied straight to the water and the seabed
-/// (they reflect and refract the same sky), so what you set shows everywhere at once.</summary>
+/// <summary>Inspector for the Clearwater sky material: its clouds and its distant land are copied straight to the water
+/// and the seabed (they reflect and refract the same sky), so what you set shows everywhere at once.</summary>
 public class ClearwaterSkyGUI : ShaderGUI
 {
-    static readonly string[] Props = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir" };
+    static readonly string[] Props = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir", "_LandCover" };
 
     public override void OnGUI(MaterialEditor editor, MaterialProperty[] props)
     {

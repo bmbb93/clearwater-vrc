@@ -21,8 +21,8 @@ public static class ClearwaterToneMapping
     const string VolumeName = "Clearwater Post-processing";
     const string LayerName = "PostProcessing";
 
-    internal const float BloomIntensity = 0.4f;
-    internal const float BloomThreshold = 1.1f;
+    internal const float BloomIntensity = 0.15f; // (a faint glow only round what is really bright: the sun, its glints)
+    internal const float BloomThreshold = 2.0f;
 
     /// <summary>The Clearwater materials that tone map (their "Tone map in shader" toggle).</summary>
     static IEnumerable<Material> Materials()

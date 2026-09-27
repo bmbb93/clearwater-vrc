@@ -100,6 +100,11 @@ float cwNoise(float2 p)
 }
 float cwFbm2(float2 p) { float v = 0., a = 0.5; for (int i = 0; i < 4; i++) { v += a * cwNoise(p); p = p * 2.03 + 17.1; a *= 0.5; } return v; }
 
+// Distant land (set on the sky material, copied to the water and the seabed like the clouds): how much of the horizon
+// it takes, round the side away from the sea (0 none, 1 all round), and which way the sea is (world xz; the coast
+// bake sets it from the swell's direction; +Z without a coast)
+float _LandCover;
+float4 _SeaDir;
 float cwRidge(float a) // periodic headland silhouette, elevation in radians (~1.5-4 deg)
 {
     return 0.040 + 0.016 * sin(a * 2.0 + 0.7) + 0.011 * sin(a * 5.0 + 2.1) + 0.006 * sin(a * 11.0 + 0.3) + 0.003 * sin(a * 23.0 + 1.7);
@@ -201,19 +206,30 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
 
 // the distant headland's ridge along d (its elevation, radians), and how much of d it covers (with its antialiased
 // edge; fwE = fwidth(d.y)): the sun, the moon and the stars go behind it
-float cwHeadlandRidge(float3 d)
+// how much land stands along d (JS space): 1 within its share of the horizon round the landward side, sloping down to
+// the sea over some 20 degrees at its ends, 0 out over the open sea
+float cwLandHere(float3 d)
 {
+    [branch] if (_LandCover >= 0.999) return 1.0;
+    float2 sea = normalize(float2(_SeaDir.x, -_SeaDir.y) + float2(0.0, -1e-4)); // (JS space; +Z without a coast)
+    float fromLand = acos(clamp(-dot(normalize(d.xz + float2(1e-6, 0.0)), sea), -1.0, 1.0)); // (0 straight away from the sea)
+    float end = _LandCover * CW_PI, taper = min(0.35, end);
+    return end <= 0.0 ? 0.0 : smoothstep(end, end - taper, fromLand);
+}
+float cwHeadlandRidge(float3 d, out float land)
+{
+    land = cwLandHere(d);
     float a = atan2(d.z, d.x);
-    return cwRidge(a) + 0.0045 * (cwNoise(float2(a * 260.0, 0.0)) - 0.5) + 0.002 * (cwNoise(float2(a * 900.0, 3.0)) - 0.5);
+    return land * (cwRidge(a) + 0.0045 * (cwNoise(float2(a * 260.0, 0.0)) - 0.5) + 0.002 * (cwNoise(float2(a * 900.0, 3.0)) - 0.5));
 }
 float cwHeadlandCover(float3 d, float fwE)
 {
     [branch] if (d.y > 0.08 || d.y < -0.3) return 0.0; // (it stands no higher than some 4 degrees)
-    float r = cwHeadlandRidge(d), w = fwE * 1.2 + 2e-4;
-    return smoothstep(r + w, r - w, d.y);
+    float land, r = cwHeadlandRidge(d, land), w = fwE * 1.2 + 2e-4;
+    return smoothstep(r + w, r - w, d.y) * saturate(land * 20.0);
 }
 
-// sky radiance for a JS-space direction (HDR, linear). fwE = fwidth(d.y), for the anti-aliased ridge edge;
+// sky radiance for a JS-space direction (HDR, linear), with the distant pine-covered land; fwE = fwidth(d.y), for the anti-aliased ridge edge;
 // pass it in when calling from inside a dynamic branch. (Indoors the room is there instead: cwSkyFw below.)
 float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
 {
@@ -222,19 +238,15 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
     float3 zen = float3(0.11, 0.27, 0.62), hor = float3(0.66, 0.78, 0.90), c;
     [branch] if (CW_TOD)
     {
-        // the baked sky, and the glare right round the sun and the moon: only the core the table leaves out (within
-        // 3 degrees; the wider glow is the table's own Mie scattering). The horizon's own colour only low down, where
-        // the far clouds and the headland fade into it
+        // the baked sky, and the glare right round the sun: only the core the table leaves out (within 3 degrees; the
+        // wider glow is the table's own Mie scattering), kept well under the disc so its edge shows. (None round the
+        // moon: it only gives back sunlight, the glow of the sky it lights is the table's.) The horizon's own colour
+        // only low down, where the far clouds and the headland fade into it
         c = cwAtmosphere(d);
         hor = c;
         [branch] if (e < 0.3) hor = cwAtmosphere(normalize(float3(d.x, 0.02, d.z) + float3(0.0, 1e-3, 0.0)));
         float ms = max(dot(d, normalize(cwToJS(_Udon_CWSun.xyz))), 0.0);
-        c += _Udon_CWSunColor.rgb * (0.04 * pow(ms, 400.0) + 0.27 * pow(ms, 2400.0));
-        [branch] if (_Udon_CWMoonColor.a > 0.0)
-        {
-            float mm = max(dot(d, normalize(cwToJS(_Udon_CWMoon.xyz))), 0.0);
-            c += _Udon_CWMoonColor.rgb * (0.04 * pow(mm, 400.0) + 0.27 * pow(mm, 2400.0));
-        }
+        c += _Udon_CWSunColor.rgb * (0.015 * pow(ms, 400.0) + 0.05 * pow(ms, 2400.0));
     }
     else
     {
@@ -242,26 +254,20 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
         c += float3(1.0, 0.86, 0.66) * (0.22 * pow(max(mu, 0.), 6.) + 0.30 * pow(max(mu, 0.), 64.) + 1.6 * pow(max(mu, 0.), 2400.));
     }
     c = cwCloudsOver(c, d, sun, mu, hor, fwE);
-    // distant headland: pine canopy over pale limestone, softened by ~2 km of air
+    // distant headland: pine canopy, softened by ~2 km of air
     float a = atan2(d.z, d.x);
-    float r = cwHeadlandRidge(d);
+    float landHere, r = cwHeadlandRidge(d, landHere);
     float back = smoothstep(-0.3, 0.95, dot(normalize(float2(d.x, d.z) + 1e-5), normalize(float2(sun.x, sun.z))));
-    float u = saturate(e / max(r, 1e-3));
+    // pine forest from its ridge down to the water (a pale band of rock along the foot read as a second texture:
+    // noise at that distance)
     float2 q = float2(a * 420.0, e * 420.0);
-    float tex = cwFbm2(q);
-    float3 pine = float3(0.045, 0.070, 0.042) * (0.6 + 0.8 * tex);
-    float3 rock = float3(0.30, 0.28, 0.23) * (0.55 + 0.7 * cwFbm2(q * 1.7 + 5.0));
-    // pale rock along the whole foot, its top rising and falling with the direction (never switched on and off by
-    // direction alone, which cut the band off with vertical edges), ragged where the pines come down
-    float cliffTop = 0.08 + 0.30 * smoothstep(0.2, 0.8, cwFbm2(float2(a * 7.0, 1.0)));
-    float cliff = smoothstep(cliffTop + 0.05, cliffTop - 0.05, u + 0.25 * (tex - 0.5) + 0.12 * (cwFbm2(float2(a * 60.0, e * 60.0 + 4.0)) - 0.5));
-    float3 land = lerp(pine, rock, cliff);
+    float3 land = float3(0.045, 0.070, 0.042) * (0.6 + 0.8 * cwFbm2(q));
     land *= lerp(1.0, 0.45, back);                         // backlit toward the sun
     [branch] if (CW_TOD) // (in the light of the moment, as against the fixed sky's)
         land *= (cwAmbientIrr() + 0.3 * cwKeyColor()) / (float3(0.62, 0.70, 0.78) * CW_PI * 0.22 + 0.3 * float3(6.0, 5.4, 4.44));
     land = lerp(land, hor * 0.92, 0.38 + 0.25 * back);      // aerial perspective
     float w = fwE * 1.2 + 2e-4;
-    c = lerp(c, land, smoothstep(r + w, r - w, e) * step(-0.3, e));
+    c = lerp(c, land, smoothstep(r + w, r - w, e) * step(-0.3, e) * saturate(landHere * 20.0));
     return c;
 }
 

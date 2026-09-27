@@ -139,6 +139,8 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetFloat("_CloudSize", skyMaterial.GetFloat("_CloudSize"));
         m.SetFloat("_CloudSpeed", skyMaterial.GetFloat("_CloudSpeed"));
         m.SetFloat("_CloudDir", skyMaterial.GetFloat("_CloudDir"));
+        m.SetFloat("_LandCover", skyMaterial.GetFloat("_LandCover"));
+        m.SetVector("_SeaDir", skyMaterial.GetVector("_SeaDir"));
     }
 
     public override void OnPlayerJoined(VRCPlayerApi player) { RefreshPlayers(); }

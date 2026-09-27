@@ -370,8 +370,14 @@ float4 fragSide(v2f i)
     float Vis = 0.5 / (nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2) + 1e-5);
     float Fh = cwFresnel(max(dot(h, v), 0.0), CW_IOR);
     float3 spec = SUN * min(D * Vis * Fh * nl, 12000.0);
-    // the moon's path on the water is its disc mirrored: no brighter than the disc is drawn (times the reflectance)
-    [branch] if (CW_TOD && _Udon_CWKey.w > 0.5) spec = min(spec, _Udon_CWMoonDisc.rgb * Fh);
+    // the moon's path on the water is its disc mirrored: no brighter than the disc is drawn (times the reflectance),
+    // reached softly (a hard cap left flat cream patches where the glints were brightest)
+    [branch] if (CW_TOD && _Udon_CWKey.w > 0.5)
+    {
+        const float3 Y = float3(0.2126, 0.7152, 0.0722);
+        float cap = dot(_Udon_CWMoonDisc.rgb, Y) * Fh, k = dot(spec, Y);
+        spec *= cap / (k + cap + 1e-6);
+    }
 
     // ---- refraction / underwater ----
     float3 tr = refract(wd, n, 1.0 / CW_IOR);
