@@ -83,7 +83,7 @@ public class ClearwaterSky : UdonSharpBehaviour
     const float DayAdaptation = 0.55f;
     const float MoonlitNight = 1e-6f;
 
-    int _idLut, _idSun, _idMoon, _idSunColor, _idMoonColor, _idKey, _idAmbient, _idStars, _idNight, _idCloud, _idHorizon, _idBodies, _idSlices;
+    int _idLut, _idSun, _idMoon, _idSunColor, _idMoonColor, _idMoonDisc, _idKey, _idAmbient, _idStars, _idNight, _idCloud, _idHorizon, _idBodies, _idSlices;
     bool _ready;
     Vector3 _sunScale, _wb, _lightScale;
     float _ambScale, _skyScale, _yRef, _meanRef, _x0, _upGain, _sideGain, _downGain;
@@ -151,6 +151,7 @@ public class ClearwaterSky : UdonSharpBehaviour
         _idMoon = VRCShader.PropertyToID("_Udon_CWMoon");
         _idSunColor = VRCShader.PropertyToID("_Udon_CWSunColor");
         _idMoonColor = VRCShader.PropertyToID("_Udon_CWMoonColor");
+        _idMoonDisc = VRCShader.PropertyToID("_Udon_CWMoonDisc");
         _idKey = VRCShader.PropertyToID("_Udon_CWKey");
         _idAmbient = VRCShader.PropertyToID("_Udon_CWAmbient");
         _idStars = VRCShader.PropertyToID("_Udon_CWStars");
@@ -226,7 +227,9 @@ public class ClearwaterSky : UdonSharpBehaviour
         float moonMean = 0f;
         if (moon)
         {
-            moonD = MoonRatio * (Vector3)Row(sunDirect, mEl);
+            // (the moon's soil gives back red light more than blue: moonlight is warmer than sunlight, some 4,100 K;
+            // its luminance kept)
+            moonD = Vector3.Scale(MoonRatio * (Vector3)Row(sunDirect, mEl), new Vector3(1.107f, 0.988f, 0.810f));
             Vector4 skyM = Row(skyLight, mEl);
             sky += MoonRatio * (Vector3)skyM;
             hor += MoonRatio * (Vector3)Row(horizon, mEl);
@@ -269,6 +272,13 @@ public class ClearwaterSky : UdonSharpBehaviour
         VRCShader.SetGlobalVector(_idMoon, new Vector4(moonW.x, moonW.y, moonW.z, moonSky * _skyScale * adapt));
         VRCShader.SetGlobalVector(_idSunColor, new Vector4(sunC.x, sunC.y, sunC.z, 1f));
         VRCShader.SetGlobalVector(_idMoonColor, new Vector4(moonC.x, moonC.y, moonC.z, moon && moonW.y > -0.01f ? 1f : 0f));
+        // the disc: its radiance (its light over the sky it covers, 6.4e-5 sr: as bright as the day's sky), seen as
+        // the sky is, softly held under 2.5 so its maria still show once the eye has got used to the night; bright
+        // enough for the eye to see its colour (no night vision on it)
+        float discL = Lum(moonD) / 6.4e-5f * _skyScale * adapt;
+        Vector3 discC = Vector3.Scale(moonD, _sunScale);
+        discC = discC / Mathf.Max(Lum(discC), 1e-30f) * (discL / (1f + discL / 2.5f));
+        VRCShader.SetGlobalVector(_idMoonDisc, new Vector4(discC.x, discC.y, discC.z, 0f));
         VRCShader.SetGlobalVector(_idKey, new Vector4(keyW.x, keyW.y, keyW.z, byMoon ? 1f : 0f));
         VRCShader.SetGlobalVector(_idAmbient, new Vector4(ambC.x, ambC.y, ambC.z, airglow));
         VRCShader.SetGlobalVector(_idStars, new Vector4(pole.x, pole.y, pole.z, starAngle));

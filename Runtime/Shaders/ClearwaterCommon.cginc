@@ -30,6 +30,7 @@ float4 _Udon_CWSun;           // xyz the sun, w the scale that slice of the tabl
 float4 _Udon_CWMoon;          // xyz the moon, w as for the sun (0: no moon)
 float4 _Udon_CWSunColor;      // rgb the sunlight on a surface facing it; w 1 when the sky of the time of day is on
 float4 _Udon_CWMoonColor;     // rgb the moonlight; a 1 while the moon is up
+float4 _Udon_CWMoonDisc;      // rgb the moon's disc (its light, as seen by eyes that tell its colour)
 float4 _Udon_CWKey;           // xyz the light that shades (the sun, the moon at night), w 1 when it is the moon
 float4 _Udon_CWAmbient;       // rgb the whole sky's light on level ground; w the airglow's radiance (night's own faint light)
 float4 _Udon_CWStars;         // xyz the celestial pole, w the angle the stars have turned; (their brightness in _Udon_CWNight.x)
@@ -294,7 +295,9 @@ float3 cwTonemap(float3 c)
     c = y;
     float lum = dot(c, float3(0.2126, 0.7152, 0.0722));
     c = lerp(lum.xxx, c, 0.90);
-    c = lerp(c, lum * float3(0.86, 1.0, 1.28), 0.55 * _Udon_CWNight.y); // (night vision: the dark scene's colours fade to blue)
+    // (night vision: the dark scene's colours fade to blue; what is bright, the moon, its path on the water, the eye still
+    // sees in colour)
+    c = lerp(c, lum * float3(0.86, 1.0, 1.28), 0.55 * _Udon_CWNight.y * (1.0 - smoothstep(0.25, 0.7, lum)));
     c = lerp(c, c * float3(0.96, 1.0, 1.05), 1.0 - smoothstep(0.0, 0.35, lum));
 #endif
     return c;

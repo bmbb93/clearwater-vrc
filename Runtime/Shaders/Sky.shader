@@ -116,7 +116,7 @@ Shader "Clearwater/Skybox"
                     // the sun, the moon and the stars of the moment, behind the clouds and dimmed by the thick air low down
                     float3 sd = normalize(cwToJS(_Udon_CWSun.xyz)), md = normalize(cwToJS(_Udon_CWMoon.xyz));
                     float3 add = _Udon_CWSunColor.rgb * 18.0 * cwDisc(rd, sd);
-                    [branch] if (_Udon_CWMoonColor.a > 0.0) add += _Udon_CWMoonColor.rgb * 3.0 * cwMoonDisc(rd, md); // (bright, its maria still seen)
+                    [branch] if (_Udon_CWMoonColor.a > 0.0) add += _Udon_CWMoonDisc.rgb * cwMoonDisc(rd, md);
                     [branch] if (_Udon_CWNight.x > 0.0 && rd.y > 0.0) add += cwStars(rd, pa) * _Udon_CWNight.x * smoothstep(0.0, 0.12, rd.y);
                     [branch] if (any(add > 0.0)) c += add * cwCloudSunT(rd);
                 }
