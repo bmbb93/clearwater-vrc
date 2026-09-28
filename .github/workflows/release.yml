@@ -40,16 +40,24 @@ jobs:
 
       - name: Zip the package
         run: |
-          # the package root is the repository root; leave out the repository's own files
-          zip -r -X -q "$RUNNER_TEMP/$ZIP" . -x ".git/*" ".github/*" ".gitignore" ".gitattributes"
+          set -o pipefail
+          # the package root is the repository root: its tracked files, less the repository's own. (git archive, not
+          # zip: zip left no file here and the step still passed, the listing check being the last of a pipe)
+          git archive --format=zip -o "$RUNNER_TEMP/$ZIP" HEAD -- . ':(exclude).github' ':(exclude).gitignore' ':(exclude).gitattributes'
+          test -s "$RUNNER_TEMP/$ZIP"
           unzip -l "$RUNNER_TEMP/$ZIP" | tail -1
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/$ZIP" package.json \
-            --title "$GITHUB_REF_NAME" --generate-notes
+          # (a release already there - the same tag pushed again - gets its files replaced)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/$ZIP" package.json --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/$ZIP" package.json \
+              --title "$GITHUB_REF_NAME" --generate-notes
+          fi
 
   listing:
     needs: release
