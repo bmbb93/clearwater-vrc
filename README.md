@@ -1,4 +1,4 @@
-# Clearwater Coast
+# Clearwater VRC
 
 VRChat ワールドに、歩いて入れる透明な浅瀬と海岸を作るパッケージです。水面の反射、水底に揺れる光の模様（コースティクス）、波音に合わせて寄せては返す波打ち際、潜ったときの水中の見え方までを含みます。元になった WebGL デモは [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater)（MIT、© Lumaris、`LICENSE-clearwater.txt`）です。
 
@@ -16,7 +16,7 @@ PC 向けです（GPU 計算を多用するため Quest では動きません）
 
 ## 入れ方
 
-ALCOM / VCC にこのパッケージのリポジトリを追加し、ワールドのプロジェクトに「Clearwater Coast」を追加します。
+ALCOM / VCC にこのパッケージのリポジトリを追加し、ワールドのプロジェクトに「Clearwater VRC」を追加します。
 
 1. ALCOM / VCC の設定（パッケージ）で、リポジトリの追加に次の URL を入れます（[配布ページ](https://bmbb93.github.io/clearwater-vrc/) のボタンからでも追加できます）
 
@@ -24,7 +24,7 @@ ALCOM / VCC にこのパッケージのリポジトリを追加し、ワール�
    https://bmbb93.github.io/clearwater-vrc/index.json
    ```
 
-2. プロジェクトの管理画面で「Clearwater Coast」を追加します
+2. プロジェクトの管理画面で「Clearwater VRC」を追加します
 
 リリースの zip を展開してプロジェクトの `Packages/` に置いても使えます（埋め込みパッケージ）。パッケージ自体を編集しながら使うときは、このリポジトリを手元に置き、プロジェクトの `Packages/manifest.json` の `dependencies` にそのフォルダへの参照を書きます（コピーせず、そのフォルダを直接読みます）。パスは `Packages/` からの相対でも書けます。
 
