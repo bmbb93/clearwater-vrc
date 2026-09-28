@@ -2,7 +2,7 @@
 
 # Clearwater VRC
 
-VRChat ワールドに、歩いて入れる透明な浅瀬と海岸を作るパッケージです。水面の反射、水底に揺れる光の模様（コースティクス）、波音に合わせて寄せては返す波打ち際、潜ったときの水中の見え方までを含みます。元になった WebGL デモは [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater)（MIT、© Lumaris、`LICENSE-clearwater.txt`）です。
+VRChat ワールドに、歩いて入れる透明な浅瀬と海岸を作るパッケージです。水面の反射、水底に揺れる光の模様（コースティクス）、波音に合わせて寄せては返す波打ち際、潜ったときの水中の見え方までを含みます。元になった WebGL デモは [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater)（MIT、© Lumaris、`Third Party Notices.md`）です。
 
 VRChat で試せます：[Clearwater Beach](https://vrchat.com/home/world/wrld_9795f8ab-5305-4cfb-a757-745fd264252e)（Build Scene で作る標準のシーンを公開したワールド）
 
@@ -389,7 +389,7 @@ PPv2 に内蔵の ACES は使っていません。明るい所の丸め方が違
 
 ## ライセンス
 
-MIT License（`LICENSE`、© 2026 bmbb93 (vbamboo)）。水の表現は clearwater by Aureliengmz（MIT、© Lumaris、`LICENSE-clearwater.txt`）を移植したものです。
+MIT License（`LICENSE`、© 2026 bmbb93 (vbamboo)）。水の表現は clearwater by Aureliengmz（MIT、© Lumaris、`Third Party Notices.md`）を移植したものです。
 
 ## クレジット
 

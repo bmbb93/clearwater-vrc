@@ -1,3 +1,12 @@
+# Third Party Notices
+
+This package contains software from the following project.
+
+## clearwater
+
+The water rendering is ported from [clearwater](https://github.com/Aureliengmz/clearwater) by Aureliengmz, under the MIT License:
+
+```text
 MIT License
 
 Copyright (c) 2026 Lumaris
@@ -19,3 +28,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+The wave audio is made from "Stromboli beach" by nicola_ariutti (Freesound, CC0); see `Runtime/Audio/CREDITS.txt`.

@@ -2,7 +2,7 @@
 
 # Clearwater VRC
 
-A package for building clear shallows and coasts you can walk into in VRChat worlds. It covers reflections on the water surface, the patterns of light that sway on the bottom (caustics), a shoreline where waves wash in and out in time with the surf sound, and the view underwater when you dive in. It is based on the WebGL demo [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater) (MIT, © Lumaris, `LICENSE-clearwater.txt`).
+A package for building clear shallows and coasts you can walk into in VRChat worlds. It covers reflections on the water surface, the patterns of light that sway on the bottom (caustics), a shoreline where waves wash in and out in time with the surf sound, and the view underwater when you dive in. It is based on the WebGL demo [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater) (MIT, © Lumaris, `Third Party Notices.md`).
 
 Try it in VRChat: [Clearwater Beach](https://vrchat.com/home/world/wrld_9795f8ab-5305-4cfb-a757-745fd264252e) (the standard scene Build Scene makes, published as a world)
 
@@ -389,7 +389,7 @@ The conditions below add to those values. Each is the difference measured by swi
 
 ## License
 
-MIT License (`LICENSE`, © 2026 bmbb93 (vbamboo)). The water rendering is ported from clearwater by Aureliengmz (MIT, © Lumaris, `LICENSE-clearwater.txt`).
+MIT License (`LICENSE`, © 2026 bmbb93 (vbamboo)). The water rendering is ported from clearwater by Aureliengmz (MIT, © Lumaris, `Third Party Notices.md`).
 
 ## Credits
 
