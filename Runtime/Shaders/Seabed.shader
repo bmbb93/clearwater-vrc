@@ -95,7 +95,10 @@ Shader "Clearwater/Seabed"
 
     SubShader
     {
-        Tags { "RenderType" = "Opaque" "Queue" = "Geometry" }
+        // (no projector's: they draw on the flat grid as it lies, at the water's level, not on the ground this shader
+        // makes of it - the user terrain's beach projector drew its swash film over the whole grid there, in front of
+        // a harbour's floor, coming and going with the waves; this draws its own caustics and beach)
+        Tags { "RenderType" = "Opaque" "Queue" = "Geometry" "IgnoreProjector" = "True" }
         Pass
         {
             Tags { "LightMode" = "ForwardBase" }

@@ -85,12 +85,12 @@ public static class ClearwaterDemoScenes
         Func<float, float> shore = x => 12f * Mathf.Sin(x / 40f) - 25f * Mathf.Exp(-Mathf.Pow((x - 30f) / 18f, 2));
         var mesh = Heightfield("Cove", 201, 100f, (x, z) =>
             Mathf.Clamp(-(z - shore(x)) * 0.083f, -2.5f, 1.2f) + 0.05f * (Mathf.PerlinNoise(x * 0.15f + 50, z * 0.15f + 50) - 0.5f), 0.5f);
-        var sand = Mat("CoveSand", new Color(0.85f, 0.62f, 0.52f), Pkg("Sand.jpg"), 0.15f, Vector2.one, true);
+        var sand = Mat("CoveSand", new Color(0.85f, 0.62f, 0.52f), Pkg("Sand.jpg"), 0.15f, Vector2.one);
         Child(root, "Ground", mesh, sand, Vector3.zero);
         var rock = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         rock.name = "Rock"; rock.transform.SetParent(root.transform, false);
         rock.transform.localPosition = new Vector3(-40, -1.2f, 14); rock.transform.localScale = new Vector3(9, 4, 7);
-        rock.GetComponent<MeshRenderer>().sharedMaterial = Mat("Rock", new Color(0.45f, 0.44f, 0.42f), RockTex(), 0.1f, Vector2.one * 2, true);
+        rock.GetComponent<MeshRenderer>().sharedMaterial = Mat("Rock", new Color(0.45f, 0.44f, 0.42f), RockTex(), 0.1f, Vector2.one * 2);
         // (its collider the mesh itself: a sphere collider on a stretched sphere is a ball as wide as the widest axis)
         Object.DestroyImmediate(rock.GetComponent<SphereCollider>());
         rock.AddComponent<MeshCollider>();
@@ -115,12 +115,12 @@ public static class ClearwaterDemoScenes
                 return Mathf.Clamp(top - (z + 12f) / 8f, floor, top);
             return z < 0f ? top : floor; // quay wall
         }, 0.25f);
-        Child(root, "Quay", mesh, Mat("Concrete", new Color(0.78f, 0.77f, 0.74f), ConcreteTex(), 0.05f, Vector2.one, true), Vector3.zero);
+        Child(root, "Quay", mesh, Mat("Concrete", new Color(0.78f, 0.77f, 0.74f), ConcreteTex(), 0.05f, Vector2.one), Vector3.zero);
         // the pier: not part of the ground (the water runs under it), its piles are obstacles to the waves
         var pier = new GameObject("Pier");
         pier.transform.SetParent(coast.transform.parent, false);
         pier.transform.position = coast.transform.position;
-        var wood = Mat("Wood", new Color(0.45f, 0.33f, 0.24f), ConcreteTex(), 0.1f, new Vector2(0.3f, 3f), true);
+        var wood = Mat("Wood", new Color(0.45f, 0.33f, 0.24f), ConcreteTex(), 0.1f, new Vector2(0.3f, 3f));
         var deck = GameObject.CreatePrimitive(PrimitiveType.Cube);
         deck.name = "Deck"; deck.transform.SetParent(pier.transform, false);
         deck.transform.localPosition = new Vector3(63, 1.35f, 20); deck.transform.localScale = new Vector3(6, 0.3f, 40);
@@ -237,7 +237,7 @@ public static class ClearwaterDemoScenes
         return pool;
     }
 
-    static Material PoolTiles() => Mat("PoolTiles", Color.white, TileTex(), 0.6f, Vector2.one, true);
+    static Material PoolTiles() => Mat("PoolTiles", Color.white, TileTex(), 0.6f, Vector2.one);
     static Material DeckStone() => Mat("DeckStone", new Color(0.86f, 0.83f, 0.77f), ConcreteTex(), 0.1f, Vector2.one * 0.5f);
 
     // a rectangle's corners as a coast loop, anticlockwise seen from above (the water inside)
@@ -486,20 +486,11 @@ public static class ClearwaterDemoScenes
         return Save(mesh, "Meshes/" + name + ".asset");
     }
 
-    // a Standard material; wet: under the water, with no highlights or reflections. The water takes what lies under
-    // it from the screen, drawn as in the air: the sun's highlight and the sky that a surface seen at a low angle
-    // mirrors (strongly, even when rough) showed through it as bright bands and patches on the floor, where under
-    // the water there are none
-    static Material Mat(string name, Color color, Texture2D tex, float smooth, Vector2 tiling, bool wet = false)
+    static Material Mat(string name, Color color, Texture2D tex, float smooth, Vector2 tiling)
     {
         var m = new Material(Shader.Find("Standard")) { name = name, color = color, mainTexture = tex };
         m.mainTextureScale = tiling;
         m.SetFloat("_Glossiness", smooth);
-        if (wet)
-        {
-            m.SetFloat("_SpecularHighlights", 0f); m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-            m.SetFloat("_GlossyReflections", 0f); m.EnableKeyword("_GLOSSYREFLECTIONS_OFF");
-        }
         return Save(m, "Materials/" + name + ".mat");
     }
 
