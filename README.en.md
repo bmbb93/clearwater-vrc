@@ -358,22 +358,22 @@ Seen from underwater, 3050 and below are hazed by the underwater fog, and 3051 a
 
 ## Performance
 
-Measured with package 1.0.0 on an RTX 4070 Ti SUPER. In the Unity editor, the same view was drawn repeatedly at 2048×2048 with a 90° field of view (close to one VR eye), timing until the GPU finished. The scene is the one Build Scene makes (16:00, 30% clouds), without post-processing. Both VR eyes take roughly twice these values.
+Measured with package 1.0.0 on an RTX 4070 Ti SUPER. In the Unity editor, the same view was drawn repeatedly at 2048×2048 with a 90° field of view (close to one VR eye), timing until the GPU finished (with the Unity window in the foreground). The scene is the one Build Scene makes (16:00, 30% clouds), without post-processing. Both VR eyes take roughly twice these values.
 
 | View | Cost (per eye) |
 | --- | --- |
-| In the shallows, looking at your feet | about 6.2 ms |
-| Above the water, looking down at the open sea (water filling the view) | about 5.3 ms |
-| From the beach, looking out to sea | about 2.6 ms |
-| Underwater, looking up at the surface | about 2.5 ms |
+| In the shallows, looking at your feet | about 5.7 ms |
+| Above the water, looking down at the open sea (water filling the view) | about 4.8 ms |
+| From the beach, looking out to sea | about 2.8 ms |
+| Underwater, looking up at the surface | about 2.6 ms |
 
 The conditions below add to those values. Each is the difference measured by switching only that condition on and off, alternately.
 
 | Condition | Added cost (per eye) |
 | --- | --- |
-| A pool's water covering most of the screen (compared with not drawing that water; pools not on screen cost nothing) | +1.6–1.9 ms |
-| `Foam relief` at 2 cm, looking at the shoreline up close | +0.9 ms |
-| Tone mapping in post-processing (compared with in the shaders; bloom included) | +0.4–0.5 ms |
+| A pool's water covering most of the screen (compared with not drawing that water; pools not on screen cost nothing) | +1.3–1.7 ms |
+| `Foam relief` at 2 cm, looking at the shoreline up close | +0.45–0.9 ms (depending on how much foam there is at the time) |
+| Tone mapping in post-processing (compared with in the shaders; bloom included) | +0.35–0.5 ms |
 | Clouds (Cover above 0) | +0.25 ms |
 | The time-of-day sky (Clearwater Sky, compared with the fixed sky) | +0.1 ms looking up at the sky by day, +0.15 ms looking up at the night sky |
 | Sun shadows (drawing them, and the beach and bottom reading them; they cannot be turned off, as the water uses the depth information) | +0.1–0.15 ms |

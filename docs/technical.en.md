@@ -557,7 +557,7 @@ The clouds and waves changed on the panel are synced by a separate object, "Sky 
 | `ResetAll()` | Returns the clouds and waves to the Settings defaults, and also calls Clearwater Sky's `ResetTime()` |
 | `SetRipples(0–1)` | The strength of the small offshore waves. Put into `_Calm` (= 1 − strength) of the sea's water surface, seabed, underwater and avatar caustics materials. Each pool's `_Calm` keeps its own value |
 
-**Cost.** The sky, the water surface and the seabed look up the table once per view direction. When the sky from either the sun or the moon is less than 1/1000 of the other, that part is not looked up. The computation for stars that cannot be seen is also skipped. (The value is set to exactly 0 and a shader branch skips it; leaving the daytime stars at a small value cost +0.2 ms at 1080p.) On one 1920×1080 screen, compared with the fixed sky, it cost +0.05 ms in the day and +0.15 ms looking up at the night sky.
+**Cost.** The sky, the water surface and the seabed look up the table once per view direction. When the sky from either the sun or the moon is less than 1/1000 of the other, that part is not looked up. The computation for stars that cannot be seen is also skipped. (The value is set to exactly 0 and a shader branch skips it; leaving the daytime stars at a small value cost +0.2 ms at 1080p.) Compared with the fixed sky, at 2048×2048 per eye, it costs +0.1 ms looking up at the sky by day and +0.15 ms looking up at the night sky.
 
 ## 14. Sky panel and pebble: visuals on the UI layer, input on another layer
 
@@ -649,7 +649,7 @@ They are in the scene's folder (chapter 9). Changes in the Inspector show in the
 | Same | `Run-up` | 2.6 | The height the swash reaches (a multiple of `Breaker height`) |
 | Same | `Whitewater height` | 0.03 m | The rise at the tip of the swash and on breaking waves |
 | Water | `Swell start depth` | 2.6 m | The water depth where the incoming waves (swell) start to appear. They reach full height 0.8 m shallower. If this is deeper than the deepest part of the coast's cross-section, they appear over the whole sea (heavier). The controller copies it at startup to the seabed, underwater and own-terrain beach materials |
-| Same | `Foam relief` | 0 | Shading for the relief of the foam. For viewing up close (+0.9 ms per eye at 2 cm) |
+| Same | `Foam relief` | 0 | Shading for the relief of the foam. For viewing up close (+0.45–0.9 ms per eye at 2 cm) |
 | Water | `Depth write` | Off | Chapter 11. When On, avatars' transparent clothes are hidden by the water |
 | Underwater | `Fog density` | 0.2 | Underwater visibility (1 = the same density as the water seen from the surface) |
 | Same | `Fog saturation` / `Fog brightness` | 0.7 / 1 | The saturation and brightness of the water color reached in the distance |
@@ -742,34 +742,37 @@ On the world project's side, Clearwater creates the following.
 
 The cost is roughly proportional to the number of pixels, and is largest when the water covers the screen. The "Performance" section of the README sums up how the cost grows under each condition. Here we keep the breakdown of where the time goes.
 
-**How it is measured.** In the Unity editor, the same view is drawn repeatedly at 2048×2048 (about 4.2 million pixels), which is close to one VR eye, and the time is measured after waiting for the GPU to finish. The value for each part is the difference from a run with only that part removed. Each measurement varies by about 10%, so comparisons alternate within a single measurement. The GPU also slows down when Unity is not in the foreground, so watch out for that too.
+**How it is measured.** In the Unity editor, the same view is drawn repeatedly at 2048×2048 (about 4.2 million pixels, close to one VR eye) with a 90° field of view, and the time is measured after waiting for the GPU to finish. The value for each part is the difference from a run with only that part removed. Each measurement varies by about 10%, so comparisons alternate within a single measurement. The GPU is about 10% slower when the Unity window is not in the foreground, so it is brought to the front for measuring.
 
-| View (2026-09-24, RTX 4070 Ti SUPER) | ms/eye | Of which water surface |
+| View (package 1.0.0, RTX 4070 Ti SUPER) | ms/eye | Of which water surface |
 | --- | --- | --- |
-| Looking down offshore (water fills the screen) | 1.93 | 1.70 |
-| Looking at your feet in the shallows | 1.73 | 1.48 |
-| Looking out to sea from the beach | 1.00 | 0.23 |
-| Diving and looking horizontally | 1.22 | 0.26 |
+| Looking at your feet in the shallows | 5.7 | 5.2 |
+| Looking down at the sea 26 m from the shore | 5.4 | 4.9 |
+| Looking down offshore (water fills the screen) | 4.8 | 4.2 |
+| Looking out to sea from the beach | 2.8 | 1.5 |
+| Looking up at the surface from underwater | 2.6 | 1.8 |
+| Diving and looking horizontally | 1.9 | 0.9 |
 
-This table is from before the surf and the distant ground were added. With them, it became about 3.0 ms with water filling the screen, and about 1.4 ms looking out to sea from the beach (the surf is computed every time inside the water surface computation, so it adds cost even when you look offshore). Later, versions 0.15.13–0.15.14 cut down the water surface and beach computation and vertices, making it 0.8–2.2 ms (about 20%) lighter per eye.
+Most of the time goes to the water surface. It gets heavier nearer the shore because the surf and foam are computed inside the water surface computation.
 
-Whatever the view, 0.33 ms is spent every frame (the caustics camera 0.28 ms, the wave and ripple computation 0.05 ms). Halving the resolution in both directions made the time about 1/3.7.
+Whatever the view, the caustics camera takes 0.33 ms every frame. For the wave and ripple computation (the Custom Render Texture updates), the GPU time cannot be isolated in the editor (the CPU side that issues the updates takes 0.09 ms). Halving the resolution in both directions (a quarter of the pixels) made the time about 1/3.
 
 | GPU (both VR eyes, water fills the screen; rough estimate) | Cost of the water alone | Against the 11.1 ms budget at 90 fps |
 | --- | --- | --- |
-| RTX 4090 | About 3.6 ms | Plenty of room |
-| RTX 4070 Ti SUPER (from measurement) | About 6.0 ms | A little over half |
-| RTX 3070 | About 9.3 ms | The water alone uses almost all of it |
-| RTX 3060 | About 13 ms | Over budget |
+| RTX 4090 | About 6 ms | About half |
+| RTX 4070 Ti SUPER (from measurement) | About 10 ms | Almost all of it |
+| RTX 3070 | About 15 ms | Over budget |
+| RTX 3060 | About 21 ms | Over budget |
 
-Except for the 4070 Ti SUPER, these values are scaled by rough performance ratios from public benchmarks, and are not measured. They are from before the optimizations, so the real cost now should be about 20% lower. In actual VRChat, avatar and UI rendering come on top of this, and the cost scales with the SteamVR resolution setting. On desktop (1080p), the water alone costs about 1.5 ms.
+The 4070 Ti SUPER value is twice the per-eye value of the offshore view looking down, plus the caustics camera. The others are scaled by rough performance ratios from public benchmarks, and are not measured. The water fills the screen when you look down; looking out to sea from the beach, the 4070 Ti SUPER takes about 6 ms. In actual VRChat, avatar and UI rendering come on top of this, and the cost scales with the SteamVR resolution setting. On desktop (1920×1080, 60° vertical field of view), looking down offshore takes about 2.6 ms and looking out to sea from the beach about 2.4 ms.
 
 These are the main optimizations so far. For each one, images of the same view before and after were compared to confirm that the look did not change (average color difference under 1/255).
 
 1. When looking from above the water surface, Seabed does not paint the seabed hidden by the surface (it still paints down to 25 cm of water depth)
 2. The "sky above the horizon" that the water surface computed is limited to pixels near the horizon
-3. The water surface and beach computation and vertices are cut down (0.15.13–0.15.14)
+3. The water surface and beach computation and vertices are cut down
 4. Computation that cannot be seen is skipped with a branch, by setting its value to exactly 0 (the stars, the moon's sky, the sun's sky)
+5. Seabed takes no Projectors. Your own terrain's projectors were drawing the whole Seabed grid again at the water's level (0.3–0.6 ms per eye in the harbour demo)
 
 ## 18. Limits and cautions: what we gave up for performance
 
