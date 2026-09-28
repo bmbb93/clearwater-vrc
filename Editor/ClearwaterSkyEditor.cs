@@ -37,8 +37,17 @@ public static class ClearwaterSkySetup
             {
                 int cyc = sky.cycle ? 1 : 0;
                 if (sky.startHour == sky.timeOfDay && sky.startCycle == cyc && sky.startDayMinutes == sky.dayMinutes) continue;
+                float h0 = sky.startHour, m0 = sky.startDayMinutes; int c0 = sky.startCycle;
                 sky.startHour = sky.timeOfDay; sky.startCycle = cyc; sky.startDayMinutes = sky.dayMinutes;
-                UdonSharpEditorUtility.CopyProxyToUdon(sky);
+                try { UdonSharpEditorUtility.CopyProxyToUdon(sky); }
+                catch (System.Exception)
+                {
+                    // (its program not compiled yet: a new project's first Build Scene saves the scene before UdonSharp
+                    // has compiled it. Left as they were, the next save copies them; until then the sky takes its own
+                    // at Start, the same values)
+                    sky.startHour = h0; sky.startCycle = c0; sky.startDayMinutes = m0;
+                    continue;
+                }
                 EditorUtility.SetDirty(sky);
             }
     }
