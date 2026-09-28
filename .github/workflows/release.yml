@@ -44,7 +44,17 @@ jobs:
           # the package root is the repository root: its tracked files, less the repository's own. (git archive, not
           # zip: zip left no file here and the step still passed, the listing check being the last of a pipe)
           git archive --format=zip -o "$RUNNER_TEMP/$ZIP" HEAD -- . ':(exclude).github' ':(exclude).gitignore' ':(exclude).gitattributes'
+          # LICENSE's .meta is not in the repository (GitHub took it for a second license on the repository page) but
+          # Unity wants it in an installed package: written in here, with the GUID it has always had
+          python3 - "$RUNNER_TEMP/$ZIP" <<'PY'
+          import sys, zipfile
+          meta = ("fileFormatVersion: 2\nguid: 89fca98d7fbf1dd4b9d898b4fb7e58e8\nDefaultImporter:\n"
+                  "  externalObjects: {}\n  userData: \n  assetBundleName: \n  assetBundleVariant: \n")
+          with zipfile.ZipFile(sys.argv[1], "a", zipfile.ZIP_DEFLATED) as z:
+              z.writestr("LICENSE.meta", meta)
+          PY
           test -s "$RUNNER_TEMP/$ZIP"
+          unzip -l "$RUNNER_TEMP/$ZIP" | grep -q " LICENSE.meta$"
           unzip -l "$RUNNER_TEMP/$ZIP" | tail -1
 
       - name: Publish the release

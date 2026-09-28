@@ -8,3 +8,6 @@ Thumbs.db
 # source recordings for Tools~/make_wave_audio.sh (not redistributed here)
 *.flac
 *.wav
+
+# written into the release zip by .github/workflows/release.yml (GitHub showed it as a second License tab)
+/LICENSE.meta
