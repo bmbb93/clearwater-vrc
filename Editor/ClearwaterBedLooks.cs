@@ -57,6 +57,8 @@ public static class ClearwaterBedLooks
             gloss = glossMap && m.HasProperty("_GlossMapScale") ? m.GetFloat("_GlossMapScale")
                   : m.HasProperty("_Glossiness") ? m.GetFloat("_Glossiness")
                   : m.HasProperty("_Smoothness") ? m.GetFloat("_Smoothness") : 0f;
+            // (none with the Standard shader's highlights and reflections both off: matte)
+            if (m.IsKeywordEnabled("_SPECULARHIGHLIGHTS_OFF") && m.IsKeywordEnabled("_GLOSSYREFLECTIONS_OFF")) gloss = 0f;
         }
         foreach (var t in ClearwaterUserTerrain.Terrains(coast))
         {

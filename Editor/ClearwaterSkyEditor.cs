@@ -101,6 +101,7 @@ public static class ClearwaterSkySetup
     const int UILayer = 5;
     const int WalkthroughLayer = 17; // (players go through it and can still use it)
     const string StoneName = "Sky Stone (Clearwater)";
+    const string CallerName = "Sky Panel Caller (Clearwater)";
 
     /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
     /// sliders, the day going by on a toggle, the shore waves' height, the sea's small waves and how fast they go on
@@ -120,8 +121,9 @@ public static class ClearwaterSkySetup
     }
 
     /// <summary>The panel for this sky and the pebble that shows it (AddPanel's work, without asking or telling);
-    /// returns the pebble.</summary>
-    internal static GameObject AddPanel(ClearwaterSky sky)
+    /// returns the pebble. pebble off: no pebble to use in the world, the panel only called up by the hand or the key
+    /// (the same opener, with nothing to show or be used by).</summary>
+    internal static GameObject AddPanel(ClearwaterSky sky, bool pebble = true)
     {
         var settings = EnsureSettings(sky);
         ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterSkyPanel.cs");
@@ -286,7 +288,7 @@ public static class ClearwaterSkySetup
         shoreWaves.value = settings.shoreWaves;
         seaWaves.value = settings.ripples;
         rippleSpeed.value = settings.rippleSpeed;
-        var stone = AddStone(root, spawn, spawnFacing);
+        var stone = AddStone(root, spawn, spawnFacing, pebble);
         // above the pebble, facing away from the spawn (the pebble puts it there again, facing whoever uses it)
         Vector3 away = stone.transform.position - spawn;
         away.y = 0f;
@@ -362,8 +364,9 @@ public static class ClearwaterSkySetup
     }
 
     /// <summary>A pebble on the ground by the spawn that shows the panel (ClearwaterSkyPanelOpener); one made before
-    /// is replaced where it lies.</summary>
-    static GameObject AddStone(GameObject panel, Vector3 spawn, Quaternion facing)
+    /// is replaced where it lies. pebble off: the opener alone, not seen and not used in the world, for calling the
+    /// panel up anywhere.</summary>
+    static GameObject AddStone(GameObject panel, Vector3 spawn, Quaternion facing, bool pebble = true)
     {
         Vector3 at = spawn + facing * new Vector3(0.8f, 0f, 1.2f);
         Quaternion turn = facing * Quaternion.Euler(0f, 25f, 0f);
@@ -381,11 +384,19 @@ public static class ClearwaterSkySetup
                 at = hit.point;
             at.y -= 0.01f; // (settled in the sand)
         }
-        var go = new GameObject(StoneName);
+        var go = new GameObject(pebble ? StoneName : CallerName);
         Undo.RegisterCreatedObjectUndo(go, "Clearwater sky panel");
         go.transform.SetParent(parent, false);
         go.transform.SetPositionAndRotation(at, turn);
         go.layer = WalkthroughLayer;
+        if (!pebble)
+        {
+            var caller = UdonSharpUndo.AddComponent<ClearwaterSkyPanelOpener>(go);
+            caller.panel = panel;
+            EditorUtility.SetDirty(caller);
+            UdonSharpEditorUtility.GetBackingUdonBehaviour(caller).SyncMethod = VRC.SDKBase.Networking.SyncType.None;
+            return go;
+        }
         var mesh = ClearwaterSetup.Save(Pebble(), "Pebble.asset");
         var mat = new Material(Shader.Find("Standard")) { color = new Color(0.40f, 0.36f, 0.31f) };
         mat.SetFloat("_Glossiness", 0.08f);

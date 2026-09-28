@@ -6,16 +6,19 @@ using UnityEngine.Rendering.PostProcessing;
 #endif
 
 /// <summary>
-/// Where Clearwater's tone mapping happens. By default each of its shaders (water, seabed, sky, underwater fog) tone
-/// maps its own output, so the world needs no post-processing and avatars keep their usual look. The alternative is
-/// one post-processing pass (Unity's Post Processing Stack v2) over the whole view: its shaders then output linear HDR,
-/// the whole scene shares one tone curve, and bloom can be added. Avatars are tone mapped too (they can look darker
-/// and softer), and it costs a full-screen pass.
+/// Where Clearwater's tone mapping happens. By default one post-processing pass (Unity's Post Processing Stack v2)
+/// over the whole view: its shaders output linear HDR, the whole scene shares one tone curve (what the water sees
+/// through its surface, a pool's tiles or a quay drawn in the Standard shader, is taken in as it is), and bloom can be
+/// added; avatars are tone mapped too (they can look darker and softer), and it costs a full-screen pass. The
+/// alternative (and the fallback without the package) is each of its shaders (water, seabed, sky, underwater fog)
+/// tone mapping its own output: no post-processing, avatars keep their usual look, but a colour taken from the screen
+/// is turned back through the curve, and one near its white (a sunlit Standard surface, which it does not cover)
+/// comes back many times too bright.
 /// </summary>
 public static class ClearwaterToneMapping
 {
-    const string MenuShaders = "Tools/Clearwater/Tone Mapping/In Shaders (default)";
-    const string MenuPost = "Tools/Clearwater/Tone Mapping/In Post-processing (PPv2)";
+    const string MenuShaders = "Tools/Clearwater/Tone Mapping/In Shaders";
+    const string MenuPost = "Tools/Clearwater/Tone Mapping/In Post-processing (PPv2, default)";
     internal const string ProfilePath = ClearwaterSetup.Gen + "/ClearwaterPost.asset";
     internal const string LutPath = ClearwaterSetup.Gen + "/ClearwaterToneLut.asset";
     const string VolumeName = "Clearwater Post-processing";
@@ -59,6 +62,15 @@ public static class ClearwaterToneMapping
     {
         foreach (var m in Materials()) return !m.IsKeywordEnabled("_CW_TONEMAP");
         return false;
+    }
+
+    /// <summary>A new scene's tone mapping: in post-processing where the package is (VRChat world projects have it),
+    /// in the shaders otherwise.</summary>
+    internal static void UseDefault()
+    {
+#if CW_PPV2
+        UsePost();
+#endif
     }
 
     [MenuItem(MenuShaders, true)]

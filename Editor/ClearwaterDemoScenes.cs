@@ -10,8 +10,9 @@ using Object = UnityEngine.Object;
 /// Demo scenes, each showing a way to use Clearwater: the beach Clearwater makes itself (its own generated ground, as
 /// Build Scene's), a cove modelled as a mesh (user terrain), a harbour (a quay, a stepped revetment, a ramp, a pier on
 /// piles), a swimming pool (a user terrain with still water), a resort (the sea and two pools at other heights) and a
-/// beach made with a Unity Terrain. Each has the sky's panel, shown by a pebble by the spawn or called up anywhere
-/// (over the hand in VR, in front of the view on a desktop). Tools > Clearwater > Demo Scenes > Build Demo
+/// beach made with a Unity Terrain. Each has the sky's panel, called up anywhere (over the hand in VR, in front of
+/// the view on a desktop); the Beach, the sample of a whole scene, also has the pebble by the spawn that shows it.
+/// All tone map in post-processing, as a new scene does. Tools > Clearwater > Demo Scenes > Build Demo
 /// Scenes makes them in Assets/Clearwater/Demo (the scenes, and their meshes, textures and materials, all made here);
 /// each is a new Clearwater scene with its own ground, its bakes in a folder of its own in Generated like any scene's
 /// (ADR 0003), and nothing else in the project is changed.
@@ -69,11 +70,11 @@ public static class ClearwaterDemoScenes
     // ------------------------------------------------------------------ scenes
 
     // the beach as Build Scene makes it: Clearwater's own generated ground (a straight coast, its cross-section and
-    // relief), nothing added but the sky's panel
+    // relief), nothing added but the sky's panel and the pebble that shows it
     static void BuildBeach()
     {
         NewScene("Demo_Beach");
-        SkyPanel();
+        SkyPanel(pebble: true);
         EditorSceneManager.SaveOpenScenes();
     }
 
@@ -84,12 +85,12 @@ public static class ClearwaterDemoScenes
         Func<float, float> shore = x => 12f * Mathf.Sin(x / 40f) - 25f * Mathf.Exp(-Mathf.Pow((x - 30f) / 18f, 2));
         var mesh = Heightfield("Cove", 201, 100f, (x, z) =>
             Mathf.Clamp(-(z - shore(x)) * 0.083f, -2.5f, 1.2f) + 0.05f * (Mathf.PerlinNoise(x * 0.15f + 50, z * 0.15f + 50) - 0.5f), 0.5f);
-        var sand = Mat("CoveSand", new Color(0.85f, 0.62f, 0.52f), Pkg("Sand.jpg"), 0.15f, Vector2.one);
+        var sand = Mat("CoveSand", new Color(0.85f, 0.62f, 0.52f), Pkg("Sand.jpg"), 0.15f, Vector2.one, true);
         Child(root, "Ground", mesh, sand, Vector3.zero);
         var rock = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         rock.name = "Rock"; rock.transform.SetParent(root.transform, false);
         rock.transform.localPosition = new Vector3(-40, -1.2f, 14); rock.transform.localScale = new Vector3(9, 4, 7);
-        rock.GetComponent<MeshRenderer>().sharedMaterial = Mat("Rock", new Color(0.45f, 0.44f, 0.42f), RockTex(), 0.1f, Vector2.one * 2);
+        rock.GetComponent<MeshRenderer>().sharedMaterial = Mat("Rock", new Color(0.45f, 0.44f, 0.42f), RockTex(), 0.1f, Vector2.one * 2, true);
         // (its collider the mesh itself: a sphere collider on a stretched sphere is a ball as wide as the widest axis)
         Object.DestroyImmediate(rock.GetComponent<SphereCollider>());
         rock.AddComponent<MeshCollider>();
@@ -114,12 +115,12 @@ public static class ClearwaterDemoScenes
                 return Mathf.Clamp(top - (z + 12f) / 8f, floor, top);
             return z < 0f ? top : floor; // quay wall
         }, 0.25f);
-        Child(root, "Quay", mesh, Mat("Concrete", new Color(0.78f, 0.77f, 0.74f), ConcreteTex(), 0.05f, Vector2.one), Vector3.zero);
+        Child(root, "Quay", mesh, Mat("Concrete", new Color(0.78f, 0.77f, 0.74f), ConcreteTex(), 0.05f, Vector2.one, true), Vector3.zero);
         // the pier: not part of the ground (the water runs under it), its piles are obstacles to the waves
         var pier = new GameObject("Pier");
         pier.transform.SetParent(coast.transform.parent, false);
         pier.transform.position = coast.transform.position;
-        var wood = Mat("Wood", new Color(0.45f, 0.33f, 0.24f), ConcreteTex(), 0.1f, new Vector2(0.3f, 3f));
+        var wood = Mat("Wood", new Color(0.45f, 0.33f, 0.24f), ConcreteTex(), 0.1f, new Vector2(0.3f, 3f), true);
         var deck = GameObject.CreatePrimitive(PrimitiveType.Cube);
         deck.name = "Deck"; deck.transform.SetParent(pier.transform, false);
         deck.transform.localPosition = new Vector3(63, 1.35f, 20); deck.transform.localScale = new Vector3(6, 0.3f, 40);
@@ -150,8 +151,7 @@ public static class ClearwaterDemoScenes
         coast.shoreWaves = false;
         coast.points = Loop(pool);
         coast.groundHalfSize = half;
-        // (the pebble on the deck by the pool's near edge: in front of the spawn is the water)
-        Finish(coast, root, true, coast.transform.position + new Vector3(1.5f, 0f, -hz - 0.8f));
+        Finish(coast, root, true);
     }
 
     // a resort by the sea (the default beach): a building on the land with an indoor pool on its ground
@@ -236,7 +236,7 @@ public static class ClearwaterDemoScenes
         return pool;
     }
 
-    static Material PoolTiles() => Mat("PoolTiles", Color.white, TileTex(), 0.6f, Vector2.one);
+    static Material PoolTiles() => Mat("PoolTiles", Color.white, TileTex(), 0.6f, Vector2.one, true);
     static Material DeckStone() => Mat("DeckStone", new Color(0.86f, 0.83f, 0.77f), ConcreteTex(), 0.1f, Vector2.one * 0.5f);
 
     // a rectangle's corners as a coast loop, anticlockwise seen from above (the water inside)
@@ -356,7 +356,7 @@ public static class ClearwaterDemoScenes
         return (coast, root);
     }
 
-    static void Finish(ClearwaterCoast coast, GameObject root, bool keepLine, Vector3? stoneAt = null)
+    static void Finish(ClearwaterCoast coast, GameObject root, bool keepLine)
     {
         coast.terrainSource = ClearwaterCoast.TerrainSource.User;
         coast.userTerrain = root;
@@ -365,24 +365,15 @@ public static class ClearwaterDemoScenes
         coast.shape = ClearwaterCoast.LineShape.Straight;
         coast.handleIn = null; coast.handleOut = null; coast.corner = null;
         ClearwaterCoastBake.Bake(coast);
-        SkyPanel(stoneAt);
+        SkyPanel();
         EditorSceneManager.SaveOpenScenes();
     }
 
-    // the sky's panel and the pebble that shows it, by the spawn or at stoneAt (on the ground just baked)
-    static void SkyPanel(Vector3? stoneAt = null)
+    // the sky's panel, called up anywhere; with the pebble by the spawn that shows it (the Beach's alone)
+    static void SkyPanel(bool pebble = false)
     {
         var sky = Object.FindObjectOfType<ClearwaterSky>(true);
-        if (sky == null) return;
-        var stone = ClearwaterSkySetup.AddPanel(sky);
-        if (stoneAt == null) return;
-        Vector3 at = stoneAt.Value;
-        Physics.SyncTransforms();
-        if (Physics.Raycast(at + Vector3.up * 3f, Vector3.down, out var hit, 10f, ~0, QueryTriggerInteraction.Ignore))
-            at.y = hit.point.y - 0.01f; // (settled, as AddPanel's)
-        Vector3 moved = at - stone.transform.position;
-        stone.transform.position = at;
-        stone.GetComponent<ClearwaterSkyPanelOpener>().panel.transform.position += moved;
+        if (sky != null) ClearwaterSkySetup.AddPanel(sky, pebble);
     }
 
     // the line drawn to meet the ground's shore (z = shore(x)) at the walkable area's edges, on out straight past them
@@ -463,11 +454,20 @@ public static class ClearwaterDemoScenes
         return Save(mesh, "Meshes/" + name + ".asset");
     }
 
-    static Material Mat(string name, Color color, Texture2D tex, float smooth, Vector2 tiling)
+    // a Standard material; wet: under the water, with no highlights or reflections. The water takes what lies under
+    // it from the screen, drawn as in the air: the sun's highlight and the sky that a surface seen at a low angle
+    // mirrors (strongly, even when rough) showed through it as bright bands and patches on the floor, where under
+    // the water there are none
+    static Material Mat(string name, Color color, Texture2D tex, float smooth, Vector2 tiling, bool wet = false)
     {
         var m = new Material(Shader.Find("Standard")) { name = name, color = color, mainTexture = tex };
         m.mainTextureScale = tiling;
         m.SetFloat("_Glossiness", smooth);
+        if (wet)
+        {
+            m.SetFloat("_SpecularHighlights", 0f); m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            m.SetFloat("_GlossyReflections", 0f); m.EnableKeyword("_GLOSSYREFLECTIONS_OFF");
+        }
         return Save(m, "Materials/" + name + ".mat");
     }
 

@@ -823,6 +823,7 @@ public static class ClearwaterSetup
         prev.farClipPlane = DefaultSeaSize * FarClipPerSeaSize;
         prev.cullingMask = ~(1 << CausticsLayer);
         prev.depth = -1;
+        ClearwaterToneMapping.UseDefault(); // (before the bake: a pool's water is a copy of the sea's material)
 
         EditorSceneManager.SaveScene(scene, path);
         if (main) EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(path, true) };
@@ -1068,6 +1069,7 @@ public static class ClearwaterSetup
         if (RenderSettings.skybox == null || RenderSettings.skybox.name == "Default-Skybox") RenderSettings.skybox = a.sky;
         CreateRig(a, sun);
         if (choice == 0) UseSkyAndSun();
+        ClearwaterToneMapping.UseDefault();
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         BakeSceneCoast();

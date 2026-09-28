@@ -436,9 +436,16 @@ float4 fragSide(v2f i)
     gsign = -gsign;
     #endif
 
+    // floor distance along the unrefracted ray, to tell the seabed mesh apart from objects above it (from the floor
+    // under P: a closer trace changed next to nothing, and cost ~0.3 ms/eye)
+    float sv = (-cwFloorDepth(P.xz) - P.y) / wd.y;
+
     // The user terrain, drawn in its own material: seen through the surface as it is on screen (shifted by the waves'
     // slope), in the light that gets down through the water to it, dimmed on the way back up. Where the screen does
-    // not have it (off its edge, or something nearer in the way), its average colour in the same light.
+    // not have it (off its edge, or something nearer in the way), its average colour in the same light. (What the
+    // screen shows lies as far past the surface as the floor along the straight ray, sv: at a low angle many times
+    // the light's refracted way down, s, which alone as the limit gave a pool's floor its average colour from a few
+    // metres off.)
     float userOn = smoothstep(0.97, 1.0, cwUserTerrain(FP.xz).y);
     [branch] if (userOn > 0.0)
     {
@@ -447,7 +454,7 @@ float4 fragSide(v2f i)
         float dF = sceneDistance(uvD + offF, rdWorld) - t; // how far past the surface the scene there lies
         float3 Lu;
         float4 gU = CW_GRAB_LOD(uvG + float2(offF.x, offF.y * gsign));
-        [branch] if (dF > 0.0 && dF < 2.0 * s + 1.0 && gU.a >= 0.25) // (not the seabed's marked pixels at its edge)
+        [branch] if (dF > 0.0 && dF < max(2.0 * s, 1.25 * sv) + 1.0 && gU.a >= 0.25) // (not the seabed's marked pixels at its edge)
             Lu = cwInvTonemap(gU.rgb) * down;
         else
             Lu = cwFloorRadianceUnder(FP.xz, depthHere, 0.4, _UserMean.rgb, uSun, caus, 1.0);
@@ -456,9 +463,6 @@ float4 fragSide(v2f i)
 
     // something standing in the water (an avatar) in front of the floor? take it from the grab texture
     float sceneDist = sceneDistance(uvD, rdWorld);
-    // floor distance along the unrefracted ray, to tell the seabed mesh apart from objects above it (from the floor
-    // under P: a closer trace changed next to nothing, and cost ~0.3 ms/eye)
-    float sv = (-cwFloorDepth(P.xz) - P.y) / wd.y;
     float dObj = sceneDist - t;
     s = min(s, 30.0);
     // (over the user terrain the floor itself is on screen, only as exact as its bake: things clearly in front of it)
