@@ -217,6 +217,7 @@ public static class ClearwaterDemoScenes
         probe.refreshMode = UnityEngine.Rendering.ReflectionProbeRefreshMode.OnAwake;
         probe.boxProjection = true;
         ClearwaterCoastBake.Bake(coast); // (bakes the pools too, and cuts the sea round them)
+        SpawnOnDryGround();
         SkyPanel();
         EditorSceneManager.SaveOpenScenes();
     }
@@ -365,8 +366,39 @@ public static class ClearwaterDemoScenes
         coast.shape = ClearwaterCoast.LineShape.Straight;
         coast.handleIn = null; coast.handleOut = null; coast.corner = null;
         ClearwaterCoastBake.Bake(coast);
+        SpawnOnDryGround();
         SkyPanel();
         EditorSceneManager.SaveOpenScenes();
+    }
+
+    // The spawn on dry ground, just over it. Build Scene's spot on its beach lay under the water in some demos (in
+    // the pool, off the Terrain's shore) and in a step of the harbour's revetment: it goes back from the sea (-z)
+    // to the first ground 25 cm over the water, and a metre past that edge.
+    static void SpawnOnDryGround()
+    {
+        var desc = Object.FindObjectOfType<VRC.SDK3.Components.VRCSceneDescriptor>();
+        var ctl = Object.FindObjectOfType<ClearwaterController>();
+        if (desc == null || desc.spawns == null || desc.spawns.Length == 0 || desc.spawns[0] == null || ctl == null) return;
+        var spawn = desc.spawns[0];
+        float water = ctl.water.position.y;
+        Physics.SyncTransforms();
+        bool Dry(Vector3 p, out float y)
+        {
+            y = 0f;
+            if (!Physics.Raycast(new Vector3(p.x, water + 20f, p.z), Vector3.down, out var hit, 60f, ~0, QueryTriggerInteraction.Ignore)) return false;
+            y = hit.point.y;
+            return y > water + 0.25f;
+        }
+        Vector3 at = spawn.position;
+        for (int k = 0; k < 80; k++, at.z -= 0.5f)
+        {
+            if (!Dry(at, out _)) continue;
+            Vector3 back = at - new Vector3(0f, 0f, k == 0 ? 0f : 1f); // (a metre in from the edge it found)
+            if (!Dry(back, out float y)) { back = at; Dry(at, out y); }
+            spawn.position = new Vector3(back.x, y + 0.1f, back.z);
+            EditorUtility.SetDirty(spawn);
+            return;
+        }
     }
 
     // the sky's panel, called up anywhere; with the pebble by the spawn that shows it (the Beach's alone)
