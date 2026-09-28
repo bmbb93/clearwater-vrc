@@ -4,6 +4,8 @@
 
 A package for building clear shallows and coasts you can walk into in VRChat worlds. It covers reflections on the water surface, the patterns of light that sway on the bottom (caustics), a shoreline where waves wash in and out in time with the surf sound, and the view underwater when you dive in. It is based on the WebGL demo [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater) (MIT, © Lumaris, `LICENSE-clearwater.txt`).
 
+Try it in VRChat: [Clearwater Beach](https://vrchat.com/home/world/wrld_9795f8ab-5305-4cfb-a757-745fd264252e) (the standard scene Build Scene makes, published as a world)
+
 ![A shallow sea seen from the beach](Documentation~/images/beach.jpg)
 
 | Shallow water and caustics | The shoreline (run-up and foam) |
@@ -356,22 +358,27 @@ Seen from underwater, 3050 and below are hazed by the underwater fog, and 3051 a
 
 ## Performance
 
-Measured on an RTX 4070 Ti SUPER at 2048×2048 per eye in VR.
+Measured with package 1.0.0 on an RTX 4070 Ti SUPER. In the Unity editor, the same view was drawn repeatedly at 2048×2048 with a 90° field of view (close to one VR eye), timing until the GPU finished. The scene is the one Build Scene makes (16:00, 30% clouds), without post-processing. Both VR eyes take roughly twice these values.
 
-| Condition | Cost (per eye) |
+| View | Cost (per eye) |
 | --- | --- |
-| Water filling the screen (base) | About 3 ms |
-| Camera underwater (the water surface is drawn differently) | +0.7 ms |
-| Avatar shadows (the beach and bottom reading the sun's shadows) | +0.1–0.3 ms above water, +0.5–0.7 ms underwater |
-| Stamps present | +0.1 ms |
-| Clouds (Cover above 0) | +0.2–0.4 ms |
-| `Foam relief` on, looking at the shoreline up close | +2 ms |
-| Your own terrain, viewpoint looking at the shoreline (for the Projectors) | +1.2–1.7 ms |
-| A pool covering much of the screen (pools not on screen cost nothing) | +0.6 ms |
-| Tone mapping in post-processing | +0–0.15 ms (+0.2–0.3 ms with bloom) |
-| Time-of-day sky (Clearwater Sky, compared with the fixed sky) | +0.05 ms by day, +0.15 ms looking up at the night sky (measured on a single 1920×1080 screen) |
+| In the shallows, looking at your feet | about 6.2 ms |
+| Above the water, looking down at the open sea (water filling the view) | about 5.3 ms |
+| From the beach, looking out to sea | about 2.6 ms |
+| Underwater, looking up at the surface | about 2.5 ms |
 
-In 0.15.13–0.15.14 the computation and vertices for the water surface and beach were reduced, and measured alternately against 0.15.12 on the same PC, it became 0.8–2.2 ms (about 20%) lighter per eye (the effect is larger when the shoreline takes up more of the screen). The values in the table were measured before that.
+The conditions below add to those values. Each is the difference measured by switching only that condition on and off, alternately.
+
+| Condition | Added cost (per eye) |
+| --- | --- |
+| A pool's water covering most of the screen (compared with not drawing that water; pools not on screen cost nothing) | +1.6–1.9 ms |
+| `Foam relief` at 2 cm, looking at the shoreline up close | +0.9 ms |
+| Tone mapping in post-processing (compared with in the shaders; bloom included) | +0.4–0.5 ms |
+| Clouds (Cover above 0) | +0.25 ms |
+| The time-of-day sky (Clearwater Sky, compared with the fixed sky) | +0.1 ms looking up at the sky by day, +0.15 ms looking up at the night sky |
+| Sun shadows (drawing them, and the beach and bottom reading them; they cannot be turned off, as the water uses the depth information) | +0.1–0.15 ms |
+| Your own terrain (for the Projectors) | +0.15 ms or less |
+| Stamps | +0.05 ms or less |
 
 ## Remaking the wave audio
 

@@ -649,7 +649,7 @@ sequenceDiagram
 | 同上 | `Run-up` | 2.6 | 打ち上げが届く高さ（`Breaker height` の倍数） |
 | 同上 | `Whitewater height` | 0.03 m | 打ち上げの先端と砕ける波の盛り上がり |
 | Water | `Swell start depth` | 2.6 m | 寄せる波（うねり）が現れ始める水深。0.8 m 浅い所で本来の高さ。海岸の断面の最深部より深いと海全体に出る（重くなる）。水底・水中・自分の地形の浜のマテリアルには、コントローラーが起動時に写す |
-| 同上 | `Foam relief` | 0 | 泡の凹凸の陰影。近くで見るとき用（片目 +2 ms） |
+| 同上 | `Foam relief` | 0 | 泡の凹凸の陰影。近くで見るとき用（2 cm で片目 +0.9 ms） |
 | Water | `Depth write` | Off | 11 章。On にするとアバターの半透明の服が水に隠れる |
 | Underwater | `Fog density` | 0.2 | 水中の見通し（1 で水面から見た水と同じ濃さ） |
 | 同上 | `Fog saturation` / `Fog brightness` | 0.7 / 1 | 遠くで行き着く水の色の濃さと明るさ |

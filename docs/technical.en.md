@@ -649,7 +649,7 @@ They are in the scene's folder (chapter 9). Changes in the Inspector show in the
 | Same | `Run-up` | 2.6 | The height the swash reaches (a multiple of `Breaker height`) |
 | Same | `Whitewater height` | 0.03 m | The rise at the tip of the swash and on breaking waves |
 | Water | `Swell start depth` | 2.6 m | The water depth where the incoming waves (swell) start to appear. They reach full height 0.8 m shallower. If this is deeper than the deepest part of the coast's cross-section, they appear over the whole sea (heavier). The controller copies it at startup to the seabed, underwater and own-terrain beach materials |
-| Same | `Foam relief` | 0 | Shading for the relief of the foam. For viewing up close (+2 ms per eye) |
+| Same | `Foam relief` | 0 | Shading for the relief of the foam. For viewing up close (+0.9 ms per eye at 2 cm) |
 | Water | `Depth write` | Off | Chapter 11. When On, avatars' transparent clothes are hidden by the water |
 | Underwater | `Fog density` | 0.2 | Underwater visibility (1 = the same density as the water seen from the surface) |
 | Same | `Fog saturation` / `Fog brightness` | 0.7 / 1 | The saturation and brightness of the water color reached in the distance |
