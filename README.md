@@ -1,3 +1,5 @@
+**日本語** | [English](README.en.md)
+
 # Clearwater VRC
 
 VRChat ワールドに、歩いて入れる透明な浅瀬と海岸を作るパッケージです。水面の反射、水底に揺れる光の模様（コースティクス）、波音に合わせて寄せては返す波打ち際、潜ったときの水中の見え方までを含みます。元になった WebGL デモは [clearwater by Aureliengmz](https://github.com/Aureliengmz/clearwater)（MIT、© Lumaris、`LICENSE-clearwater.txt`）です。
