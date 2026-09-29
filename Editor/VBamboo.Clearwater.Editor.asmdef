@@ -3,7 +3,8 @@
     "rootNamespace": "",
     "references": ["VBamboo.Clearwater.Udon", "VBamboo.Clearwater.Authoring", "UdonSharp.Editor", "UdonSharp.Runtime",
                    "VRC.SDKBase", "VRC.SDK3", "VRC.Udon", "VRC.Udon.Editor", "VRC.SDK3.Editor", "VRC.SDKBase.Editor",
-                   "Unity.Postprocessing.Runtime", "UnityEngine.UI", "Unity.TextMeshPro"],
+                   "Unity.Postprocessing.Runtime", "UnityEngine.UI", "Unity.TextMeshPro",
+                   "red.sim.LightVolumes", "red.sim.LightVolumesUdon"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
@@ -12,7 +13,8 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [
-        { "name": "com.unity.postprocessing", "expression": "3.0.0", "define": "CW_PPV2" }
+        { "name": "com.unity.postprocessing", "expression": "3.0.0", "define": "CW_PPV2" },
+        { "name": "red.sim.lightvolumes", "expression": "2.0.0", "define": "CW_LIGHT_VOLUMES" }
     ],
     "noEngineReferences": false
 }

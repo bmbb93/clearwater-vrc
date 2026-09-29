@@ -4,13 +4,18 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+#if CW_LIGHT_VOLUMES
+using UdonSharpEditor;
+using VRCLightVolumes;
+#endif
 using Object = UnityEngine.Object;
 
 /// <summary>
 /// Demo scenes, each showing a way to use Clearwater: the beach Clearwater makes itself (its own generated ground, as
 /// Build Scene's), a cove modelled as a mesh (user terrain), a harbour (a quay, a stepped revetment, a ramp, a pier on
 /// piles), a swimming pool (a user terrain with still water), a resort (the sea and two pools at other heights) and a
-/// beach made with a Unity Terrain. Each has the sky's panel, called up anywhere (over the hand in VR, in front of
+/// beach made with a Unity Terrain; with VRC Light Volumes in the project, also the beach at night lit by point light
+/// volumes, one of them moving. Each has the sky's panel, called up anywhere (over the hand in VR, in front of
 /// the view on a desktop); the Beach, the sample of a whole scene, also has the pebble by the spawn that shows it.
 /// All tone map in post-processing, as a new scene does. Tools > Clearwater > Demo Scenes > Build Demo
 /// Scenes makes them in Assets/Clearwater/Demo (the scenes, and their meshes, textures and materials, all made here);
@@ -40,6 +45,9 @@ public static class ClearwaterDemoScenes
             BuildPool();
             BuildResort();
             BuildTerrain();
+#if CW_LIGHT_VOLUMES
+            BuildLightVolumes();
+#endif
             BuildBeach(); // (last: the one left open)
         }
         finally { _assets = null; }
@@ -52,6 +60,9 @@ public static class ClearwaterDemoScenes
     [MenuItem(Menu + "Open Pool (still water only)", false, 202)] static void OpenPool() => Open(Dir + "/Demo_Pool.unity");
     [MenuItem(Menu + "Open Resort (the sea and two pools)", false, 203)] static void OpenResort() => Open(Dir + "/Demo_Resort.unity");
     [MenuItem(Menu + "Open Terrain (a Unity Terrain)", false, 204)] static void OpenTerrainScene() => Open(Dir + "/Demo_Terrain.unity");
+#if CW_LIGHT_VOLUMES
+    [MenuItem(Menu + "Open Light Volumes (VRC Light Volumes)", false, 205)] static void OpenLightVolumes() => Open(Dir + "/Demo_LightVolumes.unity");
+#endif
     [MenuItem(Menu + "Back to the Clearwater Scene", false, 300)] static void OpenMain() => Open(ClearwaterSetup.ScenePath);
 
     /// <summary>Opens a scene (each keeps its own bakes: nothing to bake again).</summary>
@@ -329,6 +340,88 @@ public static class ClearwaterDemoScenes
         MeetShore(coast, shore);
         Finish(coast, root, true);
     }
+
+#if CW_LIGHT_VOLUMES
+    // The beach at night (21:00, the moon up) lit by VRC Light Volumes' point light volumes, as Clearwater reads them:
+    // lamps on the sand, over the shallows and under the water (in the shallows, and 1.6 m down), a spot over the beach,
+    // and one that goes round across the waterline changing its colour and brightness (ClearwaterDemoLamp). Each has a
+    // small glowing ball to show where it is (Standard: under the water too, where the water finds things by depth).
+    static void BuildLightVolumes()
+    {
+        NewScene("Demo_LightVolumes");
+        SkyPanel();
+        var sky = Object.FindObjectOfType<ClearwaterSky>(true);
+        if (sky != null)
+        {
+            sky.timeOfDay = 21f;
+            UdonSharpEditorUtility.CopyProxyToUdon(sky);
+            ClearwaterSkySetup.Show(sky);
+        }
+        var root = new GameObject("Light Volumes (Demo)");
+        var warm = new Color(1f, 0.62f, 0.3f);
+        var cool = new Color(0.4f, 0.8f, 1f);
+        Lamp(root, "Lamp on the sand", new Vector3(-1.5f, 0.8f, -38f), warm, 6f);
+        Lamp(root, "Lamp over the shallows", new Vector3(1.5f, 0.5f, -30f), warm, 6f);
+        Lamp(root, "Lamp under the water", new Vector3(-3f, -0.35f, -31f), cool, 3f);
+        Lamp(root, "Lamp in deeper water", new Vector3(-2f, -1.1f, -5f), cool, 3f);
+        var spot = Lamp(root, "Spot on the beach", new Vector3(3.5f, 2.5f, -39f), new Color(1f, 0.9f, 0.75f), 8f);
+        spot.transform.rotation = Quaternion.LookRotation(Vector3.down, Vector3.forward);
+        spot.Type = PointLightVolume.LightType.SpotLight;
+        spot.Angle = 70f;
+        spot.Falloff = 0.6f;
+        var moving = Lamp(root, "Moving lamp", new Vector3(4f, 0.6f, -33f), Color.white, 4f);
+        moving.Dynamic = true;
+
+        ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterDemoLamp.cs");
+        var lamp = UdonSharpUndo.AddComponent<ClearwaterDemoLamp>(moving.gameObject);
+        lamp.marker = moving.GetComponentInChildren<MeshRenderer>();
+        var ground = GameObject.Find("Seabed Collider");
+        if (ground != null) lamp.groundLayers = 1 << ground.layer;
+
+        var setup = Object.FindObjectOfType<LightVolumeSetup>();
+        foreach (var v in root.GetComponentsInChildren<PointLightVolume>()) { v.SetupDependencies(); v.SyncUdonScript(); }
+        lamp.lightVolume = UdonSharpEditorUtility.GetBackingUdonBehaviour(moving.PointLightVolumeInstance);
+        UdonSharpEditorUtility.CopyProxyToUdon(lamp);
+        if (setup == null) setup = Object.FindObjectOfType<LightVolumeSetup>();
+        if (setup != null) { setup.RefreshVolumesList(); setup.SyncUdonScript(); }
+        EditorSceneManager.SaveOpenScenes();
+    }
+
+    // a point light volume with a small glowing ball in its colour
+    static PointLightVolume Lamp(GameObject root, string name, Vector3 pos, Color color, float intensity)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(root.transform, false);
+        go.transform.position = pos;
+        // (its Udon side first, the U# way, so it has its UdonBehaviour at once: the volume would add it plainly, and
+        // U# makes the UdonBehaviour for that only later, too late to be referred to or saved here)
+        UdonSharpUndo.AddComponent<PointLightVolumeInstance>(go);
+        var v = go.AddComponent<PointLightVolume>();
+        v.Color = color;
+        v.Intensity = intensity;
+        v.Range = 10f;
+        v.LightSourceSize = 0.25f;
+        var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        ball.name = "Marker";
+        Object.DestroyImmediate(ball.GetComponent<Collider>());
+        ball.transform.SetParent(go.transform, false);
+        ball.transform.localScale = Vector3.one * 0.12f;
+        var r = ball.GetComponent<MeshRenderer>();
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.sharedMaterial = Glow("Lamp " + name, color * 2f);
+        return v;
+    }
+
+    static Material Glow(string name, Color emission)
+    {
+        var m = new Material(Shader.Find("Standard")) { name = name, color = Color.black };
+        m.SetFloat("_Glossiness", 0f);
+        m.EnableKeyword("_EMISSION");
+        m.SetColor("_EmissionColor", emission);
+        m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+        return Save(m, "Materials/" + name + ".mat");
+    }
+#endif
 
     // ------------------------------------------------------------------ building blocks
 

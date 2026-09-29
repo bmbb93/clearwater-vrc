@@ -10,6 +10,7 @@ Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き
 
 - [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes)（RED_SIM）に対応しました。Light Volumes を置いたワールドでは、Additive の Light Volume と Point Light Volume の光が、アバターと同じように浜・水の中の底・泡にも当たり、水面にはその照り返しが映ります。夜の浜に置いたランプや焚き火が、砂と浅瀬を照らします。Additive でない Light Volume は、焼いたときの時刻の明るさが入っているので読みません（[README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.md#vrc-light-volumes) の「VRC Light Volumes」）
 - Light Volumes のパッケージは必須ではありません。シェーダーが読む部分（`LightVolumes.cginc` 2.1.3、MIT）を同梱しています。Light Volume のないワールドでは、見た目も負荷も 1.0.0 と変わりません
+- VRC Light Volumes がプロジェクトに入っていれば、Build Demo Scenes が 7 つ目のデモ「Demo_LightVolumes」も作ります。夜の浜を、砂の上・浅瀬の上・水の中に置いた Point Light Volume と、水際を回りながら色と明るさを変えるランプで照らしたものです（`Open Light Volumes (VRC Light Volumes)`）
 
 ## [1.0.0] - 2026-09-29
 

@@ -17,6 +17,9 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
   the hour they were baked at (see "VRC Light Volumes" in the [README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.en.md#vrc-light-volumes)).
 - The Light Volumes package is optional: its shader include (`LightVolumes.cginc` 2.1.3, MIT) comes with the
   package. In a world without Light Volumes, the look and the cost are the same as in 1.0.0.
+- With VRC Light Volumes in the project, Build Demo Scenes also makes a seventh demo, Demo_LightVolumes: the beach at
+  night lit by Point Light Volumes on the sand, over the shallows and in the water, and by a lamp that goes round
+  across the waterline changing its colour and brightness (`Open Light Volumes (VRC Light Volumes)`).
 
 ## [1.0.0] - 2026-09-29
 

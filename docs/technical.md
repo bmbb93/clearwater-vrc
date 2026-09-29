@@ -711,6 +711,7 @@ Sky の雲と遠景の陸は、Inspector で変えると Water と Seabed にも
 | `Runtime/Udon/ClearwaterController.cs` | 見ている水、波紋、体とタップの波紋、水中の判定、太陽の向き、波音、光の模様の Projector |
 | `Runtime/Udon/ClearwaterSky.cs` | 時刻の空と、その同期 |
 | `Runtime/Udon/ClearwaterSkyPanel.cs`、`ClearwaterSkyPanelOpener.cs` | 空のパネルと、それを出す小石 |
+| `Runtime/Udon/ClearwaterDemoLamp.cs` | Light Volumes のデモの動くランプ（Light Volumes の型を使わず、その UdonBehaviour の変数を書き換える。パッケージがなくてもコンパイルできる） |
 | `Runtime/Authoring/ClearwaterCoast.cs` | 海岸（編集用。アップロードに含まれない） |
 | `Runtime/Authoring/ClearwaterStamp.cs`、`ClearwaterPool.cs`、`ClearwaterBedLook.cs` | スタンプ、プール、Bed look |
 | `Runtime/BedLooks/`、`Runtime/Textures/` | 小石と砂の Bed look、その画像（計算で作ったもの） |
@@ -726,7 +727,7 @@ Sky の雲と遠景の陸は、Inspector で変えると Water と Seabed にも
 | `Editor/ClearwaterSkyEditor.cs` | 時刻の空の設置と Inspector、Add Sky Control Panel |
 | `Editor/ClearwaterSkyGUI.cs` | Sky マテリアルの Inspector（雲と遠景の陸を水面と水底へコピー） |
 | `Editor/ClearwaterToneMapping.cs` | トーンマッピングの方式の切り替え（PPv2 の LUT） |
-| `Editor/ClearwaterDemoScenes.cs` | デモシーン 6 つ（Clearwater が作る地面の浜と、自分の地形・プールの例） |
+| `Editor/ClearwaterDemoScenes.cs` | デモシーン 6 つ（Clearwater が作る地面の浜と、自分の地形・プールの例）。VRC Light Volumes があれば 7 つ目（asmdef の versionDefines で `CW_LIGHT_VOLUMES` が付くときだけコンパイル） |
 | `Tests/Editor/` | EditMode のテスト（19 章） |
 | `Tools~/make_wave_audio.sh`、`detect_wave_breaks.js`、`make_sand.py` | 波音の加工、波の崩れる瞬間の検出、砂の画像 |
 | `Documentation~/images/` | README の画像 |
