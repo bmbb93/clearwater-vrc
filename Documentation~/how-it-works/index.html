@@ -1,0 +1,1489 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Clearwater VRC が VRChat ワールドの浅瀬を描く仕組みを、動く図で説明するページ。">
+<title>Clearwater VRC の仕組み</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+html { color-scheme: light; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+:root {
+  --bg: #ecf2f1;
+  --panel: #f8fbfa;
+  --stage: #e2ecea;
+  --ink: #10303a;
+  --muted: #4f6c73;
+  --line: #c6d6d5;
+  --accent: #0b8780;
+  --sun: #d0801f;
+  --water: #2f93a4;
+  --water-deep: #134b5d;
+  --sand: #d8c29a;
+  --foam: #ffffff;
+  --sky: #9fc9e2;
+  --focus: #0b8780;
+  --font-jp: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #09161b;
+    --panel: #0e2027;
+    --stage: #0b1b21;
+    --ink: #dbeaea;
+    --muted: #8eaeb2;
+    --line: #21404a;
+    --accent: #3cc7bc;
+    --sun: #f0a847;
+    --water: #2b95a8;
+    --water-deep: #0a3242;
+    --sand: #b8a179;
+    --foam: #f4fbfb;
+    --sky: #3c7194;
+    --focus: #3cc7bc;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #09161b;
+  --panel: #0e2027;
+  --stage: #0b1b21;
+  --ink: #dbeaea;
+  --muted: #8eaeb2;
+  --line: #21404a;
+  --accent: #3cc7bc;
+  --sun: #f0a847;
+  --water: #2b95a8;
+  --water-deep: #0a3242;
+  --sand: #b8a179;
+  --foam: #f4fbfb;
+  --sky: #3c7194;
+  --focus: #3cc7bc;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-jp);
+  font-size: 15px;
+  line-height: 1.8;
+  padding-inline: 20px;
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; }
+header.top {
+  padding-block: 44px 20px;
+  display: grid;
+  gap: 14px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+h1 {
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.25;
+  margin: 0;
+  font-weight: 700;
+  text-wrap: balance;
+}
+.lead { max-width: 44em; margin: 0; color: var(--ink); }
+.lead + .lead { color: var(--muted); font-size: 14px; }
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px; }
+nav.toc a {
+  color: var(--ink);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 11px;
+  font-size: 13px;
+  background: var(--panel);
+}
+nav.toc a:hover { border-color: var(--accent); }
+button, input { font: inherit; }
+.btn {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 3px 13px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+section.plate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px 36px;
+  padding-block: 40px;
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 920px) {
+  section.plate { grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); align-items: start; }
+  section.plate.wide { grid-template-columns: minmax(0, 1fr); }
+  section.plate.wide .text { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: 0 36px; }
+  section.plate.wide .text .facts { align-self: end; }
+}
+.text { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.chap {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+h2 {
+  font-size: clamp(20px, 2.6vw, 25px);
+  line-height: 1.45;
+  margin: 0;
+  font-weight: 700;
+  text-wrap: balance;
+}
+.text p { margin: 0; max-width: 40em; }
+.facts {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 4px 14px;
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.facts dd .jp { font-family: var(--font-jp); font-size: 13.5px; }
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: color-mix(in srgb, var(--line) 45%, transparent);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+figure { margin: 0; display: grid; gap: 10px; min-width: 0; }
+.stage {
+  background: var(--stage);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  min-width: 0;
+}
+.stage canvas { display: block; width: 100%; }
+figcaption { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+  font-size: 13.5px;
+}
+.controls label { display: inline-flex; gap: 7px; align-items: center; cursor: pointer; }
+.controls input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+.controls input[type="range"] { accent-color: var(--accent); width: min(320px, 100%); }
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.readout b { color: var(--ink); font-weight: 600; }
+.swatch {
+  display: inline-block;
+  width: 26px;
+  height: 14px;
+  border-radius: 3px;
+  vertical-align: -2px;
+  border: 1px solid var(--line);
+}
+.stages { display: flex; flex-wrap: wrap; gap: 6px; }
+.stages span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  transition: background-color .2s, color .2s, border-color .2s;
+}
+.stages span.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+footer {
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  font-size: 13px;
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+}
+footer a, .text a { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .stages span { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Clearwater VRC 1.0.0</div>
+    <h1>Clearwater VRC の仕組み</h1>
+    <p class="lead">VRChat ワールドの透明な浅瀬を、エディターで焼き込んだ少しのデータと、毎フレームの GPU の計算で描いています。水面の揺れ、水越しの水底、光の模様、打ち寄せる波、水中からの眺め、空の色、最後の色の整え方を、動く図で順に見ていきます。</p>
+    <p class="lead">屈折率、水の吸収、臨界角、トーンカーブなどの数値は、パッケージの実装と同じ値です。寸法と一部の色は、見やすさのために誇張したり簡略化したりしています。詳しくは <a href="https://github.com/bmbb93/clearwater-vrc/blob/main/docs/technical.md">docs/technical.md</a> にあります。</p>
+    <div class="toolbar">
+      <nav class="toc" aria-label="目次">
+        <a href="#pipeline">1 フレームの流れ</a>
+        <a href="#waves">波</a>
+        <a href="#seabed">水底</a>
+        <a href="#caustics">光の模様</a>
+        <a href="#swash">打ち寄せる波</a>
+        <a href="#snell">水中から見上げる</a>
+        <a href="#sky">空</a>
+        <a href="#tone">トーンカーブ</a>
+      </nav>
+      <button class="btn" id="pause-all" type="button" aria-pressed="false">動きを止める</button>
+    </div>
+  </header>
+
+  <section class="plate wide" id="pipeline">
+    <div class="text">
+      <div>
+        <div class="chap">technical.md 1 章</div>
+        <h2>毎フレーム、材料を作ってから 5 つのシェーダーで描く</h2>
+      </div>
+      <p>左の Udon と真ん中の下ごしらえは、画面には出ない材料作りです。Udon は、見ている人がどの水にいるか、どこに波紋を落とすか、波音がどこまで進んだかを決めます。下ごしらえでは、Custom Render Texture（CRT）の連鎖で波の高さと波紋を計算し、専用のカメラで光の模様を描きます。右の 5 つのシェーダーが、その材料を読んで画面を描きます。流れる点は、材料の受け渡しを表しています。</p>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-pipeline" role="img" aria-label="1 フレームの流れの図。Udon の ClearwaterController と ClearwaterSky、GPU の CRT_Spectrum から CRT_FFT、CRT_Ripple から CRT_RippleNormals、光の模様カメラを経て、Sky・Underwater・Water・Seabed・AvatarCaustics の各シェーダーへ材料が流れる。"></canvas></div>
+      <figcaption>毎フレーム作る材料は 3 つです。波の高さ（<code>CRT_FFT_Y1_Surface</code>、256²、半精度）、波紋（<code>CRT_RippleNormals</code>、見ている人の前の 14 m 四方を 512²）、光の模様（<code>RT_Caustics</code>、1024²）。Seabed は深度テクスチャと影の印を通して、Water に水底の影を渡します。</figcaption>
+    </figure>
+  </section>
+
+  <section class="plate" id="waves">
+    <div class="text">
+      <div class="chap">technical.md 4 章</div>
+      <h2>波は 4.6 m 四方の模様を敷き詰め、60 秒で元に戻る</h2>
+      <p>水面の揺れは、4.6 m 四方を 256 × 256 に分けた波の模様です。エディターで一度だけ波のスペクトルを作り、毎フレーム、時刻の分だけ位相を進めて、逆 FFT で高さと傾きを求めます。周波数を 2π/60 の倍数に丸めてあるので、波は 60 秒でちょうど元に戻ります。</p>
+      <p>模様は場所によらないので、海の広さやプールの数が増えても、この計算の負荷は変わりません。ただ、同じ模様を並べると繰り返しが見えてしまいます。そこで水面では、0.41 倍に縮めて回した 2 枚目を小さく重ねています。</p>
+      <dl class="facts">
+        <dt>模様の大きさ</dt><dd>4.6 m 四方、256²</dd>
+        <dt>波の山</dt><dd><span class="jp">風の波 0.62 m、うねり 1.6 m</span></dd>
+        <dt>繰り返し</dt><dd>60 s</dd>
+        <dt>計算</dt><dd><span class="jp">CRT 5 枚（位相 1 + FFT 4）</span></dd>
+      </dl>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-waves" role="img" aria-label="上から見た水面。4.6 m 四方の同じ波の模様が 3 列に並び、時間とともに揺れる。"></canvas></div>
+      <div class="controls">
+        <label><input type="checkbox" id="waves-layer"> 2 枚目を重ねる（0.41 倍に縮めて回す）</label>
+      </div>
+      <figcaption>点線が 4.6 m の模様の区切りです。チェックを外したままだと、どの区画にも同じ模様が並んでいるのが分かります。チェックを入れると、実際の水面と同じく 2 枚目が重なり、繰り返しが目立たなくなります。図の模様は、FFT の代わりに、同じ条件（4.6 m と 60 秒で繰り返す）を満たす 12 本の波を足して描いています。</figcaption>
+    </figure>
+  </section>
+
+  <section class="plate" id="seabed">
+    <div class="text">
+      <div class="chap">technical.md 5・7 章</div>
+      <h2>水越しの水底は、画面から拾わずに計算で求める</h2>
+      <p>水面から見える水底は、画面に描かれた水底のメッシュではありません。水面のシェーダーが、屈折した視線を、焼き込んだ水底の深さの式に当てて求めています。まず水面の真下の深さで交点を仮に置き（1）、その位置の深さで置き直し（2）、もう一度置き直します（3）。3 回で、起伏のある水底にもほぼ正確に当たります。</p>
+      <p>交わった所の砂の色に、水の中を進んだ距離だけ吸収を掛けます。赤が一番早く消えるので、深い所ほど青緑になります。この方式なら、画面の外や手前の物に隠れた水底でも絵が崩れません。水の中にあるアバターや杭だけは、深度テクスチャで見つけて画面から拾います。</p>
+      <dl class="facts">
+        <dt>水面の屈折率</dt><dd>1.3335</dd>
+        <dt>吸収（1 m あたり）</dt><dd>R 0.40　G 0.074　B 0.088</dd>
+        <dt>深さの式</dt><dd><code>cwFloorDepth</code></dd>
+      </dl>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-seabed" role="img" aria-label="海岸の断面図。浜に立つ目からの視線が水面で屈折し、水底の深さの式に 3 回当てて交点を求める様子。"></canvas></div>
+      <div class="readout" id="seabed-readout" aria-live="off"></div>
+      <figcaption>断面図です。右が浜、左が沖で、高さは 2 倍ほどに誇張しています。点線の縦と横の線が、「その位置の深さを読んで、視線がその深さに達する所へ移る」1 回分の計算です。下の色は、水の中を進んだ距離で砂の色がどう変わるかを示しています。</figcaption>
+    </figure>
+  </section>
+
+  <section class="plate" id="caustics">
+    <div class="text">
+      <div class="chap">technical.md 6 章</div>
+      <h2>光の模様は、曲げた格子の縮み具合で明るさを決める</h2>
+      <p>水底に揺れる光の網目は、Evan Wallace の方法で作っています。波 1 枚分を覆う格子の各頂点を、水面で屈折した太陽光に沿って深さ 1.6 m まで曲げます。曲げた後に網目が縮んだ所は光が集まった所なので、明るく塗ります。</p>
+      <p>赤・緑・青で屈折率を少しずつ変えて 3 回描くので、模様の縁にうっすら虹色がにじみます。描く先は 1024² のテクスチャで、専用の正射影カメラが、y = −20000 の地下で Caustics レイヤー（23）だけを描きます。水底・水面・アバターの 3 つが、同じ模様を読みます。</p>
+      <dl class="facts">
+        <dt>格子</dt><dd>283 × 283 頂点</dd>
+        <dt>深さ</dt><dd>1.6 m</dd>
+        <dt>屈折率（R・G・B）</dt><dd>1.3315 / 1.3335 / 1.3365</dd>
+        <dt>負荷</dt><dd><span class="jp">毎フレーム約 0.33 ms</span></dd>
+      </dl>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-caustics" role="img" aria-label="水の断面。平行な太陽光が波打つ水面で屈折し、深さ 1.6 m の水底で集まったり広がったりして、明るい筋と暗い所ができる。"></canvas></div>
+      <div class="controls">
+        <label><input type="checkbox" id="caustics-disp"> 色ごとの屈折率の差を 20 倍にして見る</label>
+      </div>
+      <figcaption>4.6 m 幅の断面です。上から来る平行な光が、揺れる水面で曲がります。いちばん下の帯が、水底に届いた光の明るさです。平らな水面のときを 1 として、上のグラフに描いています。</figcaption>
+    </figure>
+  </section>
+
+  <section class="plate" id="swash">
+    <div class="text">
+      <div class="chap">technical.md 8 章</div>
+      <h2>打ち寄せる波は、波音の再生位置を時計にして動く</h2>
+      <p>浜に打ち上げる波は、聞こえる波音と合うように動かしています。90 秒の波音のループから、波が崩れる瞬間を 27 か所、あらかじめ検出してあります。実行中は、コントローラーが波音の <code>AudioSource.time</code> を、シェーダーの時計 <code>_SwashClock</code> に渡します。</p>
+      <p>波打ち際は 4 つの段階で計算します。沖から来るうねりは、浅くなるほど遅く高くなります。高さが水深の 0.8 倍を超えると崩れて泡立ちます。崩れた水は浜を放物線を描いて駆け上がり、上がるときの 0.6 倍の加速で引いていきます。水が引いた後の砂は暗く光り、数秒かけて乾きます。</p>
+      <dl class="facts">
+        <dt>波音のループ</dt><dd>90 s、崩れる瞬間 27 か所</dd>
+        <dt>崩れる高さ</dt><dd>0.14 m <span class="jp">（Breaker height）</span></dd>
+        <dt>打ち上げ</dt><dd><span class="jp">崩れる高さの 2.6 倍（Run-up）</span></dd>
+        <dt>場所ごとの遅れ</dt><dd>√(g·h) <span class="jp">で焼き込み</span></dd>
+      </dl>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-swash" role="img" aria-label="上に 90 秒の波音の波形と再生位置、下に浜の断面。波が崩れる印に合わせて、うねりが崩れ、浜を駆け上がって引き、濡れた砂が乾いていく。"></canvas></div>
+      <div class="stages" id="swash-stages" aria-hidden="true">
+        <span data-k="swell">うねり</span><span data-k="break">砕波</span><span data-k="swash">打ち上げ</span><span data-k="wet">濡れた砂</span>
+      </div>
+      <figcaption>上の帯は、波音 90 秒の音量（模式）です。三角の印が波の崩れる瞬間で、縦線が今の再生位置です。下の断面では、印の時刻に合わせて波が崩れ、浜を駆け上がります。高さは誇張しています。</figcaption>
+    </figure>
+  </section>
+
+  <section class="plate" id="snell">
+    <div class="text">
+      <div class="chap">technical.md 7 章</div>
+      <h2>水中から見上げると、空は 97° の円の中に集まる</h2>
+      <p>水から空気へ抜ける光は、水面で大きく曲がります。真上から 48.6°（臨界角）より内側の視線だけが空気へ抜け、空の半球全体がその円の中に縮んで見えます。これがスネルの窓です。窓の外では水面が鏡になり（全反射）、水底や水中の物が映ります。</p>
+      <p>水面のシェーダーは、上から見るパスと下から見るパスを持ち、カメラの側に合わないほうを潰します。カメラが水面から 60 cm 以内にあるときは、レンズの位置の実際の波の高さで、画素ごとに上か下かを決めます。窓の外に映る物は画面からたどり、見つからなければ計算した水底を映します。</p>
+      <dl class="facts">
+        <dt>臨界角</dt><dd>asin(1 / 1.3335) = 48.6°</dd>
+        <dt>窓の広さ</dt><dd>97.2°</dd>
+        <dt>水中の霧</dt><dd><span class="jp">水面から 0.6 m 以内で表示</span></dd>
+      </dl>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-snell" role="img" aria-label="水中から見上げた断面と、見上げた画面。臨界角より内側の視線は空へ抜け、外側は水面で反射して水底へ向かう。"></canvas></div>
+      <div class="readout" id="snell-readout" aria-live="off"></div>
+      <figcaption>左が断面、右が見上げたときの画面です。明るい線が今の視線で、水中での角度と、空気中へ抜けた後の角度、抜ける光の割合（フレネル）を示しています。</figcaption>
+    </figure>
+  </section>
+
+  <section class="plate" id="sky">
+    <div class="text">
+      <div class="chap">technical.md 13 章</div>
+      <h2>空の色は、太陽の高さごとに一度だけ計算した表から引く</h2>
+      <p>時刻の空は、エディターで大気の散乱を一度だけ計算し（5 秒ほど）、表にしてあります。空気の分子（Rayleigh 散乱）、細かい粒子（Mie 散乱）、オゾン、2 回以上の散乱まで入れた地球の大気です。実行中は、Udon の <code>ClearwaterSky</code> が時刻から太陽と月の位置を求め、グローバル変数でシェーダーに渡します。シェーダーは見る方向ごとに表を 1 回引くだけです。</p>
+      <p>太陽が低いほど、光が空気の中を進む道のりは長くなります。そのあいだに青い光が散らされ、届く光は赤く、暗くなります。図の色は、空気の分子による減り方だけで計算した太陽光の色です。</p>
+      <dl class="facts">
+        <dt>空の表</dt><dd>3D 64 × 64 × 48</dd>
+        <dt>Udon の表</dt><dd><span class="jp">0.5° ごと 221 行</span></dd>
+        <dt>空気の厚さ</dt><dd><span class="jp">分子 8 km、粒子 1.2 km ごとに 1/e</span></dd>
+        <dt>時刻を進めるとき</dt><dd><span class="jp">0.1 秒ごと、1 回 0.07 ms</span></dd>
+      </dl>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-sky" role="img" aria-label="地球と大気の断面。太陽が低くなるほど、太陽から観測者までの空気の道のりが長くなり、届く光が赤くなる。"></canvas></div>
+      <div class="controls">
+        <label for="sky-time">太陽の位置</label>
+        <input type="range" id="sky-time" min="0" max="1000" value="330">
+      </div>
+      <div class="readout" id="sky-readout" aria-live="off"></div>
+      <figcaption>大気の厚さは大きく誇張しています。背景の空の色は模式です。スライダーを動かすと、その位置で止まります。3 秒たつと、また動き出します。</figcaption>
+    </figure>
+  </section>
+
+  <section class="plate" id="tone">
+    <div class="text">
+      <div class="chap">technical.md 12 章</div>
+      <h2>明るい所は 0.8 から長い肩を通り、0.9 の白で止まる</h2>
+      <p>描いた明るさは、最後に 1 本の曲線（トーンカーブ）で画面の明るさに直します。露出 0.63 を掛けて ACES の近似曲線を通し、0.8 を超えた所だけは別の肩に乗せて、ゆっくり 0.9 に近づけます。画面に 100% の白が出ないので、太陽の周りや雲の縁の明るさにも階調が残ります。</p>
+      <p>既定では、同じ曲線を 33³ の LUT にして、Post Processing Stack v2 で画面全体に掛けます。シェーダーの中で掛ける方式も選べますが、水越しに拾った Standard の明るい物が白く飛ぶので、既定はポストプロセスです。</p>
+      <dl class="facts">
+        <dt>露出</dt><dd>0.63</dd>
+        <dt>肩の始まり</dt><dd><span class="jp">露出後 0.8（ACES の値 0.7523）</span></dd>
+        <dt>白</dt><dd>0.9</dd>
+        <dt>既定</dt><dd><span class="jp">PPSv2 の LUT（33³）</span></dd>
+      </dl>
+    </div>
+    <figure>
+      <div class="stage"><canvas id="cv-tone" role="img" aria-label="トーンカーブのグラフ。横軸が描いた明るさ、縦軸が画面の明るさ。ACES の近似曲線は 1 に近づき、Clearwater の曲線は 0.8 から肩を通って 0.9 に近づく。下に二つの曲線で変換した明るさの帯。"></canvas></div>
+      <div class="readout" id="tone-readout" aria-live="off"></div>
+      <figcaption>破線が ACES の近似曲線だけの場合、実線が Clearwater の曲線です。下の 2 本の帯は、同じ明るさの並びをそれぞれの曲線に通したものです。ACES だけでは明るい側がほぼ一様な白になり、Clearwater では 0.9 の手前まで階調が残ります。図は露出と曲線だけで、わずかな彩度の調整は省いています。</figcaption>
+    </figure>
+  </section>
+
+  <footer>
+    <div>Clearwater VRC 1.0.0（MIT）。元になった WebGL デモは <a href="https://github.com/Aureliengmz/clearwater">clearwater by Aureliengmz</a>（MIT、© Lumaris）です。</div>
+    <div>リポジトリ：<a href="https://github.com/bmbb93/clearwater-vrc">github.com/bmbb93/clearwater-vrc</a>　ワールド：<a href="https://vrchat.com/home/world/wrld_9795f8ab-5305-4cfb-a757-745fd264252e">Clearwater Beach</a></div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const FJ = '"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif';
+  const FM = '"JetBrains Mono", ui-monospace, Consolas, monospace';
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const fract = x => x - Math.floor(x);
+
+  // ---- theme tokens ----
+  const C = {};
+  const TOKENS = ["bg", "panel", "stage", "ink", "muted", "line", "accent", "sun", "water", "water-deep", "sand", "foam", "sky"];
+  function hexRGB(s) {
+    s = s.trim();
+    if (s[0] !== "#") return [128, 128, 128];
+    if (s.length === 4) s = "#" + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+    return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+  }
+  function readTokens() {
+    const cs = getComputedStyle(document.body);
+    for (const k of TOKENS) C[k.replace("-", "_")] = hexRGB(cs.getPropertyValue("--" + k));
+    C.dark = (C.bg[0] + C.bg[1] + C.bg[2]) < 200;
+  }
+  const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  const toSRGB = v => { v = clamp(v, 0, 1); return v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; };
+  const linCss = (r, g, b) => `rgb(${Math.round(toSRGB(r) * 255)},${Math.round(toSRGB(g) * 255)},${Math.round(toSRGB(b) * 255)})`;
+
+  function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function pill(ctx, text, x, y, font, fg, bg) {
+    ctx.font = font;
+    const tw = ctx.measureText(text).width;
+    rr(ctx, x - tw / 2 - 6, y - 9, tw + 12, 18, 9);
+    ctx.fillStyle = bg; ctx.fill();
+    ctx.fillStyle = fg; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y + 0.5);
+  }
+  function mulberry(a) {
+    return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+
+  // ---- stage loop ----
+  const stages = [];
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let pausedAll = false;
+  function stage(id, heightFor, draw, t0 = 0) {
+    const canvas = document.getElementById(id);
+    const s = { canvas, ctx: canvas.getContext("2d"), w: 0, h: 0, t: t0, visible: true, dirty: true, draw, hold: 0 };
+    function resize() {
+      const w = Math.max(1, canvas.parentElement.clientWidth);
+      const h = Math.round(heightFor(w));
+      const d = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.style.height = h + "px";
+      canvas.width = Math.round(w * d); canvas.height = Math.round(h * d);
+      s.ctx.setTransform(d, 0, 0, d, 0, 0);
+      s.w = w; s.h = h; s.dirty = true;
+    }
+    resize();
+    new ResizeObserver(resize).observe(canvas.parentElement);
+    if ("IntersectionObserver" in window) new IntersectionObserver(e => { s.visible = e[0].isIntersecting; if (s.visible) s.dirty = true; }).observe(canvas);
+    stages.push(s);
+    return s;
+  }
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const moving = !reduce.matches && !pausedAll;
+    for (const s of stages) {
+      if (!s.visible) continue;
+      if (moving && s.hold <= 0) { s.t += dt; s.dirty = true; }
+      if (s.hold > 0) s.hold -= dt;
+      if (s.dirty) { s.dirty = false; try { s.draw(s); } catch (e) { console.error(e); } }
+    }
+    requestAnimationFrame(frame);
+  }
+  const redrawAll = () => { readTokens(); for (const s of stages) s.dirty = true; };
+
+  // =====================================================================================
+  // 1. pipeline
+  // =====================================================================================
+  const PN = {
+    CTL: { g: 0, t: "ClearwaterController", s: "見ている水・波紋・波音" },
+    SKY: { g: 0, t: "ClearwaterSky", s: "時刻 → 太陽・月・光" },
+    SPEC: { g: 1, t: "CRT_Spectrum", s: "波の位相を進める" },
+    FFT: { g: 1, t: "CRT_FFT ×4", s: "波の高さと傾き" },
+    RIP: { g: 1, t: "CRT_Ripple", s: "波紋の方程式" },
+    RIPN: { g: 1, t: "CRT_RippleNormals", s: "波紋の傾き" },
+    CAUS: { g: 1, t: "光の模様カメラ", s: "RT_Caustics", jp: true },
+    SKYB: { g: 2, t: "Sky", s: "空" },
+    UNDER: { g: 2, t: "Underwater", s: "水中の霧" },
+    WATER: { g: 2, t: "Water", s: "水面" },
+    SEABED: { g: 2, t: "Seabed", s: "水底・浜" },
+    AVC: { g: 2, t: "AvatarCaustics", s: "アバターの光の模様" },
+  };
+  const PE = [
+    ["CTL", "RIP", "波紋"], ["CTL", "WATER", "波音の時計"], ["SKY", "SKYB"], ["SKY", "WATER", "_Udon_CW*"],
+    ["SPEC", "FFT"], ["RIP", "RIPN"], ["FFT", "CAUS"], ["RIPN", "CAUS"], ["FFT", "WATER"], ["RIPN", "WATER"],
+    ["CAUS", "SEABED"], ["CAUS", "WATER"], ["CAUS", "AVC"], ["SEABED", "WATER", "深度・影"], ["WATER", "UNDER"],
+  ];
+  const GROUPS = ["Udon（毎フレーム）", "GPU の下ごしらえ（画面に出ない）", "画面に描く"];
+  let pLayout = null;
+  function pipelineHeight(w) { return w >= 760 ? 440 : 640; }
+  function bezierPts(p0, c1, c2, p3, n = 24) {
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, u = 1 - t;
+      out.push([u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p3[0],
+                u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p3[1]]);
+    }
+    return out;
+  }
+  function polyLen(pts) { const L = [0]; for (let i = 1; i < pts.length; i++) L.push(L[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])); return L; }
+  function polyAt(e, s) {
+    const L = e.len, total = L[L.length - 1], d = s * total;
+    let i = 1; while (i < L.length - 1 && L[i] < d) i++;
+    const a = e.pts[i - 1], b = e.pts[i], seg = (L[i] - L[i - 1]) || 1, t = (d - L[i - 1]) / seg;
+    return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), Math.atan2(b[1] - a[1], b[0] - a[0])];
+  }
+  function layoutPipeline(w, h) {
+    const wide = w >= 760;
+    const nodes = {}, groups = [];
+    if (wide) {
+      const bw = clamp(w * 0.175, 128, 196), bh = 48;
+      const gx = [[0.015, 0.215], [0.255, 0.68], [0.72, 0.985]];
+      gx.forEach((g, i) => groups.push({ x: g[0] * w, y: 10, w: (g[1] - g[0]) * w, h: h - 20, label: GROUPS[i] }));
+      const top = 50, H = h - 70;
+      const at = { CTL: [0.115, 0.3], SKY: [0.115, 0.74], SPEC: [0.37, 0.12], FFT: [0.57, 0.12], CAUS: [0.57, 0.5], RIP: [0.37, 0.88], RIPN: [0.57, 0.88],
+        SKYB: [0.852, 0.04], UNDER: [0.852, 0.28], WATER: [0.852, 0.52], SEABED: [0.852, 0.76], AVC: [0.852, 1.0] };
+      for (const k in at) nodes[k] = { x: at[k][0] * w, y: top + at[k][1] * H, w: bw, h: bh };
+    } else {
+      const bw = clamp(w * 0.43, 120, 190), bh = 48;
+      const c1 = w * 0.27, c2 = w * 0.73, c0 = w * 0.5;
+      const gy = [[8, 110], [124, 392], [406, 632]];
+      gy.forEach((g, i) => groups.push({ x: 6, y: g[0], w: w - 12, h: g[1] - g[0], label: GROUPS[i] }));
+      const P = { CTL: [c1, 68], SKY: [c2, 68], RIP: [c1, 184], SPEC: [c2, 184], RIPN: [c1, 262], FFT: [c2, 262], CAUS: [c0, 346],
+        SKYB: [c1, 466], UNDER: [c2, 466], WATER: [c0, 530], SEABED: [c1, 596], AVC: [c2, 596] };
+      for (const k in P) nodes[k] = { x: P[k][0], y: P[k][1], w: bw, h: bh };
+    }
+    // ports: spread several edges on one side of a box
+    const ports = {};
+    const edges = PE.map(([a, b, label]) => {
+      const A = nodes[a], B = nodes[b];
+      const dx = B.x - A.x, dy = B.y - A.y;
+      const skip = PN[b].g - PN[a].g === 2;
+      let mode = Math.abs(dx) > Math.abs(dy) * 1.1 ? "h" : "v";
+      if (skip) mode = "lane";
+      const e = { a, b, label, mode, g: PN[a].g };
+      let sideA, sideB;
+      if (mode === "h") { sideA = dx > 0 ? "r" : "l"; sideB = dx > 0 ? "l" : "r"; }
+      else if (mode === "v") { sideA = dy > 0 ? "b" : "t"; sideB = dy > 0 ? "t" : "b"; }
+      else if (wide) { sideA = "r"; sideB = "l"; }
+      else { sideA = A.x > w / 2 ? "r" : "l"; sideB = sideA; }
+      e.sideA = sideA; e.sideB = sideB;
+      (ports[a + sideA] = ports[a + sideA] || []).push([e, 0]);
+      (ports[b + sideB] = ports[b + sideB] || []).push([e, 1]);
+      return e;
+    });
+    for (const k in ports) {
+      const list = ports[k], n = list.length;
+      list.forEach(([e, end], i) => { const off = (i - (n - 1) / 2) * 9; if (end === 0) e.offA = off; else e.offB = off; });
+    }
+    function port(N, side, off) {
+      if (side === "r") return [N.x + N.w / 2, N.y + off];
+      if (side === "l") return [N.x - N.w / 2, N.y + off];
+      if (side === "b") return [N.x + off, N.y + N.h / 2];
+      return [N.x + off, N.y - N.h / 2];
+    }
+    let lane = 0;
+    for (const e of edges) {
+      const A = nodes[e.a], B = nodes[e.b];
+      const p0 = port(A, e.sideA, e.offA || 0), p3 = port(B, e.sideB, e.offB || 0);
+      if (e.mode === "h") {
+        const k = (p3[0] - p0[0]) * 0.45;
+        e.pts = bezierPts(p0, [p0[0] + k, p0[1]], [p3[0] - k, p3[1]], p3);
+      } else if (e.mode === "v") {
+        const k = (p3[1] - p0[1]) * 0.45;
+        e.pts = bezierPts(p0, [p0[0], p0[1] + k], [p3[0], p3[1] - k], p3);
+      } else if (wide) {
+        // across the GPU box, along the gaps between its rows, then down/up the lane before the drawing column
+        const ly = { CTL: 0.31, SKY: 0.69 }[e.a];
+        const gapY = 50 + ly * (h - 70);
+        const lx = w * (0.694 + lane * 0.009); lane++;
+        const r = 10;
+        const pts = [p0];
+        pts.push(...bezierPts(p0, [p0[0] + 30, p0[1]], [p0[0] + 20, gapY], [p0[0] + 50, gapY], 10).slice(1));
+        pts.push([lx - r, gapY]);
+        const dir = Math.sign(p3[1] - gapY) || 1;
+        pts.push(...bezierPts([lx - r, gapY], [lx, gapY], [lx, gapY], [lx, gapY + dir * r], 6).slice(1));
+        pts.push([lx, p3[1] - dir * r]);
+        pts.push(...bezierPts([lx, p3[1] - dir * r], [lx, p3[1]], [lx, p3[1]], [lx + r, p3[1]], 6).slice(1));
+        pts.push(p3);
+        e.pts = pts;
+      } else {
+        const right = e.sideA === "r";
+        const lx = right ? w - 14 - lane * 6 : 14 + lane * 6; lane++;
+        const r = 10, s = right ? 1 : -1;
+        const pts = [p0, [lx - s * r, p0[1]]];
+        pts.push(...bezierPts([lx - s * r, p0[1]], [lx, p0[1]], [lx, p0[1]], [lx, p0[1] + r], 6).slice(1));
+        pts.push([lx, p3[1] - r]);
+        pts.push(...bezierPts([lx, p3[1] - r], [lx, p3[1]], [lx, p3[1]], [lx - s * r, p3[1]], 6).slice(1));
+        pts.push(p3);
+        e.pts = pts;
+      }
+      e.len = polyLen(e.pts);
+      e.seed = fract(Math.sin(e.pts.length * 12.9898 + p0[0] * 0.13 + p3[1] * 0.07) * 43758.5453);
+    }
+    return { w, h, nodes, groups, edges, wide };
+  }
+  function drawPipeline(s) {
+    const { ctx, w, h } = s;
+    if (!pLayout || pLayout.w !== w || pLayout.h !== h) pLayout = layoutPipeline(w, h);
+    const L = pLayout;
+    const gcol = [C.sun, C.accent, C.water];
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = rgba(C.stage); ctx.fillRect(0, 0, w, h);
+    L.groups.forEach((g, i) => {
+      rr(ctx, g.x, g.y, g.w, g.h, 10);
+      ctx.fillStyle = rgba(gcol[i], C.dark ? 0.07 : 0.06); ctx.fill();
+      ctx.setLineDash([4, 4]); ctx.strokeStyle = rgba(gcol[i], 0.45); ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = `500 12px ${FJ}`; ctx.fillStyle = rgba(C.muted); ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(g.label, g.x + 12, g.y + 17);
+    });
+    for (const e of L.edges) {
+      ctx.beginPath();
+      e.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      ctx.strokeStyle = rgba(gcol[e.g], 0.5); ctx.lineWidth = 1.4; ctx.stroke();
+      const q = polyAt(e, 1), a = q[2];
+      ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate(a);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-7, -3.6); ctx.lineTo(-7, 3.6); ctx.closePath();
+      ctx.fillStyle = rgba(gcol[e.g], 0.8); ctx.fill(); ctx.restore();
+    }
+    for (const e of L.edges) {
+      const total = e.len[e.len.length - 1];
+      const speed = 70 / total;
+      for (let k = 0; k < 2; k++) {
+        const u = fract(s.t * speed * 0.5 + e.seed + k * 0.5);
+        const q = polyAt(e, u);
+        const fade = smooth(0, 0.08, u) * (1 - smooth(0.9, 1, u));
+        ctx.beginPath(); ctx.arc(q[0], q[1], 5, 0, TAU); ctx.fillStyle = rgba(gcol[e.g], 0.18 * fade); ctx.fill();
+        ctx.beginPath(); ctx.arc(q[0], q[1], 2.6, 0, TAU); ctx.fillStyle = rgba(gcol[e.g], 0.95 * fade); ctx.fill();
+      }
+    }
+    for (const e of L.edges) {
+      if (!e.label) continue;
+      const q = polyAt(e, e.mode === "lane" ? 0.18 : 0.5);
+      pill(ctx, e.label, q[0], q[1], `11px ${e.label.startsWith("_") ? FM : FJ}`, rgba(C.muted), rgba(C.stage, 0.92));
+    }
+    for (const k in L.nodes) {
+      const N = L.nodes[k], info = PN[k];
+      rr(ctx, N.x - N.w / 2, N.y - N.h / 2, N.w, N.h, 8);
+      ctx.fillStyle = rgba(C.panel); ctx.fill();
+      ctx.strokeStyle = rgba(gcol[info.g], 0.85); ctx.lineWidth = 1.3; ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = info.jp ? `700 12.5px ${FJ}` : `600 11.5px ${FM}`;
+      ctx.fillStyle = rgba(C.ink);
+      ctx.fillText(info.t, N.x, N.y - 8, N.w - 10);
+      ctx.font = info.jp ? `11px ${FM}` : `11px ${FJ}`;
+      ctx.fillStyle = rgba(C.muted);
+      ctx.fillText(info.s, N.x, N.y + 10, N.w - 10);
+    }
+  }
+
+  // =====================================================================================
+  // 2. FFT waves
+  // =====================================================================================
+  const WL = 4.6, G = 9.81;
+  const wrand = mulberry(11);
+  const WAVES = [[7, 0, 1.0], [6, 2, 0.8], [8, -1, 0.7], [5, -2, 0.6], [9, 3, 0.42], [3, 0, 1.5], [3, 1, 1.0], [11, -2, 0.3], [10, 1, 0.34], [13, 2, 0.2], [4, -3, 0.5], [15, -4, 0.12]]
+    .map(([nx, nz, a]) => {
+      const kx = TAU * nx / WL, kz = TAU * nz / WL, k = Math.hypot(kx, kz);
+      const m = Math.max(1, Math.round(Math.sqrt(G * k) * 60 / TAU));
+      return { kx, kz, om: TAU * m / 60, a: a * 0.011, ph: wrand() * TAU };
+    });
+  const wavesOff = document.createElement("canvas");
+  let wavesImg = null;
+  const layerBox = document.getElementById("waves-layer");
+  function slopeAt(x, z, t, out) {
+    let sx = 0, sz = 0;
+    for (const c of WAVES) {
+      const k = c.a * Math.cos(c.kx * x + c.kz * z - c.om * t + c.ph);
+      sx += k * c.kx; sz += k * c.kz;
+    }
+    out[0] = sx; out[1] = sz;
+  }
+  function drawWaves(s) {
+    const { ctx, w, h } = s;
+    const RW = 190, RH = Math.max(40, Math.round(RW * h / w));
+    if (!wavesImg || wavesImg.width !== RW || wavesImg.height !== RH) {
+      wavesOff.width = RW; wavesOff.height = RH; wavesImg = wavesOff.getContext("2d").createImageData(RW, RH);
+    }
+    const span = 3 * WL, px = span / RW;
+    const zSpan = RH * px, z0 = -(zSpan - WL) / 2;
+    const deep = C.water_deep, light = mix(C.water, C.foam, 0.25), foam = C.foam;
+    const d = wavesImg.data, o = [0, 0], o2 = [0, 0];
+    const layer = layerBox.checked;
+    const ca = Math.cos(0.63), sa = Math.sin(0.63);
+    const lx = 0.55, lz = -0.83;
+    let i = 0;
+    for (let y = 0; y < RH; y++) {
+      const z = z0 + (y + 0.5) * px;
+      for (let x = 0; x < RW; x++) {
+        const X = (x + 0.5) * px;
+        slopeAt(X, z, s.t, o);
+        let sx = o[0], sz = o[1];
+        if (layer) {
+          const u = (ca * X - sa * z) / 0.41 + 1.7, v = (sa * X + ca * z) / 0.41 + 0.9;
+          slopeAt(u, v, s.t * 1.0 + 7.3, o2);
+          const bx = ca * o2[0] + sa * o2[1], bz = -sa * o2[0] + ca * o2[1];
+          sx += bx * 0.33; sz += bz * 0.33;
+        }
+        const sh = clamp(0.5 + (sx * lx + sz * lz) * 2.3, 0, 1);
+        const sp = Math.pow(clamp((sh - 0.72) * 3.2, 0, 1), 2);
+        const base = mix(deep, light, sh);
+        const c = mix(base, foam, sp * 0.85);
+        d[i++] = c[0]; d[i++] = c[1]; d[i++] = c[2]; d[i++] = 255;
+      }
+    }
+    wavesOff.getContext("2d").putImageData(wavesImg, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(wavesOff, 0, 0, w, h);
+    // tiles
+    const tpx = w / 3, zTop = z0;
+    ctx.save();
+    ctx.setLineDash([5, 5]); ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    for (let k = 1; k < 3; k++) { ctx.beginPath(); ctx.moveTo(k * tpx, 0); ctx.lineTo(k * tpx, h); ctx.stroke(); }
+    for (let k = Math.ceil(zTop / WL); k * WL < zTop + zSpan; k++) {
+      const y = (k * WL - zTop) / zSpan * h;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    const y0 = (0 - zTop) / zSpan * h, y1 = (WL - zTop) / zSpan * h;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)"; ctx.lineWidth = 2;
+    ctx.strokeRect(tpx + 1, y0 + 1, tpx - 2, y1 - y0 - 2);
+    pill(ctx, "4.6 m", tpx * 1.5, Math.max(14, y0 + 16), `600 11.5px ${FM}`, "#0b2a33", "rgba(255,255,255,0.88)");
+    // clock
+    const cx = w - 34, cy = 34, r = 21, ph = (s.t % 60) / 60;
+    ctx.beginPath(); ctx.arc(cx, cy, r + 7, 0, TAU); ctx.fillStyle = "rgba(8,30,38,0.55)"; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + ph * TAU); ctx.strokeStyle = "rgba(255,255,255,0.95)"; ctx.stroke();
+    ctx.font = `600 11px ${FM}`; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText((s.t % 60).toFixed(0) + "s", cx, cy);
+    ctx.restore();
+  }
+
+  // =====================================================================================
+  // 3. seabed ray
+  // =====================================================================================
+  const IOR = 1.3335, ABS = [0.40, 0.074, 0.088];
+  const SB = { x0: 0, x1: 12, y0: -3.0, y1: 2.3, shore: 9.5, eye: [11.55, 1.9] };
+  const sbFloor = x => Math.max(-2.75, (x - SB.shore) * 0.3 + 0.07 * Math.sin(x * 2.4) + 0.04 * Math.sin(x * 5.3 + 1));
+  const sbSurf = (x, t) => 0.06 * Math.sin(1.9 * x - 1.3 * t) + 0.03 * Math.sin(4.3 * x + 2.1 * t);
+  const sbSurfD = (x, t) => 0.06 * 1.9 * Math.cos(1.9 * x - 1.3 * t) + 0.03 * 4.3 * Math.cos(4.3 * x + 2.1 * t);
+  function refract2(d, n, eta) {
+    const ci = -(d[0] * n[0] + d[1] * n[1]);
+    const k = 1 - eta * eta * (1 - ci * ci);
+    if (k < 0) return null;
+    const a = eta * ci - Math.sqrt(k);
+    return [eta * d[0] + a * n[0], eta * d[1] + a * n[1]];
+  }
+  const seabedOut = document.getElementById("seabed-readout");
+  let seabedTxt = "";
+  function drawSeabed(s) {
+    const { ctx, w, h } = s, t = s.t;
+    const X = x => (x - SB.x0) / (SB.x1 - SB.x0) * w, Y = y => (SB.y1 - y) / (SB.y1 - SB.y0) * (h - 44);
+    ctx.clearRect(0, 0, w, h);
+    const sky = ctx.createLinearGradient(0, 0, 0, Y(0));
+    sky.addColorStop(0, rgba(mix(C.sky, C.stage, 0.35))); sky.addColorStop(1, rgba(mix(C.sky, C.foam, 0.45)));
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h - 44);
+    // water body
+    ctx.beginPath();
+    for (let i = 0; i <= 120; i++) { const x = SB.x0 + (SB.x1 - SB.x0) * i / 120; const y = Math.max(sbSurf(x, t), sbFloor(x)); i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); }
+    for (let i = 120; i >= 0; i--) { const x = SB.x0 + (SB.x1 - SB.x0) * i / 120; ctx.lineTo(X(x), Y(sbFloor(x))); }
+    ctx.closePath();
+    const wg = ctx.createLinearGradient(0, Y(0), 0, Y(-2.8));
+    wg.addColorStop(0, rgba(C.water, 0.55)); wg.addColorStop(1, rgba(C.water_deep, 0.85));
+    ctx.fillStyle = wg; ctx.fill();
+    // ground
+    ctx.beginPath(); ctx.moveTo(0, h - 44);
+    for (let i = 0; i <= 120; i++) { const x = SB.x0 + (SB.x1 - SB.x0) * i / 120; ctx.lineTo(X(x), Y(sbFloor(x))); }
+    ctx.lineTo(w, h - 44); ctx.closePath();
+    ctx.fillStyle = rgba(C.sand); ctx.fill();
+    // surface line
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i <= 160; i++) { const x = SB.x0 + (SB.x1 - SB.x0) * i / 160; const y = sbSurf(x, t); if (y < sbFloor(x)) continue; started ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); started = true; }
+    ctx.strokeStyle = rgba(C.foam, 0.9); ctx.lineWidth = 1.5; ctx.stroke();
+
+    // cycle
+    const cyc = 5.2, ci = Math.floor(t / cyc), ph = (t % cyc) / cyc;
+    const angDeg = 15 + (fract(Math.sin(ci * 91.7 + 3.1) * 43758.5) * 20);
+    const a = angDeg * Math.PI / 180, E = SB.eye, dir = [-Math.cos(a), -Math.sin(a)];
+    // hit surface
+    let lo = 0, hi = 0;
+    for (let k = 0; k < 400; k++) { const p = k * 0.03; const x = E[0] + dir[0] * p, y = E[1] + dir[1] * p; if (y <= sbSurf(x, t)) { hi = p; break; } lo = p; }
+    for (let k = 0; k < 24; k++) { const m = (lo + hi) / 2; const x = E[0] + dir[0] * m, y = E[1] + dir[1] * m; if (y <= sbSurf(x, t)) hi = m; else lo = m; }
+    const S = [E[0] + dir[0] * hi, E[1] + dir[1] * hi];
+    const sl = sbSurfD(S[0], t), nl = Math.hypot(sl, 1), nrm = [-sl / nl, 1 / nl];
+    const r = refract2(dir, nrm, 1 / IOR);
+    // eye
+    ctx.fillStyle = rgba(C.ink); ctx.beginPath(); ctx.arc(X(E[0]), Y(E[1]), 4.5, 0, TAU); ctx.fill();
+    ctx.font = `12px ${FJ}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillText("目", X(E[0]), Y(E[1]) - 7);
+    // incoming ray
+    ctx.strokeStyle = rgba(C.sun); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(X(E[0]), Y(E[1])); ctx.lineTo(X(S[0]), Y(S[1])); ctx.stroke();
+    if (!r) return;
+    const pts = [];
+    let q = S;
+    for (let k = 0; k < 3; k++) {
+      const yd = sbFloor(q[0]);
+      const tt = (yd - S[1]) / r[1];
+      const P = [S[0] + r[0] * tt, S[1] + r[1] * tt];
+      pts.push({ from: q, depth: yd, P });
+      q = P;
+    }
+    // true hit
+    let tl = 0, th = 0;
+    for (let k = 0; k < 600; k++) { const p = k * 0.02; const x = S[0] + r[0] * p, y = S[1] + r[1] * p; if (y <= sbFloor(x)) { th = p; break; } tl = p; }
+    for (let k = 0; k < 24; k++) { const m = (tl + th) / 2; const x = S[0] + r[0] * m, y = S[1] + r[1] * m; if (y <= sbFloor(x)) th = m; else tl = m; }
+    const trueP = [S[0] + r[0] * th, S[1] + r[1] * th];
+    // refracted ray (extended)
+    const ext = Math.max(th, ...pts.map(p => Math.hypot(p.P[0] - S[0], p.P[1] - S[1]))) + 0.35;
+    ctx.setLineDash([]); ctx.strokeStyle = rgba(C.sun, 0.95); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(X(S[0]), Y(S[1])); ctx.lineTo(X(S[0] + r[0] * ext), Y(S[1] + r[1] * ext)); ctx.stroke();
+    // straight continuation (unrefracted), faint
+    ctx.setLineDash([3, 4]); ctx.strokeStyle = rgba(C.ink, 0.3); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(S[0]), Y(S[1])); ctx.lineTo(X(S[0] + dir[0] * 2.2), Y(S[1] + dir[1] * 2.2)); ctx.stroke();
+    ctx.setLineDash([]);
+    // iterations
+    const shown = ph < 0.15 ? 0 : ph < 0.35 ? 1 : ph < 0.55 ? 2 : 3;
+    for (let k = 0; k < shown; k++) {
+      const it = pts[k];
+      ctx.setLineDash([3, 3]); ctx.strokeStyle = rgba(C.ink, 0.65); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(X(it.from[0]), Y(it.from[1])); ctx.lineTo(X(it.from[0]), Y(it.depth)); ctx.lineTo(X(it.P[0]), Y(it.depth)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(X(it.from[0]), Y(it.depth), 2.5, 0, TAU); ctx.fillStyle = rgba(C.ink, 0.7); ctx.fill();
+      const P = it.P;
+      ctx.beginPath(); ctx.arc(X(P[0]), Y(P[1]), 7, 0, TAU); ctx.fillStyle = rgba(C.panel); ctx.fill();
+      ctx.strokeStyle = rgba(C.accent); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.font = `600 10px ${FM}`; ctx.fillStyle = rgba(C.accent); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(k + 1), X(P[0]), Y(P[1]) + 0.5);
+    }
+    if (shown === 3) {
+      ctx.beginPath(); ctx.arc(X(trueP[0]), Y(trueP[1]), 11, 0, TAU); ctx.strokeStyle = rgba(C.sun, 0.8); ctx.lineWidth = 1.2; ctx.stroke();
+    }
+    // surface hit marker
+    ctx.beginPath(); ctx.arc(X(S[0]), Y(S[1]), 3, 0, TAU); ctx.fillStyle = rgba(C.foam); ctx.fill();
+    // path & colors
+    const Pf = pts[2].P, Lp = Math.hypot(Pf[0] - S[0], Pf[1] - S[1]) + Math.abs(Pf[1] - S[1]);
+    const T = ABS.map(k => Math.exp(-k * Lp));
+    const sand = [0.62, 0.50, 0.34];
+    const scat = [0.02, 0.10, 0.14];
+    const out = sand.map((c, i) => c * T[i] + scat[i] * (1 - T[i]));
+    // bottom bar
+    const by = h - 36;
+    ctx.fillStyle = rgba(C.stage); ctx.fillRect(0, h - 44, w, 44);
+    ctx.font = `12px ${FJ}`; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = rgba(C.muted);
+    const lx = 12;
+    ctx.fillText("砂の色", lx, by + 14);
+    const sw = Math.min(64, w * 0.12);
+    const x1 = lx + 50;
+    ctx.fillStyle = linCss(...sand); ctx.fillRect(x1, by + 5, sw, 18);
+    ctx.fillStyle = rgba(C.muted); ctx.fillText("→", x1 + sw + 8, by + 14);
+    ctx.fillStyle = linCss(...out); ctx.fillRect(x1 + sw + 24, by + 5, sw, 18);
+    ctx.fillStyle = rgba(C.muted);
+    ctx.fillText(`水の中 ${Lp.toFixed(1)} m 進んだ後`, x1 + 2 * sw + 34, by + 14);
+    const txt = `視線の角度 ${angDeg.toFixed(0)}°　水の中の道のり ${Lp.toFixed(2)} m　残る光 R ${(T[0] * 100).toFixed(0)}%・G ${(T[1] * 100).toFixed(0)}%・B ${(T[2] * 100).toFixed(0)}%`;
+    if (txt !== seabedTxt) { seabedTxt = txt; seabedOut.textContent = txt; }
+  }
+
+  // =====================================================================================
+  // 4. caustics
+  // =====================================================================================
+  const CN = [1.3315, 1.3335, 1.3365];
+  const dispBox = document.getElementById("caustics-disp");
+  const CS = [[2, 0.030, 1.1, 0.3], [3, 0.022, -1.5, 1.9], [5, 0.011, 2.1, 0.7], [7, 0.007, -2.6, 2.5], [4, 0.012, 1.7, 4.1]];
+  const cSurf = (x, t) => { let y = 0; for (const [n, a, om, p] of CS) y += a * Math.sin(TAU * n * x / WL - om * t + p); return y; };
+  const cSurfD = (x, t) => { let y = 0; for (const [n, a, om, p] of CS) y += a * TAU * n / WL * Math.cos(TAU * n * x / WL - om * t + p); return y; };
+  function drawCaustics(s) {
+    const { ctx, w, h } = s, t = s.t;
+    const depth = 1.6, top = 0.55;
+    const plotH = 58, band = 16;
+    const areaH = h - plotH - band - 10;
+    const X = x => x / WL * w, Y = y => (top - y) / (top + depth) * areaH;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = rgba(mix(C.sky, C.stage, 0.4)); ctx.fillRect(0, 0, w, Y(0.05));
+    const wg = ctx.createLinearGradient(0, Y(0), 0, Y(-depth));
+    wg.addColorStop(0, rgba(C.water, 0.6)); wg.addColorStop(1, rgba(C.water_deep, 0.9));
+    ctx.beginPath();
+    for (let i = 0; i <= 140; i++) { const x = WL * i / 140; i ? ctx.lineTo(X(x), Y(cSurf(x, t))) : ctx.moveTo(X(x), Y(cSurf(x, t))); }
+    ctx.lineTo(w, Y(-depth)); ctx.lineTo(0, Y(-depth)); ctx.closePath();
+    ctx.fillStyle = wg; ctx.fill();
+    const sunA = 16 * Math.PI / 180, sd = [Math.sin(sunA), -Math.cos(sunA)];
+    const N = 260, bins = 240, I = [new Float32Array(bins), new Float32Array(bins), new Float32Array(bins)];
+    const k = dispBox.checked ? 20 : 1;
+    const land = [[], [], []];
+    for (let c = 0; c < 3; c++) {
+      const n = 1.3335 + (CN[c] - 1.3335) * k;
+      for (let i = 0; i <= N; i++) {
+        const x = WL * i / N, sl = cSurfD(x, t), nl = Math.hypot(sl, 1);
+        const r = refract2(sd, [-sl / nl, 1 / nl], 1 / n);
+        const yS = cSurf(x, t);
+        land[c].push(x + r[0] / -r[1] * (depth + yS));
+      }
+      for (let i = 0; i < N; i++) {
+        let a = land[c][i], b = land[c][i + 1];
+        if (b < a) { const tmp = a; a = b; b = tmp; }
+        const width = Math.max(b - a, 1e-4), e = WL / N;
+        const i0 = Math.floor(a / WL * bins), i1 = Math.floor(b / WL * bins);
+        for (let j = i0; j <= i1; j++) {
+          const bx0 = j * WL / bins, bx1 = (j + 1) * WL / bins;
+          const ov = Math.max(0, Math.min(b, bx1) - Math.max(a, bx0));
+          const idx = ((j % bins) + bins) % bins;
+          I[c][idx] += e * ov / width / (WL / bins);
+        }
+      }
+    }
+    // rays (green)
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= N; i += 6) {
+      const x = WL * i / N, yS = cSurf(x, t);
+      const x0 = x - sd[0] / -sd[1] * (top - yS);
+      ctx.strokeStyle = rgba(C.sun, 0.45);
+      ctx.beginPath(); ctx.moveTo(X(x0), Y(top)); ctx.lineTo(X(x), Y(yS)); ctx.stroke();
+      ctx.strokeStyle = rgba(C.foam, 0.28);
+      ctx.beginPath(); ctx.moveTo(X(x), Y(yS)); ctx.lineTo(X(land[1][i]), Y(-depth)); ctx.stroke();
+    }
+    // surface line
+    ctx.beginPath();
+    for (let i = 0; i <= 140; i++) { const x = WL * i / 140; i ? ctx.lineTo(X(x), Y(cSurf(x, t))) : ctx.moveTo(X(x), Y(cSurf(x, t))); }
+    ctx.strokeStyle = rgba(C.foam, 0.95); ctx.lineWidth = 1.5; ctx.stroke();
+    // bottom band
+    const by = Y(-depth);
+    const sand = [0.55, 0.45, 0.32];
+    const bw = w / bins;
+    for (let j = 0; j < bins; j++) {
+      const r = sand[0] * I[0][j] * 0.55, g = sand[1] * I[1][j] * 0.55, b = sand[2] * I[2][j] * 0.55;
+      ctx.fillStyle = linCss(r, g, b);
+      ctx.fillRect(j * bw, by, bw + 0.8, band);
+    }
+    // plot
+    const py0 = by + band + 8, py1 = h - 6;
+    ctx.fillStyle = rgba(C.stage); ctx.fillRect(0, py0 - 4, w, h - py0 + 4);
+    const maxI = 4;
+    const PY = v => py1 - clamp(v / maxI, 0, 1) * (py1 - py0);
+    ctx.strokeStyle = rgba(C.line); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(0, PY(1)); ctx.lineTo(w, PY(1)); ctx.stroke(); ctx.setLineDash([]);
+    const cols = [[222, 70, 60], [60, 170, 90], [70, 110, 230]];
+    for (let c = 0; c < 3; c++) {
+      ctx.beginPath();
+      for (let j = 0; j < bins; j++) { const x = (j + 0.5) * bw, y = PY(I[c][j]); j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.strokeStyle = rgba(cols[c], 0.8); ctx.lineWidth = 1.1; ctx.stroke();
+    }
+    ctx.font = `11px ${FJ}`; ctx.textAlign = "left"; ctx.textBaseline = "bottom"; ctx.fillStyle = rgba(C.muted);
+    ctx.fillText("1（平らな水面）", 6, PY(1) - 2);
+    ctx.textBaseline = "top"; ctx.fillStyle = rgba(C.ink, 0.8);
+    ctx.fillText("太陽光", 8, 6);
+    ctx.textAlign = "right"; ctx.fillStyle = rgba(C.foam, 0.9);
+    ctx.fillText("水底 1.6 m", w - 8, by - 16);
+  }
+
+  // =====================================================================================
+  // 5. swash
+  // =====================================================================================
+  const SW = (() => {
+    const rnd = mulberry(27);
+    const gaps = []; for (let i = 0; i < 27; i++) gaps.push(2 + rnd() * 4);
+    const sum = gaps.reduce((a, b) => a + b, 0);
+    let acc = 0; const breaks = [];
+    for (let i = 0; i < 27; i++) { acc += gaps[i] * 90 / sum; breaks.push({ t: acc - gaps[0] * 45 / sum, s: 0.55 + rnd() * 0.45 }); }
+    const env = new Float32Array(900);
+    const nz = mulberry(5);
+    for (let i = 0; i < 900; i++) {
+      const tt = i / 10; let e = 0.1;
+      for (const b of breaks) for (const off of [-90, 0, 90]) {
+        const u = tt - (b.t + off);
+        e += b.s * (u >= 0 ? Math.exp(-u / 1.5) : Math.exp(u * 3.5)) * 0.8;
+      }
+      env[i] = Math.min(1, e) * (0.55 + 0.45 * nz());
+    }
+    return { breaks, env };
+  })();
+  const stageEls = {};
+  document.querySelectorAll("#swash-stages span").forEach(el => stageEls[el.dataset.k] = el);
+  let wetLast = null, wetW = 0;
+  function drawSwash(s) {
+    const { ctx, w, h } = s, t = s.t;
+    ctx.clearRect(0, 0, w, h);
+    // waveform strip
+    const sh = 64, sy = 14, mid = sy + sh / 2 + 6;
+    const loopT = ((t % 90) + 90) % 90;
+    ctx.font = `11px ${FJ}`; ctx.fillStyle = rgba(C.muted); ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText("波音 90 秒のループ", 10, 4);
+    ctx.textAlign = "right"; ctx.font = `11px ${FM}`;
+    ctx.fillText(`AudioSource.time = ${loopT.toFixed(1)} s → _SwashClock`, w - 10, 4);
+    const n = Math.floor(w / 3);
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor(i / n * 900);
+      const v = SW.env[idx] * (sh / 2 - 6);
+      const past = i / n * 90 <= loopT;
+      ctx.fillStyle = past ? rgba(C.accent, 0.85) : rgba(C.muted, 0.35);
+      ctx.fillRect(i * 3 + 0.5, mid - v, 2, v * 2);
+    }
+    for (const b of SW.breaks) {
+      const x = b.t / 90 * w;
+      ctx.beginPath(); ctx.moveTo(x, sy + 12); ctx.lineTo(x - 3.5, sy + 6); ctx.lineTo(x + 3.5, sy + 6); ctx.closePath();
+      ctx.fillStyle = rgba(C.sun, 0.9); ctx.fill();
+    }
+    const phx = loopT / 90 * w;
+    ctx.strokeStyle = rgba(C.ink); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(phx, sy + 4); ctx.lineTo(phx, sy + sh + 10); ctx.stroke();
+
+    // shore
+    const top = sy + sh + 22, H = h - top;
+    const x0 = 0, x1 = 14, y0 = -1.1, y1 = 1.2, shoreX = 8.6, slope = 0.13;
+    const X = x => (x - x0) / (x1 - x0) * w, Y = y => top + (y1 - y) / (y1 - y0) * H;
+    const floor = x => (x - shoreX) * slope;
+    const skyG = ctx.createLinearGradient(0, top, 0, Y(0));
+    skyG.addColorStop(0, rgba(mix(C.sky, C.stage, 0.5))); skyG.addColorStop(1, rgba(mix(C.sky, C.foam, 0.4)));
+    ctx.fillStyle = skyG; ctx.fillRect(0, top, w, Y(0) - top);
+
+    // waves in flight
+    const D = 1.7, xb = 4.6, Tu = 1.8, back = Math.sqrt(1 / 0.6);
+    const events = [];
+    const cyc = Math.floor(t / 90);
+    for (const c of [cyc - 1, cyc, cyc + 1]) for (const b of SW.breaks) events.push({ tb: b.t + c * 90, s: b.s });
+    let front = 0, bumps = [], state = { swell: false, break: false, swash: false };
+    for (const e of events) {
+      const tau0 = t - e.tb;
+      if (tau0 > -3.2 && tau0 < 0) {
+        const p = (tau0 + 3.2) / 3.2;
+        bumps.push({ x: lerp(0.6, xb, Math.pow(p, 0.9)), hgt: e.s * lerp(0.05, 0.13, p), foam: 0 });
+        state.swell = true;
+      } else if (tau0 >= 0 && tau0 < D) {
+        const p = tau0 / D;
+        bumps.push({ x: lerp(xb, shoreX, 1 - Math.pow(1 - p, 1.6)), hgt: e.s * 0.13 * (1 - 0.75 * p), foam: 1 - 0.4 * p });
+        state.break = true;
+      }
+      const tau = t - e.tb - D;
+      if (tau >= 0) {
+        const R = 2.6 * 0.14 * e.s / slope;
+        const a = 2 * R / (Tu * Tu);
+        let u;
+        if (tau < Tu) u = a * Tu * tau - 0.5 * a * tau * tau;
+        else { const t2 = tau - Tu; u = R - 0.5 * 0.6 * a * t2 * t2; }
+        if (u > 0.02) { front = Math.max(front, u); state.swash = true; }
+      }
+    }
+    // water body
+    const surfY = x => {
+      let y = 0.018 * Math.sin(x * 2.1 - t * 1.4);
+      for (const b of bumps) y += b.hgt * Math.exp(-Math.pow((x - b.x) / 0.55, 2));
+      return y;
+    };
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) { const x = x0 + (x1 - x0) * i / 200; const y = Math.max(surfY(x), floor(x)); i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); }
+    for (let i = 200; i >= 0; i--) { const x = x0 + (x1 - x0) * i / 200; ctx.lineTo(X(x), Y(Math.min(floor(x), 0.2))); }
+    ctx.closePath();
+    const wg = ctx.createLinearGradient(0, Y(0.2), 0, Y(-1.1));
+    wg.addColorStop(0, rgba(C.water, 0.7)); wg.addColorStop(1, rgba(C.water_deep, 0.9));
+    ctx.fillStyle = wg; ctx.fill();
+    // sand with wet record
+    const cols = Math.ceil(w / 2);
+    if (!wetLast || wetW !== cols) { wetLast = new Float32Array(cols).fill(-99); wetW = cols; }
+    const tipX = shoreX + front;
+    for (let i = 0; i < cols; i++) {
+      const x = x0 + (x1 - x0) * (i + 0.5) / cols;
+      if (x > shoreX && x < tipX) wetLast[i] = t;
+      if (wetLast[i] > t) wetLast[i] = -99;
+    }
+    ctx.beginPath(); ctx.moveTo(0, h);
+    for (let i = 0; i <= 120; i++) { const x = x0 + (x1 - x0) * i / 120; ctx.lineTo(X(x), Y(floor(x))); }
+    ctx.lineTo(w, h); ctx.closePath();
+    ctx.fillStyle = rgba(C.sand); ctx.fill();
+    let anyWet = false;
+    for (let i = 0; i < cols; i++) {
+      const x = x0 + (x1 - x0) * (i + 0.5) / cols;
+      if (x <= shoreX) continue;
+      const age = t - wetLast[i];
+      if (age < 0 || age > 5) continue;
+      const a = (1 - age / 5) * 0.5;
+      if (x > tipX && a > 0.05) anyWet = true;
+      const yy = Y(floor(x));
+      ctx.fillStyle = `rgba(60,45,25,${a})`;
+      ctx.fillRect(i * 2, yy, 2.2, 7);
+    }
+    state.wet = anyWet;
+    // swash sheet
+    if (front > 0.02) {
+      ctx.beginPath();
+      for (let i = 0; i <= 40; i++) { const x = shoreX - 0.2 + (front + 0.2) * i / 40; const rel = (x - shoreX) / front; const th = 0.05 * (1 - clamp(rel, 0, 1)) + 0.012; i ? ctx.lineTo(X(x), Y(floor(x) + th)) : ctx.moveTo(X(x), Y(floor(x) + th)); }
+      for (let i = 40; i >= 0; i--) { const x = shoreX - 0.2 + (front + 0.2) * i / 40; ctx.lineTo(X(x), Y(floor(x))); }
+      ctx.closePath(); ctx.fillStyle = rgba(C.water, 0.8); ctx.fill();
+      const fr = mulberry(Math.floor(t * 6));
+      for (let k = 0; k < 14; k++) {
+        const x = tipX - fr() * Math.min(front, 1.2);
+        ctx.beginPath(); ctx.arc(X(x), Y(floor(x) + 0.02) - 1, 1 + fr() * 1.6, 0, TAU);
+        ctx.fillStyle = rgba(C.foam, 0.85); ctx.fill();
+      }
+    }
+    // foam on breaking crests
+    for (const b of bumps) if (b.foam > 0) {
+      const fr = mulberry(Math.floor(b.x * 40));
+      for (let k = 0; k < 18; k++) {
+        const x = b.x + (fr() - 0.6) * 0.9;
+        ctx.beginPath(); ctx.arc(X(x), Y(surfY(x)) - fr() * 3, 1 + fr() * 2, 0, TAU);
+        ctx.fillStyle = rgba(C.foam, 0.85 * b.foam); ctx.fill();
+      }
+    }
+    // surface line
+    ctx.beginPath(); let st = false;
+    for (let i = 0; i <= 200; i++) { const x = x0 + (x1 - x0) * i / 200; if (x > shoreX + 0.1) break; const y = surfY(x); st ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); st = true; }
+    ctx.strokeStyle = rgba(C.foam, 0.9); ctx.lineWidth = 1.4; ctx.stroke();
+    // labels
+    ctx.font = `11px ${FJ}`; ctx.fillStyle = rgba(C.ink, 0.75); ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText("沖", X(0.6), Y(y0) - 18);
+    ctx.fillText("浜", X(12.8), Y(floor(12.8)) + 10);
+    for (const k in stageEls) stageEls[k].classList.toggle("on", !!state[k]);
+  }
+
+  // =====================================================================================
+  // 6. snell
+  // =====================================================================================
+  const TC = Math.asin(1 / IOR);
+  function fresnel(ci, n) {
+    ci = clamp(ci, 0, 1);
+    const st2 = (1 - ci * ci) / (n * n); if (st2 >= 1) return 1;
+    const ct = Math.sqrt(1 - st2);
+    const rs = (ci - n * ct) / (ci + n * ct), rp = (n * ci - ct) / (n * ci + ct);
+    return 0.5 * (rs * rs + rp * rp);
+  }
+  const snellOut = document.getElementById("snell-readout");
+  let snellTxt = "";
+  function snellHeight(w) { return w >= 620 ? Math.round(w * 0.5) : Math.round(w * 1.25); }
+  function drawSnell(s) {
+    const { ctx, w, h } = s, t = s.t;
+    ctx.clearRect(0, 0, w, h);
+    const wide = w >= 620;
+    const A = wide ? { x: 0, y: 0, w: w * 0.6, h } : { x: 0, y: 0, w, h: h * 0.56 };
+    const B = wide ? { x: w * 0.6, y: 0, w: w * 0.4, h } : { x: 0, y: h * 0.56, w, h: h * 0.44 };
+    // cross-section
+    const xr = 3.4, ytop = 1.3, ybot = -2.9, eyeY = -2.0;
+    const sc = Math.min(A.w / (2 * xr), A.h / (ytop - ybot));
+    const cx = A.x + A.w / 2, oy = A.y + (A.h - (ytop - ybot) * sc) / 2;
+    const X = x => cx + x * sc, Y = y => oy + (ytop - y) * sc;
+    ctx.save(); ctx.beginPath(); ctx.rect(A.x, A.y, A.w, A.h); ctx.clip();
+    const sk = ctx.createLinearGradient(0, Y(ytop), 0, Y(0));
+    sk.addColorStop(0, rgba(mix(C.sky, C.stage, 0.2))); sk.addColorStop(1, rgba(mix(C.sky, C.foam, 0.5)));
+    ctx.fillStyle = sk; ctx.fillRect(A.x, A.y, A.w, Y(0) - A.y);
+    const wg = ctx.createLinearGradient(0, Y(0), 0, Y(ybot));
+    wg.addColorStop(0, rgba(C.water, 0.85)); wg.addColorStop(1, rgba(C.water_deep));
+    ctx.fillStyle = wg; ctx.fillRect(A.x, Y(0), A.w, A.y + A.h - Y(0));
+    ctx.fillStyle = rgba(C.sand, 0.9); ctx.fillRect(A.x, Y(-2.6), A.w, A.y + A.h - Y(-2.6));
+    const surf = x => 0.035 * Math.sin(x * 3.1 - t * 1.6) + 0.02 * Math.sin(x * 6.7 + t * 2.2);
+    const surfD = x => 0.035 * 3.1 * Math.cos(x * 3.1 - t * 1.6) + 0.02 * 6.7 * Math.cos(x * 6.7 + t * 2.2);
+    ctx.beginPath();
+    for (let i = 0; i <= 120; i++) { const x = -xr + 2 * xr * i / 120; i ? ctx.lineTo(X(x), Y(surf(x))) : ctx.moveTo(X(x), Y(surf(x))); }
+    ctx.strokeStyle = rgba(C.foam, 0.95); ctx.lineWidth = 1.5; ctx.stroke();
+    const depth = -eyeY;
+    function ray(th, strong) {
+      const xs = depth * Math.tan(th);
+      const ys = surf(xs), sl = surfD(xs);
+      const d = [Math.sin(th), Math.cos(th)];
+      const nl = Math.hypot(sl, 1), n = [sl / nl, -1 / nl];
+      const r = refract2(d, n, IOR);
+      const S = [xs, ys];
+      ctx.lineWidth = strong ? 2.4 : 1;
+      ctx.strokeStyle = strong ? rgba(C.sun) : rgba(C.foam, 0.45);
+      ctx.beginPath(); ctx.moveTo(X(0), Y(eyeY)); ctx.lineTo(X(S[0]), Y(S[1])); ctx.stroke();
+      let res;
+      if (r) {
+        ctx.strokeStyle = strong ? rgba(C.sun) : rgba(mix(C.sky, C.foam, 0.2), 0.9);
+        ctx.beginPath(); ctx.moveTo(X(S[0]), Y(S[1])); ctx.lineTo(X(S[0] + r[0] * 2.5), Y(S[1] + r[1] * 2.5)); ctx.stroke();
+        res = { out: Math.asin(clamp(Math.abs(r[0]), 0, 1)), T: 1 - fresnel(Math.cos(th), 1 / IOR) };
+      } else {
+        const dot = d[0] * n[0] + d[1] * n[1];
+        const rf = [d[0] - 2 * dot * n[0], d[1] - 2 * dot * n[1]];
+        ctx.strokeStyle = strong ? rgba(C.sun) : rgba(C.water_deep, 0.8);
+        if (!strong) ctx.strokeStyle = rgba(mix(C.water, C.foam, 0.3), 0.55);
+        ctx.beginPath(); ctx.moveTo(X(S[0]), Y(S[1])); ctx.lineTo(X(S[0] + rf[0] * 4), Y(S[1] + rf[1] * 4)); ctx.stroke();
+        res = { out: null, T: 0 };
+      }
+      return res;
+    }
+    for (let d = -84; d <= 84; d += 7) ray(d * Math.PI / 180, false);
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = rgba(C.ink, 0.55); ctx.lineWidth = 1;
+    for (const sg of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X(0), Y(eyeY)); ctx.lineTo(X(sg * depth * Math.tan(TC)), Y(0)); ctx.stroke(); }
+    ctx.setLineDash([]);
+    const th = 82 * Math.sin(t * 0.35) * Math.PI / 180;
+    const res = ray(th, true);
+    ctx.beginPath(); ctx.arc(X(0), Y(eyeY), 5, 0, TAU); ctx.fillStyle = rgba(C.ink); ctx.fill();
+    ctx.font = `12px ${FJ}`; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillStyle = rgba(C.foam);
+    ctx.fillText("目", X(0), Y(eyeY) + 8);
+    ctx.font = `600 11px ${FM}`; ctx.fillStyle = rgba(C.foam, 0.95); ctx.textBaseline = "bottom";
+    ctx.fillText("48.6°", X(depth * Math.tan(TC) * 0.55), Y(eyeY * 0.45));
+    ctx.restore();
+
+    // view from below
+    const cr = Math.min(B.w, B.h) * 0.42, ccx = B.x + B.w / 2, ccy = B.y + B.h / 2 + (wide ? 0 : 4);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(ccx, ccy, cr, 0, TAU); ctx.clip();
+    const outer = ctx.createRadialGradient(ccx, ccy, cr * 0.5, ccx, ccy, cr);
+    outer.addColorStop(0, rgba(mix(C.water, C.water_deep, 0.3))); outer.addColorStop(1, rgba(C.water_deep));
+    ctx.fillStyle = outer; ctx.fillRect(ccx - cr, ccy - cr, 2 * cr, 2 * cr);
+    for (let k = 0; k < 7; k++) {
+      ctx.beginPath(); ctx.arc(ccx + Math.sin(k * 2.3 + t * 0.3) * 6, ccy + Math.cos(k * 1.7) * 5, cr * (0.72 + k * 0.045), 0, TAU);
+      ctx.strokeStyle = rgba(C.sand, 0.12); ctx.lineWidth = 3; ctx.stroke();
+    }
+    const Rw = cr * 0.66;
+    ctx.beginPath();
+    for (let i = 0; i <= 120; i++) {
+      const a = TAU * i / 120;
+      const rr2 = Rw * (1 + 0.03 * Math.sin(5 * a + 1.3 * t) + 0.02 * Math.sin(9 * a - 2.1 * t) + 0.012 * Math.sin(14 * a + 3 * t));
+      const x = ccx + Math.cos(a) * rr2, y = ccy + Math.sin(a) * rr2;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+    ctx.save(); ctx.clip();
+    const skyR = ctx.createRadialGradient(ccx, ccy, 0, ccx, ccy, Rw * 1.05);
+    skyR.addColorStop(0, rgba(mix(C.sky, [40, 100, 170], 0.3))); skyR.addColorStop(0.75, rgba(mix(C.sky, C.foam, 0.35))); skyR.addColorStop(1, rgba(mix(C.sky, C.foam, 0.75)));
+    ctx.fillStyle = skyR; ctx.fillRect(ccx - Rw * 1.2, ccy - Rw * 1.2, Rw * 2.4, Rw * 2.4);
+    const radOf = phi => Math.asin(Math.sin(phi) / IOR) / TC * Rw;
+    const sunR = radOf(35 * Math.PI / 180), sa = -2.2;
+    const sx = ccx + Math.cos(sa) * sunR, sy = ccy + Math.sin(sa) * sunR;
+    const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, Rw * 0.35);
+    glow.addColorStop(0, "rgba(255,250,235,1)"); glow.addColorStop(0.15, "rgba(255,245,220,0.8)"); glow.addColorStop(1, "rgba(255,245,220,0)");
+    ctx.fillStyle = glow; ctx.fillRect(ccx - Rw, ccy - Rw, 2 * Rw, 2 * Rw);
+    const clouds = [[0.4, 60], [1.4, 72], [2.9, 80], [4.2, 55], [5.3, 84], [3.6, 30]];
+    for (const [az, el] of clouds) {
+      const rad = radOf(el * Math.PI / 180), a2 = az + t * 0.02;
+      const x = ccx + Math.cos(a2) * rad, y = ccy + Math.sin(a2) * rad;
+      const squash = Math.cos(el * Math.PI / 180 * 0.9) * 0.6 + 0.4;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(a2 + Math.PI / 2); ctx.scale(1, squash);
+      ctx.beginPath(); ctx.ellipse(0, 0, Rw * 0.16, Rw * 0.07, 0, 0, TAU); ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(ccx, ccy, cr, 0, TAU); ctx.strokeStyle = rgba(C.line); ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = `11.5px ${FJ}`; ctx.textAlign = "center"; ctx.fillStyle = rgba(C.muted); ctx.textBaseline = "bottom";
+    ctx.fillText("見上げた画面", ccx, ccy - cr - 6);
+    ctx.textBaseline = "top";
+    ctx.fillText("窓の外は全反射（水底が映る）", ccx, ccy + cr + 6);
+    const deg = th * 180 / Math.PI;
+    const txt = res.out == null
+      ? `水中の角度 ${Math.abs(deg).toFixed(0)}°　全反射（抜ける光 0%）`
+      : `水中の角度 ${Math.abs(deg).toFixed(0)}°　空気中 ${(res.out * 180 / Math.PI).toFixed(0)}°　抜ける光 ${(res.T * 100).toFixed(0)}%`;
+    if (txt !== snellTxt) { snellTxt = txt; snellOut.textContent = txt; }
+  }
+
+  // =====================================================================================
+  // 7. sky
+  // =====================================================================================
+  const TAUR = [0.0464, 0.108, 0.265], TAUM = 0.03;
+  const skyRange = document.getElementById("sky-time");
+  const skyOut = document.getElementById("sky-readout");
+  let skyTxt = "", skyStage = null;
+  const airmass = e => 1 / (Math.sin(e) + 0.50572 * Math.pow(e * 180 / Math.PI + 6.07995, -1.6364));
+  function sunColor(e) {
+    const m = airmass(Math.max(e, 0));
+    return TAUR.map(tr => Math.exp(-(tr + TAUM) * m));
+  }
+  function drawSky(s) {
+    const { ctx, w, h } = s;
+    const p = s.skyP;
+    const alpha = -0.2 + (Math.PI + 0.4) * p;
+    const e = Math.asin(Math.sin(alpha));
+    const eDeg = e * 180 / Math.PI;
+    const day = smooth(-0.12, 0.08, Math.sin(alpha));
+    const low = 1 - smooth(0.03, 0.35, Math.sin(alpha));
+    const T = sunColor(e), mx = Math.max(...T);
+    const hue = T.map(v => v / mx);
+    ctx.clearRect(0, 0, w, h);
+    const zen = mix([12, 22, 48], [58, 120, 190], day);
+    const hor = mix([28, 36, 70], mix([196, 222, 238], [255, 170, 110], low * 0.85), day);
+    const g = ctx.createLinearGradient(0, 0, 0, h * 0.8);
+    g.addColorStop(0, rgba(zen)); g.addColorStop(1, rgba(hor));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const Ox = w / 2, Oy = h * 0.8, Re = Math.max(w, h) * 2.4, Cy = Oy + Re, Ra = Re + h * 0.24;
+    // atmosphere band
+    ctx.beginPath(); ctx.arc(Ox, Cy, Ra, 0, TAU); ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fill();
+    ctx.setLineDash([4, 5]); ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = `11px ${FJ}`; ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    ctx.fillText("大気の上端（厚さは誇張）", 10, Cy - Math.sqrt(Ra * Ra - (Ox - 10) * (Ox - 10)) - 4);
+    // earth
+    ctx.beginPath(); ctx.arc(Ox, Cy, Re, 0, TAU);
+    ctx.fillStyle = rgba(mix(C.water_deep, [8, 20, 28], 1 - day * 0.8)); ctx.fill();
+    // sun & path
+    const Rs = Math.min(w * 0.44, h * 0.72);
+    const u = [Math.cos(alpha), -Math.sin(alpha)];
+    const sx = Ox + u[0] * Rs, sy = Oy + u[1] * Rs;
+    if (Math.sin(alpha) > -0.02) {
+      const dx = Ox - Ox, dy = Oy - Cy;
+      const b = 2 * (u[0] * dx + u[1] * dy), c = dx * dx + dy * dy - Ra * Ra;
+      const sEx = (-b + Math.sqrt(b * b - 4 * c)) / 2;
+      const Ex = Ox + u[0] * sEx, Ey = Oy + u[1] * sEx;
+      const col = hue.map(v => v * 255);
+      const lg = ctx.createLinearGradient(Ex, Ey, Ox, Oy);
+      lg.addColorStop(0, "rgba(255,250,240,0.95)"); lg.addColorStop(1, rgba(col, 0.95));
+      ctx.strokeStyle = lg; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(Ex, Ey); ctx.lineTo(Ox, Oy); ctx.stroke();
+      const n = 9;
+      for (let i = 1; i < n; i++) {
+        const f = i / n, px = lerp(Ex, Ox, f), py = lerp(Ey, Oy, f);
+        const a = f * 7.1 + i * 1.9 + s.t * 0.8;
+        const len = 9 + 5 * Math.sin(i * 3.3);
+        ctx.strokeStyle = "rgba(120,170,255,0.75)"; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len); ctx.stroke();
+      }
+      const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 34);
+      sg.addColorStop(0, rgba(col.map(v => lerp(v, 255, 0.35)))); sg.addColorStop(0.3, rgba(col, 0.7)); sg.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = sg; ctx.fillRect(sx - 40, sy - 40, 80, 80);
+      ctx.beginPath(); ctx.arc(sx, sy, 9, 0, TAU); ctx.fillStyle = rgba(col.map(v => lerp(v, 255, 0.25))); ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(Ox, Oy, 4.5, 0, TAU); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.font = `12px ${FJ}`; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillText("見ている人", Ox, Oy + 8);
+    let txt;
+    if (eDeg > 0) {
+      const m = airmass(e);
+      const bright = T[1];
+      txt = `太陽の高さ ${eDeg.toFixed(0)}°　空気の道のり 真上の ${m.toFixed(1)} 倍　届く光（緑）${(bright * 100).toFixed(0)}%`;
+    } else txt = `太陽は地平線の下（${eDeg.toFixed(0)}°）　空に残るのは、高い空気が散らした光だけ`;
+    if (txt !== skyTxt) {
+      skyTxt = txt;
+      skyOut.innerHTML = "";
+      const span = document.createElement("span"); span.textContent = txt; skyOut.appendChild(span);
+      if (eDeg > 0) {
+        const sw = document.createElement("span");
+        sw.innerHTML = '届く光の色 <span class="swatch"></span>';
+        sw.querySelector(".swatch").style.background = `rgb(${hue.map(v => Math.round(toSRGB(v) * 255)).join(",")})`;
+        skyOut.appendChild(sw);
+      }
+    }
+  }
+
+  // =====================================================================================
+  // 8. tone curve
+  // =====================================================================================
+  const aces = c => (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+  const cwTone = x => { const c = x * 0.63; if (c <= 0.8) return aces(c); const u = 0.3125 / (0.9 - 0.7523) * (c - 0.8); return 0.7523 + (0.9 - 0.7523) * u / (1 + u); };
+  const toneOut = document.getElementById("tone-readout");
+  let toneTxt = "";
+  function drawTone(s) {
+    const { ctx, w, h } = s;
+    ctx.clearRect(0, 0, w, h);
+    const L = 46, R = 16, Tp = 16, strips = 58, B = 34 + strips;
+    const pw = w - L - R, ph = h - Tp - B;
+    const XM = 12;
+    const X = x => L + x / XM * pw, Y = y => Tp + (1 - y / 1.05) * ph;
+    ctx.strokeStyle = rgba(C.line); ctx.lineWidth = 1;
+    ctx.font = `11px ${FM}`; ctx.fillStyle = rgba(C.muted);
+    for (let x = 0; x <= XM; x += 2) {
+      ctx.beginPath(); ctx.moveTo(X(x), Tp); ctx.lineTo(X(x), Tp + ph); ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(String(x), X(x), Tp + ph + 4);
+    }
+    for (const y of [0, 0.25, 0.5, 0.75, 1]) {
+      ctx.beginPath(); ctx.moveTo(L, Y(y)); ctx.lineTo(L + pw, Y(y)); ctx.stroke();
+      ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(y.toFixed(2), L - 6, Y(y));
+    }
+    ctx.font = `11px ${FJ}`; ctx.textAlign = "right"; ctx.textBaseline = "top";
+    ctx.fillText("描いた明るさ →", L + pw, Tp + ph + 18);
+    ctx.save(); ctx.translate(12, Tp + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("画面の明るさ", 0, 0); ctx.restore();
+    ctx.setLineDash([2, 4]); ctx.strokeStyle = rgba(C.sun); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(L, Y(0.9)); ctx.lineTo(L + pw, Y(0.9)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = `11px ${FJ}`; ctx.fillStyle = rgba(C.sun); ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    ctx.fillText("白 0.9", L + pw - 4, Y(0.9) - 2);
+    const knee = 0.8 / 0.63;
+    ctx.setLineDash([2, 3]); ctx.strokeStyle = rgba(C.muted, 0.7);
+    ctx.beginPath(); ctx.moveTo(X(knee), Y(0)); ctx.lineTo(X(knee), Y(aces(0.8))); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = rgba(C.muted); ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText("ここから肩（露出後 0.8）", X(knee) + 6, Y(0.3));
+    ctx.beginPath();
+    for (let i = 0; i <= 300; i++) { const x = XM * i / 300; const y = Math.min(aces(x * 0.63), 1.05); i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); }
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = rgba(C.muted); ctx.lineWidth = 1.6; ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();
+    for (let i = 0; i <= 300; i++) { const x = XM * i / 300; const y = cwTone(x); i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)); }
+    ctx.strokeStyle = rgba(C.accent); ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.font = `11px ${FJ}`; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    ctx.fillStyle = rgba(C.muted); ctx.fillText("ACES の近似だけ", X(7.6), Y(aces(7.6 * 0.63)) - 4);
+    ctx.fillStyle = rgba(C.accent); ctx.textBaseline = "top"; ctx.fillText("Clearwater", X(7.6), Y(cwTone(7.6)) + 5);
+    const ph2 = (Math.sin(s.t * 0.45 - Math.PI / 2) + 1) / 2;
+    const xv = XM * Math.pow(ph2, 1.6);
+    const ya = Math.min(aces(xv * 0.63), 1), yc = cwTone(xv);
+    for (const [y, c] of [[ya, C.muted], [yc, C.accent]]) {
+      ctx.beginPath(); ctx.arc(X(xv), Y(y), 4.5, 0, TAU); ctx.fillStyle = rgba(c); ctx.fill();
+      ctx.strokeStyle = rgba(C.stage); ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    // strips
+    const sy0 = Tp + ph + 36;
+    const sh = (strips - 8) / 2;
+    const n = Math.max(40, Math.floor(pw / 2));
+    for (let row = 0; row < 2; row++) {
+      for (let i = 0; i < n; i++) {
+        const x = XM * (i + 0.5) / n;
+        const y = row === 0 ? Math.min(aces(x * 0.63), 1) : cwTone(x);
+        const v = Math.round(toSRGB(y) * 255);
+        ctx.fillStyle = `rgb(${v},${v},${v})`;
+        ctx.fillRect(L + pw * i / n, sy0 + row * (sh + 6), pw / n + 0.7, sh);
+      }
+      ctx.font = `11px ${FJ}`; ctx.fillStyle = rgba(C.muted); ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    }
+    ctx.fillStyle = rgba(C.muted); ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.font = `10.5px ${FJ}`;
+    ctx.fillText("ACES", L - 6, sy0 + sh / 2);
+    ctx.fillText("CW", L - 6, sy0 + sh + 6 + sh / 2);
+    const txt = `描いた明るさ ${xv.toFixed(2)}　ACES だけ ${ya.toFixed(3)}　Clearwater ${yc.toFixed(3)}`;
+    if (txt !== toneTxt) { toneTxt = txt; toneOut.textContent = txt; }
+  }
+
+  // ---- boot ----
+  readTokens();
+  stage("cv-pipeline", pipelineHeight, drawPipeline, 3);
+  const wavesStage = stage("cv-waves", w => Math.round(w * (w < 560 ? 0.8 : 0.58)), drawWaves, 14);
+  stage("cv-seabed", w => Math.round(w * (w < 560 ? 0.78 : 0.56)) + 44, drawSeabed, 4.4);
+  const causStage = stage("cv-caustics", w => Math.round(w * (w < 560 ? 0.95 : 0.66)), drawCaustics, 2);
+  stage("cv-swash", w => Math.round(Math.max(300, w * (w < 560 ? 0.95 : 0.6))), drawSwash, 11.5);
+  stage("cv-snell", snellHeight, drawSnell, 2.2);
+  skyStage = stage("cv-sky", w => Math.round(w * (w < 560 ? 0.85 : 0.56)), s => {
+    if (s.hold <= 0 && !reduce.matches && !pausedAll) { s.skyP = fract(s.t / 28); skyRange.value = Math.round(s.skyP * 1000); }
+    drawSky(s);
+  }, 28 * 0.33);
+  skyStage.skyP = 0.33;
+  stage("cv-tone", w => Math.round(Math.max(320, w * (w < 560 ? 0.95 : 0.62))), drawTone, 3.3);
+
+  layerBox.addEventListener("change", () => { wavesStage.dirty = true; });
+  dispBox.addEventListener("change", () => { causStage.dirty = true; });
+  skyRange.addEventListener("input", () => {
+    skyStage.skyP = skyRange.value / 1000;
+    skyStage.t = skyStage.skyP * 28;
+    skyStage.hold = 3; skyStage.dirty = true;
+  });
+  const pauseBtn = document.getElementById("pause-all");
+  pauseBtn.addEventListener("click", () => {
+    pausedAll = !pausedAll;
+    pauseBtn.setAttribute("aria-pressed", String(pausedAll));
+    pauseBtn.textContent = pausedAll ? "動かす" : "動きを止める";
+  });
+  if (reduce.matches) { pauseBtn.hidden = true; }
+  reduce.addEventListener?.("change", () => { pauseBtn.hidden = reduce.matches; redrawAll(); });
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", redrawAll);
+  new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class", "style"] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

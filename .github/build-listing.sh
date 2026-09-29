@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds the VPM listing (index.json) and a small landing page from the repository's releases.
+# Builds the VPM listing (index.json) and a small landing page from the repository's releases, and copies the
+# explainer page (Documentation~/how-it-works) next to them.
 # Each release carries the package zip and its package.json; the listing gives every version with its zip URL
 # and SHA-256, the format ALCOM / VCC read. Usage (in Actions, GH_TOKEN set): build-listing.sh <out dir>
 set -euo pipefail
@@ -39,7 +40,10 @@ code{background:#8882;padding:.1em .3em;border-radius:4px;word-break:break-all}a
 <p><a class="b" href="vcc://vpm/addRepo?url=$BASE/index.json">ALCOM / VCC に追加</a></p>
 <p>ボタンが動かないときは、ALCOM / VCC の「パッケージ」設定でリポジトリを追加し、次の URL を入れてください。</p>
 <p><code>$BASE/index.json</code></p>
-<p><a href="https://github.com/$REPO">GitHub</a></p>
+<p><a href="how-it-works/">仕組み（動く図解）</a> · <a href="https://github.com/$REPO">GitHub</a></p>
 </body></html>
 EOF
+# the animated explainer (Documentation~/how-it-works) is served beside the listing
+cp -r "Documentation~/how-it-works" "$OUT/how-it-works"
+
 echo "listing: $(jq '[.packages[].versions | keys[]] | length' "$OUT/index.json") version(s) -> $BASE/index.json"

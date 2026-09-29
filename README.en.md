@@ -16,7 +16,7 @@ Try it in VRChat: [Clearwater Beach](https://vrchat.com/home/world/wrld_9795f8ab
 
 For PC only (it relies heavily on GPU computation, so it does not run on Quest). It requires VRChat Worlds SDK 3.10 or later and assumes you have built and uploaded a world in Unity before.
 
-The first time, read the three sections "Installation", "Getting started" and "Drawing the coast" in order, and you will have a working coast. Refer to the later sections when you want to use your own terrain or pools, or tune the look. Terms are defined in `CONTEXT.md` (Japanese). How things work inside (wave computation, how the bottom is drawn, draw order, the sky and syncing, etc.) is explained with diagrams in [docs/technical.en.md](docs/technical.en.md). That document also lists the default values of the tunable settings and what each file does.
+The first time, read the three sections "Installation", "Getting started" and "Drawing the coast" in order, and you will have a working coast. Refer to the later sections when you want to use your own terrain or pools, or tune the look. Terms are defined in `CONTEXT.md` (Japanese). How things work inside (wave computation, how the bottom is drawn, draw order, the sky and syncing, etc.) is explained with diagrams in [docs/technical.en.md](docs/technical.en.md). That document also lists the default values of the tunable settings and what each file does. The main mechanisms are also shown as [animated diagrams](https://bmbb93.github.io/clearwater-vrc/how-it-works/) (Japanese).
 
 ## Installation
 
