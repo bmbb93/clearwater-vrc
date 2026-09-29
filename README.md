@@ -367,6 +367,8 @@ PPv2 に内蔵の ACES は使っていません。明るい所の丸め方が違
 
 ![夜の浜。砂の上のランプが砂を、浅瀬の上のランプが水の中の底と水面を照らし、水の中の青いランプと色の変わるランプが光っている](Documentation~/images/light-volumes.jpg)
 
+VRChat で試せます：[Clearwater VRCLV demo](https://vrchat.com/home/world/wrld_364c34d1-7e60-4df8-9039-3248d77f2813)（下の「デモで試す」のデモを公開したワールド）
+
 - Light Volumes のパッケージがなくても動きます。シェーダーが読む部分（`LightVolumes.cginc`、MIT）を同梱しているためです。Light Volume のないワールドでは、見た目も負荷も変わりません
 - 読むのは、Additive の Light Volume と Point Light Volume だけです。Additive でない Light Volume には焼いたときの時刻の明るさが入っていて、時刻の空と合わないため読みません（夜に、砂だけが昼の明るさで浮きます）。時刻によらない光（ランプ・焚き火・建物の灯り）は、Additive か Point Light Volume で置いてください
 - 水の中の底に届く光は、空の光と同じだけ水に弱められます。水の中に置いた光も同じ扱いです

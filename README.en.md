@@ -367,6 +367,8 @@ In a world with [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes) (
 
 ![The beach at night: a lamp on the sand lights the sand, a lamp over the shallows lights the bottom and the water surface, and a blue lamp in the water and a lamp that changes colour glow](Documentation~/images/light-volumes.jpg)
 
+Try it in VRChat: [Clearwater VRCLV demo](https://vrchat.com/home/world/wrld_364c34d1-7e60-4df8-9039-3248d77f2813) (the demo in "Trying the demo" below, published as a world)
+
 - It works without the Light Volumes package: the part the shaders read (`LightVolumes.cginc`, MIT) is included. In a world without Light Volumes, neither the look nor the cost changes
 - Only additive Light Volumes and Point Light Volumes are read. A Light Volume that is not additive holds the brightness of the hour it was baked at, which does not match the time-of-day sky (at night the sand alone would stand out at daylight brightness), so it is not read. Put light that does not change with the hour (lamps, fires, the lights of a building) in additive or Point Light Volumes
 - Light reaching the bottom under the water is dimmed by the water as much as the sky's light is. Lights placed under the water are treated the same way
