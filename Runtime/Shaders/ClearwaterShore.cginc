@@ -389,14 +389,15 @@ float3 cwFoamRadiance(float3 n, float3 sun)
 
 // Foam with relief: its density is its height (up to _FoamRelief), so clumps stand up, their sunward sides light
 // and their far sides shade, thin foam and the holes sink in, and wet bubble tops catch the sun.
-// n = the surface under the foam; g = the density's gradient (per metre); v = towards the viewer.
-float3 cwFoamLit(float foam, float2 g, float3 n, float3 sun, float3 v)
+// n = the surface under the foam; g = the density's gradient (per metre); v = towards the viewer; lv = the light
+// volumes' light on it (cwLightVolumesIrr).
+float3 cwFoamLit(float foam, float2 g, float3 n, float3 sun, float3 v, float3 lv)
 {
     float3 nf = normalize(n + float3(-g.x, 0.0, -g.y) * _FoamRelief);
     // foam is white but not a light: kept below clipping, with more of the light coming straight from the sun so
     // the faces turned away from it (the back of a lip or a roller) fall into the sky's bluish shade
     // (thin foam greyer, the water's shade through it; thick clumps white)
-    float3 c = 1.1 / CW_PI * (cwSunColor() * (0.1 + 0.9 * saturate(dot(nf, sun))) * saturate(sun.y * 2.0) + cwSkyIrr() * 1.4)
+    float3 c = 1.1 / CW_PI * (cwSunColor() * (0.1 + 0.9 * saturate(dot(nf, sun))) * saturate(sun.y * 2.0) + cwSkyIrr() * 1.4 + lv)
              * 0.8 * (0.6 + 0.48 * foam);
     float3 r = reflect(-sun, nf);
     c += cwSunColor() * pow(saturate(dot(r, v)), 60.0) * 0.35 * foam * saturate(sun.y * 2.0);

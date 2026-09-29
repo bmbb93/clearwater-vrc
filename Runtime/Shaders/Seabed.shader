@@ -178,6 +178,7 @@ Shader "Clearwater/Seabed"
             float4 frag(v2f i) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+                cwLvOrigin = _WaterOrigin.xyz;
                 float3 sun = cwSun();
                 float2 p = float2(i.wpos.x - _WaterOrigin.x, -(i.wpos.z - _WaterOrigin.z));
                 clip(0.985 - cwUserTerrain(p).y); // (on the user terrain the ground is its own mesh)
@@ -240,7 +241,8 @@ Shader "Clearwater/Seabed"
                     float film = cwWetFilm(p, -depth);
                     float3 dry = alb * lerp(0.72, 1.0, smoothstep(0.0, 0.3, -depth));
                     float3 albW = dry * (1.0 - 0.5 * film);
-                    L = albW / CW_PI * (cwSunColor() * max(dot(n, sun), 0.0) * shadow * ao + cwSkyIrr() * 1.3 * ao);
+                    float3 lv = cwLightVolumesIrr(i.wpos, n); // (VRC Light Volumes' lamps)
+                    L = albW / CW_PI * (cwSunColor() * max(dot(n, sun), 0.0) * shadow * ao + (cwSkyIrr() * 1.3 + lv) * ao);
                     // the dry ground's own sheen (the bed look's smoothness; none on the rock, and the swash's film
                     // has its own)
                     [branch] if (_BedGloss > 0.0 && !under)
@@ -288,7 +290,7 @@ Shader "Clearwater/Seabed"
                             fg = float2(cwRunupFoam(cwShoreUV(p + float2(e, 0)), fc, runTop, 1.0, footprint) - foam,
                                         cwRunupFoam(cwShoreUV(p + float2(0, e)), fc, runTop, 1.0, footprint) - foam) / e * reliefW;
                         }
-                        L = lerp(L, cwFoamLit(foam, fg, n, sun, v), cwFoamAlpha(foam));
+                        L = lerp(L, cwFoamLit(foam, fg, n, sun, v, lv), cwFoamAlpha(foam));
                     }
                 }
                 // distant land fades into the same haze as the distant water

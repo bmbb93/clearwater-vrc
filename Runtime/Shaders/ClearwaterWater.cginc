@@ -258,6 +258,7 @@ float4 fragSide(v2f i)
     t = max(t, 0.0);
     float3 P = uCam + wd * t;
     cwEnvPos = i.origin + cwToJS(P); // (indoors the room is reflected from here)
+    cwLvOrigin = i.origin; // (the floor it traces is lit by the light volumes there)
     // (the sea: none in a pool's basin, whose own water is there)
     [branch] if (_PoolMaskArea.w > 0.0) clip(cwInPool(i.origin + cwToJS(P)) ? -1.0 : 1.0);
     // Anything standing out of the water between the raised plane and the surface (an avatar's waist, a post) is
@@ -411,6 +412,14 @@ float4 fragSide(v2f i)
         const float3 Y = float3(0.2126, 0.7152, 0.0722);
         float cap = dot(_Udon_CWMoonDisc.rgb, Y) * Fh, k = dot(spec, Y);
         spec *= cap / (k + cap + 1e-6);
+    }
+    // VRC Light Volumes' lamps glinting on the water: toward the way most of their light comes from (their SH's
+    // dominant direction), as rough as the sun's glints are for the waves smaller than the pixel
+    [branch] if (_UdonLightVolumeEnabled != 0)
+    {
+        float3 L0, L1r, L1g, L1b;
+        LightVolumeAdditiveSH(cwEnvPos, L0, L1r, L1g, L1b);
+        spec += LightVolumeSpecularDominant(F.xxx, saturate((1.0 - sqrt(sqrt(a2))) / 0.9), cwToJS(n), cwToJS(v), L0, L1r, L1g, L1b);
     }
 
     // ---- refraction / underwater ----
@@ -577,7 +586,7 @@ float4 fragSide(v2f i)
                        cwWhitewater(P.xz + float2(0, e), cover, cc, run, obst, footprint) - foam) / e * reliefW;
         }
         // dense foam is brighter, its thin edges greyer; only its last wisps let the water through
-        col = lerp(col, cwFoamLit(foam, g, n, uSun, v), cwFoamAlpha(foam));
+        col = lerp(col, cwFoamLit(foam, g, n, uSun, v, cwLightVolumesIrrAt(P, n)), cwFoamAlpha(foam));
         // the last few millimetres of the sheet fade into the wet beach behind it, no hard clip line
         float3 behind = cwInvTonemap(behindGrab.rgb);
         // (only at the edge over sand: rock standing out of the water is cut by the depth buffer instead; and not

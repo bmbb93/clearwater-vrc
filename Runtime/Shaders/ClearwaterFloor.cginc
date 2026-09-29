@@ -8,8 +8,10 @@
 
 sampler2D _Peb, _Caus, _Rip;
 // The baked data (rock, stamps, user terrain, the shore's exposure) share one sampler, and the bed look's height
-// another: the water shader would run past the 16 samplers a pixel shader has with one each.
-SamplerState cw_linear_clamp_sampler;
+// another: the water shader would run past the 16 samplers a pixel shader has with one each. (The light volumes read
+// their textures with the first too: the include below declares it, under the name it gives its own.)
+#define sampler_UdonLightVolume cw_linear_clamp_sampler
+#include "ThirdParty/LightVolumes.cginc"
 SamplerState cw_trilinear_repeat_sampler;
 // The bed look (ClearwaterBedLook, copied onto the materials by the coast; the defaults are the pebbles):
 //  _Peb the colour texture, _BedHeight its height (when _BedHasHeight; else guessed from the colour's brightness),
@@ -77,6 +79,28 @@ inline float3 cwSkyIrr()
     [branch] if (_Indoor > 0.5) return cwRoom(float3(0, 1, 0), 1.0) * CW_PI;
     return cwAmbientIrr();
 }
+
+// VRC Light Volumes (RED_SIM's, MIT: its shader include, as it comes, in ThirdParty/, included at the top). In a
+// world that has them, their additive volumes and point light volumes light the ground, the floor under the water and
+// the foam too, as they light the avatars there: lamps, a fire, light that is the same at any hour. Not the other
+// volumes: they hold the light of the hour they were baked at, where the sky of the time of day is the light here.
+// Without them (_UdonLightVolumeEnabled 0: the world has no Light Volume Manager, or the package is not there) none of
+// it runs.
+// water space's origin in the world, for points given in water space (set by the shader that lights them)
+static float3 cwLvOrigin = 0.0;
+// their light on a surface facing n (water space) at a world point: irradiance, as cwSkyIrr's
+float3 cwLightVolumesIrr(float3 wpos, float3 n)
+{
+    float3 E = 0.0;
+    [branch] if (_UdonLightVolumeEnabled != 0)
+    {
+        float3 L0, L1r, L1g, L1b;
+        LightVolumeAdditiveSH(wpos, L0, L1r, L1g, L1b);
+        E = max(LightVolumeEvaluate(cwToJS(n), L0, L1r, L1g, L1b), 0.0) * CW_PI;
+    }
+    return E;
+}
+inline float3 cwLightVolumesIrrAt(float3 p, float3 n) { return cwLightVolumesIrr(cwLvOrigin + cwToJS(p), n); } // (p in water space)
 
 // polynomial smooth min / max: blends two lines over a width k with no kink (k/4 rounding at the crossing)
 float cwSmin(float a, float b, float k) { float h = max(k - abs(a - b), 0.0) / k; return min(a, b) - h * h * k * 0.25; }
@@ -498,10 +522,12 @@ float3 cwFloorRadianceUnder(float2 FP, float depthHere, float hgt, float3 alb, f
     float3 Esun = SUN * Ts * exp(-SIG_T * depthHere / (-sunT.y)) * caus * (-sunT.y) * lerp(0.75, 1.0, ao) * sunShade;
     float3 Esky = cwSkyIrr() * exp(-(SIG_A + 0.4 * SIG_S) * depthHere * 1.25) * ao;
     [branch] if (cwUnderView) Esky = max(Esky, CW_UNDER_GLOW_FLOOR * _Udon_CWNight.w * ao);
+    // the light volumes' lamps, through the water as the sky's light comes (a lamp under the water too: near enough)
+    float3 Elv = cwLightVolumesIrrAt(float3(FP.x, -depthHere, FP.y), float3(0, 1, 0)) * exp(-(SIG_A + 0.4 * SIG_S) * depthHere * 1.25) * ao;
     // sand under the last few centimetres of water is as dark as the wet sand just above the waterline (its pores are
     // full of water too), so the water edge does not show as a step in brightness; deeper, the floor as before
     float wet = lerp(0.65, 1.0, smoothstep(0.0, 0.25, depthHere));
-    return alb / CW_PI * (Esun + Esky) * wet;
+    return alb / CW_PI * (Esun + Esky + Elv) * wet;
 }
 
 // light scattered toward the viewer along a water path of length s (direction tr, away from the viewer),

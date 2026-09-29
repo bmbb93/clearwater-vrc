@@ -360,6 +360,15 @@ How they look depends on the render queue.
 
 Seen from underwater, 3050 and below are hazed by the underwater fog, and 3051 and above are seen without haze. Transparent objects placed in the world (bubble particles, etc.) are treated the same way. They are drawn after the water surface, so even when underwater they appear on top of the water.
 
+## VRC Light Volumes
+
+In a world with [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes) (RED_SIM), the light of additive Light Volumes and of Point Light Volumes also falls on the beach, the bottom and the foam, and the water surface shows its reflection. It is the same light that lights the avatars, so a lamp or a fire on the beach at night lights the avatars and the sand beside it alike.
+
+- It works without the Light Volumes package: the part the shaders read (`LightVolumes.cginc`, MIT) is included. In a world without Light Volumes, neither the look nor the cost changes
+- Only additive Light Volumes and Point Light Volumes are read. A Light Volume that is not additive holds the brightness of the hour it was baked at, which does not match the time-of-day sky (at night the sand alone would stand out at daylight brightness), so it is not read. Put light that does not change with the hour (lamps, fires, the lights of a building) in additive or Point Light Volumes
+- Light reaching the bottom under the water is dimmed by the water as much as the sky's light is. Lights placed under the water are treated the same way
+- Your own terrain (Terrain source: User) is lit if its material's shader supports Light Volumes. Of the wetness and foam Clearwater lays over it, the foam is lit
+
 ## Performance
 
 Measured with package 1.0.0 on an RTX 4070 Ti SUPER. In the Unity editor, the same view was drawn repeatedly at 2048×2048 with a 90° field of view (close to one VR eye), timing until the GPU finished (with the Unity window in the foreground). The scene is the one Build Scene makes (16:00, 30% clouds), without post-processing. Both VR eyes take roughly twice these values.
@@ -383,6 +392,7 @@ The conditions below add to those values. Each is the difference measured by swi
 | Sun shadows (drawing them, and the beach and bottom reading them; they cannot be turned off, as the water uses the depth information) | +0.1–0.15 ms |
 | Your own terrain (for the Projectors) | +0.15 ms or less |
 | Stamps | +0.05 ms or less |
+| Looking near two VRC Light Volumes Point Light Volumes (nothing is added in a world without Light Volumes) | +0.1–0.4 ms |
 
 ## Remaking the wave audio
 
@@ -393,10 +403,11 @@ The conditions below add to those values. Each is the difference measured by swi
 
 ## License
 
-MIT License (`LICENSE`, © 2026 bmbb93 (vbamboo)). The water rendering is ported from clearwater by Aureliengmz (MIT, © Lumaris, `Third Party Notices.md`).
+MIT License (`LICENSE`, © 2026 bmbb93 (vbamboo)). The water rendering is ported from clearwater by Aureliengmz (MIT, © Lumaris, `Third Party Notices.md`). The VRC Light Volumes shader include (`Runtime/Shaders/ThirdParty/LightVolumes.cginc`) is by RED_SIM, under the MIT License.
 
 ## Credits
 
 - Water rendering: clearwater by Aureliengmz (MIT, © Lumaris)
 - Surf sound: Freesound "Stromboli beach" by nicola_ariutti (CC0)
+- Reading the light of VRC Light Volumes: VRC Light Volumes by RED_SIM (MIT)
 - Bed textures: both are generated procedurally, with no photos (the pebbles by the original's `tools/make_pebbles.py`, the sand by `Tools~/make_sand.py`)

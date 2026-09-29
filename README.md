@@ -360,6 +360,15 @@ PPv2 に内蔵の ACES は使っていません。明るい所の丸め方が違
 
 水中から見ると、3050 以下は水中のフォグで霞み、3051 以上は霞まずに見えます。ワールドに置く半透明の物（泡のパーティクルなど）も同じ扱いです。水面より後に描かれるので、水中にあっても水の上に重なって見えます。
 
+## VRC Light Volumes
+
+[VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes)（RED_SIM）を入れたワールドでは、Additive にした Light Volume と Point Light Volume の光が、浜・水底・泡にも当たります。水面には、その光の照り返しが映ります。アバターを照らすのと同じ光なので、夜の浜に置いたランプや焚き火は、そばのアバターと砂を同じように照らします。
+
+- Light Volumes のパッケージがなくても動きます。シェーダーが読む部分（`LightVolumes.cginc`、MIT）を同梱しているためです。Light Volume のないワールドでは、見た目も負荷も変わりません
+- 読むのは、Additive の Light Volume と Point Light Volume だけです。Additive でない Light Volume には焼いたときの時刻の明るさが入っていて、時刻の空と合わないため読みません（夜に、砂だけが昼の明るさで浮きます）。時刻によらない光（ランプ・焚き火・建物の灯り）は、Additive か Point Light Volume で置いてください
+- 水の中の底に届く光は、空の光と同じだけ水に弱められます。水の中に置いた光も同じ扱いです
+- 自分の地形（Terrain source: User）は、そのマテリアルのシェーダーが Light Volumes に対応していれば照らされます。Clearwater が重ねる濡れと泡のうち、泡には光が当たります
+
 ## 負荷の目安
 
 パッケージ 1.0.0 を RTX 4070 Ti SUPER で測った値です。Unity エディターで、VR の片目に近い 2048×2048・視野 90° に同じ視点を繰り返し描き、GPU の完了を待って測りました（Unity のウィンドウは最前面）。シーンは Build Scene のもの（16 時、雲 30%）で、ポストプロセスは含みません。VR の両目では、ほぼこの 2 倍になります。
@@ -383,6 +392,7 @@ PPv2 に内蔵の ACES は使っていません。明るい所の丸め方が違
 | 太陽の影（影を描く分と、浜と水底がそれを読む分。水が奥行き情報を使うので切れません） | +0.1〜0.15 ms |
 | 自分の地形（Projector の分） | +0.15 ms 以下 |
 | スタンプがある | +0.05 ms 以下 |
+| VRC Light Volumes の Point Light Volume 2 つの近くを見る（Light Volume のないワールドでは増えません） | +0.1〜0.4 ms |
 
 ## 波音を作り直す
 
@@ -393,10 +403,11 @@ PPv2 に内蔵の ACES は使っていません。明るい所の丸め方が違
 
 ## ライセンス
 
-MIT License（`LICENSE`、© 2026 bmbb93 (vbamboo)）。水の表現は clearwater by Aureliengmz（MIT、© Lumaris、`Third Party Notices.md`）を移植したものです。
+MIT License（`LICENSE`、© 2026 bmbb93 (vbamboo)）。水の表現は clearwater by Aureliengmz（MIT、© Lumaris、`Third Party Notices.md`）を移植したものです。VRC Light Volumes のシェーダーの部品（`Runtime/Shaders/ThirdParty/LightVolumes.cginc`）は RED_SIM によるもので、MIT License です。
 
 ## クレジット
 
 - 水の表現：clearwater by Aureliengmz（MIT、© Lumaris）
 - 波音：Freesound「Stromboli beach」nicola_ariutti（CC0）
+- VRC Light Volumes の光を読む部分：VRC Light Volumes by RED_SIM（MIT）
 - 底のテクスチャ：どちらも計算で作ったもので、写真は使っていません（小石は移植元の `tools/make_pebbles.py`、砂は `Tools~/make_sand.py`）

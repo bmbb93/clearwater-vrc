@@ -2,7 +2,7 @@
 
 # How Clearwater VRC works
 
-This document explains how Clearwater VRC draws the sea. It is for people who want to change the code, and for people who want to know the reasons behind its cost and its look. How to use it is in the [README](../README.en.md). Here the same features are described from the side of "what happens inside". Numbers are as of package 1.0.0.
+This document explains how Clearwater VRC draws the sea. It is for people who want to change the code, and for people who want to know the reasons behind its cost and its look. How to use it is in the [README](../README.en.md). Here the same features are described from the side of "what happens inside". Numbers are as of package 1.1.0.
 
 **How to read this.** Chapter 1 (Overview) and chapter 2 (Terms) give you the overall flow; after that you can read the chapters in any order. Chapters 4–8 cover the look of the water, 9–10 baking and pools, 13–14 the sky, and chapter 15 onward is reference material for looking things up. If you are new to Unity, start with the term table in chapter 2. If you change the package, also see the tests in chapter 19. Terms are defined in [CONTEXT.md](../CONTEXT.md) (Japanese), and decisions that are hard to change later are collected in [docs/adr](adr/) (Japanese).
 
@@ -517,6 +517,8 @@ The Udon-side table has 221 rows, one every 0.5°, with three values: the direct
 
 **Unity lights.** The Directional Light points at the sun (the moon at night) and has the same color and brightness. The ambient light for avatars and the world is Gradient (Trilight). Its three colors (sky, horizon and ground) are set to match the old sky (the ambient light made from the Skybox) at 31°, and change with the time from there. For sky reflections, a reflection probe that draws only the sky is re-rendered every 10 seconds while time advances.
 
+**VRC Light Volumes.** When the world has VRC Light Volumes, the light of additive Light Volumes and Point Light Volumes is added to the beach (Seabed), the bottom the water surface draws, the foam, and the foam over your own terrain (`cwLightVolumesIrr` in `ClearwaterFloor.cginc`). The Light Volumes functions give the light at a position as L1 spherical harmonics. They are evaluated for the surface's facing, multiplied by π and added as irradiance, the same way as the sky's light (`cwSkyIrr`). This makes the light as bright as it is on avatars with Standard-style shaders. Under the water it is dimmed as the sky's light is, by `exp(-(σa + 0.4σs) × depth × 1.25)`. On the water surface, the reflection from where most of the light comes (the sum of the L1 terms) is added with `LightVolumeSpecularDominant`. Its roughness comes, like the sun glints', from the spread of the wave slopes within the pixel. Light Volumes that are not additive hold the light of the hour they were baked at and are not read. `LightVolumes.cginc` (2.1.3, MIT), which has these functions, is included unchanged in `Runtime/Shaders/ThirdParty/`. So the shaders compile without the package, and when `_UdonLightVolumeEnabled` is 0 (a world without a Light Volume Manager) a branch skips it all. The water surface shader already uses all 16 samplers, so the Light Volumes textures are read with `cw_linear_clamp_sampler`, the one the baked data use (`sampler_UdonLightVolume` is defined to that name before the include). In a world without Light Volumes, both the image and the GPU time match 1.0.0 (within the spread between two draws of the same shader).
+
 ### Sync
 
 The instance owner syncs the base time and its server time, whether time advances, the length of a day, and the cloud amount and drift speed (`UdonSynced`, Manual). Each person computes the current time from the server time, so data is sent only when the instance opens and when a value changes, on the panel or elsewhere.
@@ -692,7 +694,8 @@ When you change the Sky's clouds and distant land in the Inspector, they are cop
 | File | Role |
 | --- | --- |
 | `Runtime/Shaders/ClearwaterCommon.cginc` | Shared code: coordinates, noise, the sky (fixed sky and time-of-day sky), reflectance, tone mapping |
-| `Runtime/Shaders/ClearwaterFloor.cginc` | Seabed: `cwFloorDepth` (reading the bakes), the Bed look patterns, underwater light |
+| `Runtime/Shaders/ClearwaterFloor.cginc` | Seabed: `cwFloorDepth` (reading the bakes), the Bed look patterns, underwater light, the light of VRC Light Volumes |
+| `Runtime/Shaders/ThirdParty/LightVolumes.cginc` | The VRC Light Volumes shader include (RED_SIM, MIT, unchanged) |
 | `Runtime/Shaders/ClearwaterShore.cginc` | Waterline: swell, breaking, swash, foam, wet sand |
 | `Runtime/Shaders/ClearwaterSurface.cginc` | Water surface height, and the above/below test for a camera right at the surface |
 | `Runtime/Shaders/ClearwaterWater.cginc`, `Water.shader` | Water surface (two passes: from above the water and from underwater) |

@@ -2,7 +2,7 @@
 
 # Clearwater VRC の仕組み
 
-この文書は、Clearwater VRC が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 1.0.0 時点のものです。
+この文書は、Clearwater VRC が海をどう描いているかを説明します。対象は、コードに手を入れたい人と、負荷や見た目の理由を知りたい人です。使い方は [README](../README.md) にあります。ここでは同じ機能を「中で何が起きているか」の側から書きます。数値はパッケージ 1.1.0 時点のものです。
 
 **読み方**。1 章（全体像）と 2 章（用語）で全体の流れをつかめば、あとはどの章からでも読めます。4〜8 章は水の見た目、9〜10 章は焼き込みとプール、13〜14 章は空、15 章以降は調べるときに引く参照用です。Unity に詳しくない人は、2 章の用語表から読んでください。パッケージに手を入れるときは、19 章のテストも見てください。用語の定義は [CONTEXT.md](../CONTEXT.md)、後から変えにくい決定は [docs/adr](adr/) にまとめてあります。
 
@@ -517,6 +517,8 @@ Udon 側の表は 0.5° ごとの 221 行で、太陽に向いた面に届く直
 
 **Unity の光**。Directional Light は太陽（夜は月）へ向け、同じ色と明るさにします。アバターやワールドの環境光は Gradient（Trilight）にし、空・地平線・地面の 3 色を、31° のときにこれまでの空（Skybox から作られた環境光）と同じになるように決めて、そこから時刻に合わせて変えます。空の映り込みは、空だけを描くリフレクションプローブを、時刻を進めるときに 10 秒ごとに描き直します。
 
+**VRC Light Volumes**。ワールドに VRC Light Volumes があると、Additive の Light Volume と Point Light Volume の光を、浜（Seabed）・水面が描く水底・泡・自分の地形の上の泡に足します（`ClearwaterFloor.cginc` の `cwLightVolumesIrr`）。Light Volumes の関数から、その位置の光を L1 の球面調和で受け取ります。これを面の向きで評価して π 倍し、空の光（`cwSkyIrr`）と同じ放射照度として足します。こうすると、アバターの Standard 系のシェーダーと同じ明るさになります。水の中の底へは、空の光と同じ `exp(-(σa + 0.4σs) × 深さ × 1.25)` で弱めます。水面には、光が主に来る向き（球面調和の L1 の和）からの照り返しを `LightVolumeSpecularDominant` で足します。粗さは、太陽のギラつきと同じく、画素の中の波の傾きのばらつきから決めます。Additive でない Light Volume は焼いた時刻の光なので読みません。関数の入った `LightVolumes.cginc`（2.1.3、MIT）は、無改変で `Runtime/Shaders/ThirdParty/` に同梱しています。そのためパッケージがなくてもコンパイルでき、`_UdonLightVolumeEnabled` が 0（Light Volume Manager のないワールド）なら分岐で飛ばします。水面のシェーダーはサンプラーを 16 個使い切っているので、Light Volumes のテクスチャは焼き込みデータと同じ `cw_linear_clamp_sampler` で読みます（`sampler_UdonLightVolume` をその名前に置き換えてから include します）。Light Volume のないワールドでは、画像も GPU 時間も 1.0.0 と差がありません（同じシェーダーを 2 回描いたときのぶれの範囲）。
+
 ### 同期
 
 インスタンスのオーナーが、起点の時刻とそのサーバー時刻、時刻を進めるか、1 日の長さ、雲の量と流れる速さを同期します（`UdonSynced`、Manual）。今の時刻は各自がサーバー時刻から計算するので、送るのはインスタンスが開いたときと、パネルなどで値が変わったときだけです。
@@ -692,7 +694,8 @@ Sky の雲と遠景の陸は、Inspector で変えると Water と Seabed にも
 | ファイル | 役割 |
 | --- | --- |
 | `Runtime/Shaders/ClearwaterCommon.cginc` | 共通：座標、ノイズ、空（時刻のない空と時刻の空）、反射率、トーンマッピング |
-| `Runtime/Shaders/ClearwaterFloor.cginc` | 水底：`cwFloorDepth`（焼き込みの読み出し）、Bed look の模様、水中の光 |
+| `Runtime/Shaders/ClearwaterFloor.cginc` | 水底：`cwFloorDepth`（焼き込みの読み出し）、Bed look の模様、水中の光、VRC Light Volumes の光 |
+| `Runtime/Shaders/ThirdParty/LightVolumes.cginc` | VRC Light Volumes のシェーダーの部品（RED_SIM、MIT、無改変） |
 | `Runtime/Shaders/ClearwaterShore.cginc` | 波打ち際：うねり・砕波・打ち上げ・泡・濡れた砂 |
 | `Runtime/Shaders/ClearwaterSurface.cginc` | 水面の高さと、水面すれすれのカメラの水上・水中の判定 |
 | `Runtime/Shaders/ClearwaterWater.cginc`、`Water.shader` | 水面（水上から・水中からの 2 パス） |
