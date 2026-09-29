@@ -4,7 +4,7 @@
 
 Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き方は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に、版の番号は[セマンティック バージョニング](https://semver.org/lang/ja/)に従います。各版の節は、英語の `CHANGELOG.en.md` の節と合わせて、GitHub のリリースノートになります。
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-09-30
 
 ### 追加
 
