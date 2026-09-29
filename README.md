@@ -365,10 +365,26 @@ PPv2 に内蔵の ACES は使っていません。明るい所の丸め方が違
 
 [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes)（RED_SIM）を入れたワールドでは、Additive にした Light Volume と Point Light Volume の光が、浜・水底・泡にも当たります。水面には、その光の照り返しが映ります。アバターを照らすのと同じ光なので、夜の浜に置いたランプや焚き火は、そばのアバターと砂を同じように照らします。
 
+![夜の浜。砂の上のランプが砂を、浅瀬の上のランプが水の中の底と水面を照らし、水の中の青いランプと色の変わるランプが光っている](Documentation~/images/light-volumes.jpg)
+
 - Light Volumes のパッケージがなくても動きます。シェーダーが読む部分（`LightVolumes.cginc`、MIT）を同梱しているためです。Light Volume のないワールドでは、見た目も負荷も変わりません
 - 読むのは、Additive の Light Volume と Point Light Volume だけです。Additive でない Light Volume には焼いたときの時刻の明るさが入っていて、時刻の空と合わないため読みません（夜に、砂だけが昼の明るさで浮きます）。時刻によらない光（ランプ・焚き火・建物の灯り）は、Additive か Point Light Volume で置いてください
 - 水の中の底に届く光は、空の光と同じだけ水に弱められます。水の中に置いた光も同じ扱いです
 - 自分の地形（Terrain source: User）は、そのマテリアルのシェーダーが Light Volumes に対応していれば照らされます。Clearwater が重ねる濡れと泡のうち、泡には光が当たります
+
+### デモで試す
+
+Light Volumes を入れたプロジェクトでは、Build Demo Scenes（「デモシーンで試す」）が、上の画像のデモ「Demo_LightVolumes」も作ります。`Tools > Clearwater > Demo Scenes > Open Light Volumes (VRC Light Volumes)` で開けます。夜 21 時の浜に、Point Light Volume で次の光を置いています。
+
+| 光 | 見どころ |
+| --- | --- |
+| 砂の上のランプ（暖色） | 砂と、打ち上げた泡が照らされる |
+| 浅瀬の上のランプ（暖色） | 水の中の底が照らされ、水面に照り返しの道ができる |
+| 水の中のランプ 2 つ（青。浅い所と水深 1.6 m） | 水の中から底を照らす。水の上からも、水の中からも見える |
+| 浜を照らすスポット | 上から下に向けたスポットライトの光の輪 |
+| 動くランプ | 水際をまたぐ半径 4 m の円を 24 秒で回り、色と明るさを変え続ける。砂・泡・水の中の底の光が付いていき、深い所では水面の下に潜る（`ClearwaterDemoLamp`。速さや範囲は Inspector で変えられます） |
+
+どのランプにも、場所が分かるように小さな光る球を付けています。時刻は空のパネル（Tab キーか左手のトリガー 2 回）で変えられるので、昼と夜で見比べることもできます。
 
 ## 負荷の目安
 

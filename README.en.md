@@ -365,10 +365,26 @@ Seen from underwater, 3050 and below are hazed by the underwater fog, and 3051 a
 
 In a world with [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes) (RED_SIM), the light of additive Light Volumes and of Point Light Volumes also falls on the beach, the bottom and the foam, and the water surface shows its reflection. It is the same light that lights the avatars, so a lamp or a fire on the beach at night lights the avatars and the sand beside it alike.
 
+![The beach at night: a lamp on the sand lights the sand, a lamp over the shallows lights the bottom and the water surface, and a blue lamp in the water and a lamp that changes colour glow](Documentation~/images/light-volumes.jpg)
+
 - It works without the Light Volumes package: the part the shaders read (`LightVolumes.cginc`, MIT) is included. In a world without Light Volumes, neither the look nor the cost changes
 - Only additive Light Volumes and Point Light Volumes are read. A Light Volume that is not additive holds the brightness of the hour it was baked at, which does not match the time-of-day sky (at night the sand alone would stand out at daylight brightness), so it is not read. Put light that does not change with the hour (lamps, fires, the lights of a building) in additive or Point Light Volumes
 - Light reaching the bottom under the water is dimmed by the water as much as the sky's light is. Lights placed under the water are treated the same way
 - Your own terrain (Terrain source: User) is lit if its material's shader supports Light Volumes. Of the wetness and foam Clearwater lays over it, the foam is lit
+
+### Trying the demo
+
+In a project with Light Volumes, Build Demo Scenes ("Trying the demo scenes") also makes the demo in the image above, Demo_LightVolumes. Open it with `Tools > Clearwater > Demo Scenes > Open Light Volumes (VRC Light Volumes)`. It is the beach at 21:00, with these lights as Point Light Volumes.
+
+| Light | What to look for |
+| --- | --- |
+| A lamp on the sand (warm) | The sand, and the foam left by the run-up, lit |
+| A lamp over the shallows (warm) | The bottom under the water lit, and a path of its reflection on the water |
+| Two lamps in the water (blue; in the shallows and 1.6 m down) | The bottom lit from within the water, seen from above the water and from under it |
+| A spot over the beach | The ring of light of a spot pointing down |
+| The moving lamp | Goes round a 4 m circle across the waterline every 24 seconds, its colour and brightness always changing. The light on the sand, the foam and the bottom follows it, and where the water is deep it dips under the surface (`ClearwaterDemoLamp`; its speed and range can be changed in the Inspector) |
+
+Each lamp has a small glowing ball to show where it is. The time can be changed with the sky panel (the Tab key, or two pulls of the left trigger), to compare the lights by day and by night.
 
 ## Performance
 
