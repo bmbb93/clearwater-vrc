@@ -14,6 +14,10 @@ Try it in VRChat: [Clearwater Beach](https://vrchat.com/home/world/wrld_9795f8ab
 | **Underwater** | **The sky seen from underwater (cut out as a circle)** |
 | ![Looking toward the beach from underwater](Documentation~/images/underwater.jpg) | ![Looking up at the water surface from underwater](Documentation~/images/snells-window.jpg) |
 
+![Top row: sunrise, morning, afternoon (16:30); bottom row: sunset, twilight, and the sky and sea on a moonlit night](Documentation~/images/time-of-day.jpg)
+
+The sky's colors are computed physically, from how the atmosphere scatters sunlight. Change the time and the sky moves from sunrise through sunset to a moonlit night; it can also be changed from a panel inside the world. The heavy scattering computation is done once in the editor and baked into a table, and at run time the shaders only look the table up. So compared with the fixed sky, it adds only 0.1–0.15 ms per VR eye ([Time of day and the sky](#time-of-day-and-the-sky-clearwater-sky), [Performance](#performance)).
+
 For PC only (it relies heavily on GPU computation, so it does not run on Quest). It requires VRChat Worlds SDK 3.10 or later and assumes you have built and uploaded a world in Unity before.
 
 The first time, read the three sections "Installation", "Getting started" and "Drawing the coast" in order, and you will have a working coast. Refer to the later sections when you want to use your own terrain or pools, or tune the look. Terms are defined in `CONTEXT.md` (Japanese). How things work inside (wave computation, how the bottom is drawn, draw order, the sky and syncing, etc.) is explained with diagrams in [docs/technical.en.md](docs/technical.en.md). That document also lists the default values of the tunable settings and what each file does. The main mechanisms are also shown as [animated diagrams](https://bmbb93.github.io/clearwater-vrc/how-it-works/) (Japanese).
@@ -257,8 +261,6 @@ Where to find the settings for waves, brightness, clouds and volume. The materia
 ## Time of day and the sky (Clearwater Sky)
 
 The sky's color is computed physically from how the atmosphere scatters sunlight. Air molecules scatter blue light strongly, so the daytime sky is blue, and in the evening only red light makes it through the long path of air. The white glare around the sun is scattering by fine particles, and the deep blue-violet after sunset is absorption by ozone. This computation runs once in the editor and is baked into a table (`Assets/Clearwater/Generated/SkyLUT.asset`); at runtime the table is only looked up.
-
-![Top row: sunrise, morning, afternoon (16:30); bottom row: sunset, twilight, and the sky and sea on a moonlit night](Documentation~/images/time-of-day.jpg)
 
 Changing the time changes not only the sky's color but also the direction and color of the sunlight, the ambient light on avatars and the world, and the sky's reflections. At night a full moon shines from opposite the sun, and the stars and the Milky Way turn around the north celestial pole.
 
