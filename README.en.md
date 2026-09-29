@@ -14,9 +14,11 @@ Try it in VRChat: [Clearwater Beach](https://vrchat.com/home/world/wrld_9795f8ab
 | **Underwater** | **The sky seen from underwater (cut out as a circle)** |
 | ![Looking toward the beach from underwater](Documentation~/images/underwater.jpg) | ![Looking up at the water surface from underwater](Documentation~/images/snells-window.jpg) |
 
+The sky's colors are computed physically, from how the atmosphere scatters sunlight. Change the time and the sky moves from sunrise through sunset to a moonlit night.
+
 ![Top row: sunrise, morning, afternoon (16:30); bottom row: sunset, twilight, and the sky and sea on a moonlit night](Documentation~/images/time-of-day.jpg)
 
-The sky's colors are computed physically, from how the atmosphere scatters sunlight. Change the time and the sky moves from sunrise through sunset to a moonlit night; it can also be changed from a panel inside the world. The heavy scattering computation is done once in the editor and baked into a table, and at run time the shaders only look the table up. So compared with the fixed sky, it adds only 0.1–0.15 ms per VR eye ([Time of day and the sky](#time-of-day-and-the-sky-clearwater-sky), [Performance](#performance)).
+The time can also be changed from a panel inside the world. The heavy scattering computation is done once in the editor and baked into a table, and at run time the shaders only look the table up. So compared with the fixed sky, it adds only 0.1–0.15 ms per VR eye ([Time of day and the sky](#time-of-day-and-the-sky-clearwater-sky), [Performance](#performance)).
 
 For PC only (it relies heavily on GPU computation, so it does not run on Quest). It requires VRChat Worlds SDK 3.10 or later and assumes you have built and uploaded a world in Unity before.
 
