@@ -9,7 +9,7 @@
     "url": "https://github.com/bmbb93"
   },
   "documentationUrl": "https://github.com/bmbb93/clearwater-vrc#readme",
-  "changelogUrl": "https://github.com/bmbb93/clearwater-vrc/releases",
+  "changelogUrl": "https://github.com/bmbb93/clearwater-vrc/blob/main/CHANGELOG.md",
   "licensesUrl": "https://github.com/bmbb93/clearwater-vrc/blob/main/LICENSE",
   "license": "MIT",
   "vpmDependencies": {

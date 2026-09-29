@@ -1,6 +1,7 @@
 # Release and VPM listing.
 #
-# Push a tag "v<version>" (matching package.json) to build the package zip and publish it as a GitHub release;
+# Push a tag "v<version>" (matching package.json) to build the package zip and publish it as a GitHub release,
+# its notes the version's sections of CHANGELOG.md and CHANGELOG.en.md (both there, dated, not "Unreleased");
 # the VPM listing (index.json on GitHub Pages, for ALCOM / VCC "Add repository") is then rebuilt from every
 # release. "Run workflow" (manual) rebuilds only the listing.
 #
@@ -38,6 +39,33 @@ jobs:
           fi
           echo "ZIP=$name-$version.zip" >> "$GITHUB_ENV"
 
+      - name: Release notes from CHANGELOG.md and CHANGELOG.en.md
+        run: |
+          version=$(jq -r .version package.json)
+          notes="$RUNNER_TEMP/notes.md"
+          : > "$notes"
+          # each file's section for the version: from its "## [x.y.z] - date" heading to the next heading or the link
+          # references; the Japanese one, then the English one under a rule
+          for f in CHANGELOG.md CHANGELOG.en.md; do
+            heading=$(awk -v p="## [$version]" 'index($0, p) == 1 { print; exit }' "$f")
+            if [ -z "$heading" ]; then
+              echo "::error::$f has no section for $version"
+              exit 1
+            fi
+            if echo "$heading" | grep -qi "unreleased"; then
+              echo "::error::$f still has $version as Unreleased: give it the release date"
+              exit 1
+            fi
+            section=$(awk -v h="$heading" '$0 == h { on = 1; next } on && (/^## \[/ || /^\[[^]]+\]: /) { exit } on' "$f")
+            if ! grep -q "[^[:space:]]" <<<"$section"; then
+              echo "::error::$f's section for $version is empty"
+              exit 1
+            fi
+            [ -s "$notes" ] && printf '\n---\n' >> "$notes"
+            printf '%s\n' "$section" >> "$notes"
+          done
+          echo "NOTES=$notes" >> "$GITHUB_ENV"
+
       - name: Zip the package
         run: |
           set -o pipefail
@@ -61,12 +89,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # (a release already there - the same tag pushed again - gets its files replaced)
+          # (a release already there - the same tag pushed again - gets its files and notes replaced)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/$ZIP" package.json --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$NOTES"
           else
             gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/$ZIP" package.json \
-              --title "$GITHUB_REF_NAME" --generate-notes
+              --title "$GITHUB_REF_NAME" --notes-file "$NOTES"
           fi
 
   listing:
