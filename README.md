@@ -14,7 +14,7 @@ VRChat で試せます：[Clearwater Beach](https://vrchat.com/home/world/wrld_9
 | **水中** | **水中から見上げた空（丸く切り取られて見える）** |
 | ![水中から浜の方を見た様子](Documentation~/images/underwater.jpg) | ![水中から水面を見上げた様子](Documentation~/images/snells-window.jpg) |
 
-空の色は、大気が日光を散らす様子を物理に沿って計算しています。時刻を変えると、日の出から夕焼け、月夜まで移り変わります。
+時刻に合わせて、空の色を変えられます。日の出から夕焼け、月夜まで、大気が日光を散らす様子を物理に沿って計算した色です。
 
 ![上段は日の出・朝・午後（16:30）、下段は日没・薄明・月夜の空と海](Documentation~/images/time-of-day.jpg)
 

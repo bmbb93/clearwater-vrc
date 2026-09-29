@@ -14,7 +14,7 @@ Try it in VRChat: [Clearwater Beach](https://vrchat.com/home/world/wrld_9795f8ab
 | **Underwater** | **The sky seen from underwater (cut out as a circle)** |
 | ![Looking toward the beach from underwater](Documentation~/images/underwater.jpg) | ![Looking up at the water surface from underwater](Documentation~/images/snells-window.jpg) |
 
-The sky's colors are computed physically, from how the atmosphere scatters sunlight. Change the time and the sky moves from sunrise through sunset to a moonlit night.
+The sky can change with the time of day, from sunrise through sunset to a moonlit night. Its colors are computed physically, from how the atmosphere scatters sunlight.
 
 ![Top row: sunrise, morning, afternoon (16:30); bottom row: sunset, twilight, and the sky and sea on a moonlit night](Documentation~/images/time-of-day.jpg)
 
