@@ -71,6 +71,17 @@ public class ClearwaterSky : UdonSharpBehaviour
     [Tooltip("Sunlight given back by the ground and the floors into the volumes, as a part of the sun's light on level " +
              "ground (it lights a room the sun shines into)")]
     [Range(0f, 1f)] public float sunBounce = 0.15f;
+    [Tooltip("Reflection probes (Custom, baked with the same white sky alone) given the strength of the sky's light. " +
+             "Each beside a probe of the same box baked with the lamps alone: Unity blends the two, so the reflections " +
+             "add up as the light does")]
+    public ReflectionProbe[] skyReflectionProbes;
+    [Tooltip("The sky reflection probes' strength times this (as Sky Light Gains for the rooms' volume)")]
+    public float skyProbeGain = 1f;
+    [Tooltip("Additive Light Volumes baked with the lamps alone (as the lightmaps are), brought up as the night falls: " +
+             "indoors at night the eye gets used to the lamps, as it does to the moonlight outside. None by day")]
+    public UdonSharpBehaviour[] lampLightVolumes;
+    [Tooltip("What the lamp volumes add at full night, as a part of the lamps' baked light")]
+    public float lampNightGain = 2f;
 
     [Header("Baked (by Build Scene / Use Clearwater Sky and Sun)")]
     public Texture3D skyTable;
@@ -414,11 +425,23 @@ public class ClearwaterSky : UdonSharpBehaviour
 
         // ---- the buildings' sky light: the sky alone (the ground's bounce of it is in the bake), from overhead and round
         // the horizon, and the sun the ground gives back
-        if (skyLightVolumes != null && skyLightVolumes.Length > 0)
+        if ((skyLightVolumes != null && skyLightVolumes.Length > 0) || (skyReflectionProbes != null && skyReflectionProbes.Length > 0))
         {
             Vector3 skyUp = Night(Vector3.Scale(sky + Vector3.one * NightIrr, _sunScale) * (_ambScale * adapt), night) * _upGain;
             Vector3 key = Vector3.Scale(keyC, _lightScale) * Mathf.Max(keyW.y, 0f);
             LightBuildings(Vector3.Lerp(skyUp, side, skyLightHorizon) + key * sunBounce);
+        }
+        if (lampLightVolumes != null)
+        {
+            // (night: 0 until well into the dusk, 1 by full night, as the eye's night vision)
+            float lamps = lampNightGain * night * night * (3f - 2f * night);
+            for (int i = 0; i < lampLightVolumes.Length; i++)
+            {
+                UdonSharpBehaviour v = lampLightVolumes[i];
+                if (v == null) continue;
+                v.SetProgramVariable("Color", Color.white);
+                v.SetProgramVariable("Intensity", lamps);
+            }
         }
     }
 
@@ -427,6 +450,13 @@ public class ClearwaterSky : UdonSharpBehaviour
     {
         float mx = Mathf.Max(Mathf.Max(lin.x, lin.y), Mathf.Max(lin.z, 1e-6f));
         Color c = new Color(Gamma(lin.x / mx), Gamma(lin.y / mx), Gamma(lin.z / mx));
+        if (skyReflectionProbes != null)
+        {
+            float strength = Lum(lin) * skyProbeGain; // (a probe has a strength, not a colour)
+            for (int i = 0; i < skyReflectionProbes.Length; i++)
+                if (skyReflectionProbes[i] != null) skyReflectionProbes[i].intensity = strength;
+        }
+        if (skyLightVolumes == null) return;
         for (int i = 0; i < skyLightVolumes.Length; i++)
         {
             UdonSharpBehaviour v = skyLightVolumes[i];

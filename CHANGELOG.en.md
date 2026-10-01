@@ -16,7 +16,9 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
   the light that does not change with the time (lamps and the like), rooms no longer stay as bright as by day
   whatever the hour. A multiplier per Light Volume (`Sky Light Gains`, for the eye getting used to the dark
   indoors), the part of the light that comes from the horizon (`Sky Light Horizon`) and the sunlight given back by
-  the ground (`Sun Bounce`) can be set too (see "The sky's light in buildings" in the [README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.en.md)).
+  the ground (`Sun Bounce`) can be set too. Reflection probes baked with the sky alone follow it as well
+  (`Sky Reflection Probes`), and Light Volumes baked with the lamps alone can be brought up at night
+  (`Lamp Light Volumes`, for the eye getting used to the lamps indoors) (see "The sky's light in buildings" in the [README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.en.md)).
 
 ## [1.1.0] - 2026-09-30
 

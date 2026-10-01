@@ -8,7 +8,7 @@ Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き
 
 ### 追加
 
-- 建物の中の空の光：空だけで焼いた Additive の Light Volume（VRC Light Volumes）を Clearwater Sky の `Sky Light Volumes` に入れると、その色と強さが時刻の空に合わせて変わります。窓から入る空の光が、昼は白く、夕方は橙に、夜は月明かりになります。ライトマップは照明など時刻によらない光だけで焼けば、時刻を変えても室内が昼のまま明るく残りません。Light Volume ごとの倍率（`Sky Light Gains`。室内の目の慣れの分）、地平線から来る光の割合（`Sky Light Horizon`）、日差しの照り返し（`Sun Bounce`）も決められます（[README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.md) の「建物の中の空の光」）
+- 建物の中の空の光：空だけで焼いた Additive の Light Volume（VRC Light Volumes）を Clearwater Sky の `Sky Light Volumes` に入れると、その色と強さが時刻の空に合わせて変わります。窓から入る空の光が、昼は白く、夕方は橙に、夜は月明かりになります。ライトマップは照明など時刻によらない光だけで焼けば、時刻を変えても室内が昼のまま明るく残りません。Light Volume ごとの倍率（`Sky Light Gains`。室内の目の慣れの分）、地平線から来る光の割合（`Sky Light Horizon`）、日差しの照り返し（`Sun Bounce`）も決められます。空だけで焼いたリフレクションプローブの強さも合わせられ（`Sky Reflection Probes`）、照明だけで焼いた Light Volume を夜に強めることもできます（`Lamp Light Volumes`。夜の室内で目が灯りに慣れる分）（[README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.md) の「建物の中の空の光」）
 
 ## [1.1.0] - 2026-09-30
 

@@ -337,6 +337,8 @@ Sky light baked into lightmaps stays at that brightness whatever the time. In a 
 | `Sky Light Gains` | A multiplier per Light Volume (same order; 1 if missing). Indoors the eye gets used to far less light than outside: a Light Volume over the rooms only at 3 to 4 times lights them as they look, not as they measure |
 | `Sky Light Horizon` | How much of the light comes from near the horizon (windows, under eaves); default 0.6. The rest comes from high in the sky |
 | `Sun Bounce` | Sunlight given back by the ground and floors, as a part of the sunlight on level ground; default 0.15. A room the sun shines into is brightened by it |
+| `Sky Reflection Probes` / `Sky Probe Gain` | Reflection probes (Custom) baked with the sky alone, and a multiplier for their strength, which follows the sky's light. Paired with a probe of the same box baked with the lamps alone, Unity blends the two half and half, so the reflections add up as the light does (then give both twice the strength) |
+| `Lamp Light Volumes` / `Lamp Night Gain` | Additive Light Volumes baked with the lamps alone, and how much they add at night (default 2). They rise as the night deepens and are 0 by day: indoors at night the eye gets used to the lamps, so the lamps in the lightmaps look that much brighter |
 
 - The sunlight itself (the light and shadows through the windows) is drawn in real time by the sun's Directional Light
 - Do not use light probes indoors. With baked probes, avatars outside are lit by them too, and the ambient light of the time does not reach them. Light Volumes light the avatars indoors
