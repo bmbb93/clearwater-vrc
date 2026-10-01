@@ -22,6 +22,10 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
 - The boxes of the `Sky Light Volumes` are the buildings to the beach and the water: inside one, no additive Light
   Volume is added to them (the sky's light was doubled there, a bright box on the sand), and a Point Light Volume
   inside one does not light them (a room's lamps came through the walls onto the sand outside).
+- Support for [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes) 3.0 (checked with 3.0.0-dev.20). A project
+  with 3.0 compiles, and Build Demo Scenes makes Demo_LightVolumes the 3.0 way (each light's settings on its Point
+  Light Volume Instance, registered with the Light Volume Manager). The beach, the bottom and the foam take Light
+  Volumes' light with 3.0 as with 2.x. Projects with 2.x, and without Light Volumes, work as before.
 
 ## [1.1.0] - 2026-09-30
 

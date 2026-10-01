@@ -393,6 +393,7 @@ In a world with [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes) (
 Try it in VRChat: [Clearwater VRCLV demo](https://vrchat.com/home/world/wrld_364c34d1-7e60-4df8-9039-3248d77f2813) (the demo in "Trying the demo" below, published as a world)
 
 - It works without the Light Volumes package: the part the shaders read (`LightVolumes.cginc`, MIT) is included. In a world without Light Volumes, neither the look nor the cost changes
+- It works with Light Volumes 2.x and 3.0 (checked with 3.0.0-dev.20). With 3.0 too, Clearwater reads the light the 2.x way (which 3.0 keeps providing), so 3.0's textured light (cookies, a video screen's picture) falls as its average colour
 - Only additive Light Volumes and Point Light Volumes are read. A Light Volume that is not additive holds the brightness of the hour it was baked at, which does not match the time-of-day sky (at night the sand alone would stand out at daylight brightness), so it is not read. Put light that does not change with the hour (lamps, fires, the lights of a building) in additive or Point Light Volumes
 - Light reaching the bottom under the water is dimmed by the water as much as the sky's light is. Lights placed under the water are treated the same way
 - Your own terrain (Terrain source: User) is lit if its material's shader supports Light Volumes. Of the wetness and foam Clearwater lays over it, the foam is lit

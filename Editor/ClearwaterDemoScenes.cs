@@ -366,11 +366,18 @@ public static class ClearwaterDemoScenes
         Lamp(root, "Lamp in deeper water", new Vector3(-2f, -1.1f, -5f), cool, 3f);
         var spot = Lamp(root, "Spot on the beach", new Vector3(3.5f, 2.5f, -39f), new Color(1f, 0.9f, 0.75f), 8f);
         spot.transform.rotation = Quaternion.LookRotation(Vector3.down, Vector3.forward);
+        var moving = Lamp(root, "Moving lamp", new Vector3(4f, 0.6f, -33f), Color.white, 4f);
+#if CW_LIGHT_VOLUMES_3
+        spot.LightType = 1;                      // (a spot)
+        spot.Angle = 70f * Mathf.Deg2Rad * 0.5f; // (3.x keeps the half angle, in radians)
+        spot.Falloff = 0.6f;
+        moving.IsDynamic = true;
+#else
         spot.Type = PointLightVolume.LightType.SpotLight;
         spot.Angle = 70f;
         spot.Falloff = 0.6f;
-        var moving = Lamp(root, "Moving lamp", new Vector3(4f, 0.6f, -33f), Color.white, 4f);
         moving.Dynamic = true;
+#endif
 
         ClearwaterSetup.EnsureProgramAsset(ClearwaterSetup.Pkg + "/Udon/ClearwaterDemoLamp.cs");
         var lamp = UdonSharpUndo.AddComponent<ClearwaterDemoLamp>(moving.gameObject);
@@ -378,15 +385,66 @@ public static class ClearwaterDemoScenes
         var ground = GameObject.Find("Seabed Collider");
         if (ground != null) lamp.groundLayers = 1 << ground.layer;
 
+#if CW_LIGHT_VOLUMES_3
+        RegisterLights3(root);
+        lamp.lightVolume = UdonSharpEditorUtility.GetBackingUdonBehaviour(moving);
+#else
         var setup = Object.FindObjectOfType<LightVolumeSetup>();
         foreach (var v in root.GetComponentsInChildren<PointLightVolume>()) { v.SetupDependencies(); v.SyncUdonScript(); }
         lamp.lightVolume = UdonSharpEditorUtility.GetBackingUdonBehaviour(moving.PointLightVolumeInstance);
-        UdonSharpEditorUtility.CopyProxyToUdon(lamp);
         if (setup == null) setup = Object.FindObjectOfType<LightVolumeSetup>();
         if (setup != null) { setup.RefreshVolumesList(); setup.SyncUdonScript(); }
+#endif
+        UdonSharpEditorUtility.CopyProxyToUdon(lamp);
         EditorSceneManager.SaveOpenScenes();
     }
 
+#if CW_LIGHT_VOLUMES_3
+    // VRC Light Volumes 3.x keeps a light's settings on its PointLightVolumeInstance, registered with the scene's one
+    // Light Volume Manager. Its editor does that on its own, a moment after the change (and when a scene opens); a demo
+    // built and saved at once does it here, through the same internal steps (by reflection: internal to the package,
+    // and free to change in it. Missing, the lights wait for the scene to be opened)
+    static void RegisterLights3(GameObject root)
+    {
+        const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance |
+                                                  System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        var lights = root.GetComponentsInChildren<PointLightVolumeInstance>(true);
+        var apply = typeof(PointLightVolumeInstance).GetMethod("EditorApplyAuthoringData", Any);
+        var setupType = Type.GetType("VRCLightVolumes.LightVolumeSceneSetup, red.sim.LightVolumesEditor");
+        var onboard = setupType?.GetMethod("OnboardHierarchy", Any);
+        if (apply == null || onboard == null)
+        {
+            Debug.LogWarning("[Clearwater] Demo_LightVolumes: this VRC Light Volumes has no OnboardHierarchy or " +
+                             "EditorApplyAuthoringData; its lamps will be set up when the scene is opened.");
+            foreach (var l in lights) UdonSharpEditorUtility.CopyProxyToUdon(l);
+            return;
+        }
+        foreach (var l in lights) apply.Invoke(l, new object[] { true, false, false });
+        var args = new object[] { root, null, false };
+        onboard.Invoke(null, args);
+        foreach (var l in lights) UdonSharpEditorUtility.CopyProxyToUdon(l);
+        if (args[1] is LightVolumeManager manager)
+        {
+            UdonSharpEditorUtility.CopyProxyToUdon(manager);
+            manager.UpdateVolumes();
+        }
+    }
+#endif
+
+#if CW_LIGHT_VOLUMES_3
+    // a point light volume (3.x: its instance alone) with a small glowing ball in its colour
+    static PointLightVolumeInstance Lamp(GameObject root, string name, Vector3 pos, Color color, float intensity)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(root.transform, false);
+        go.transform.position = pos;
+        var v = UdonSharpUndo.AddComponent<PointLightVolumeInstance>(go);
+        v.LightType = 0;
+        v.Color = color;
+        v.Intensity = intensity;
+        v.Range = 10f;
+        v.LightSourceSize = 0.25f;
+#else
     // a point light volume with a small glowing ball in its colour
     static PointLightVolume Lamp(GameObject root, string name, Vector3 pos, Color color, float intensity)
     {
@@ -401,6 +459,7 @@ public static class ClearwaterDemoScenes
         v.Intensity = intensity;
         v.Range = 10f;
         v.LightSourceSize = 0.25f;
+#endif
         var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         ball.name = "Marker";
         Object.DestroyImmediate(ball.GetComponent<Collider>());

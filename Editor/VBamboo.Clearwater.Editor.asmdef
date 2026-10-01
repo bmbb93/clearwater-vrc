@@ -14,7 +14,9 @@
     "defineConstraints": [],
     "versionDefines": [
         { "name": "com.unity.postprocessing", "expression": "3.0.0", "define": "CW_PPV2" },
-        { "name": "red.sim.lightvolumes", "expression": "2.0.0", "define": "CW_LIGHT_VOLUMES" }
+        { "name": "red.sim.lightvolumes", "expression": "2.0.0", "define": "CW_LIGHT_VOLUMES" },
+        { "name": "red.sim.lightvolumes", "expression": "[2.0.0,2.99.0]", "define": "CW_LIGHT_VOLUMES_2" },
+        { "name": "red.sim.lightvolumes", "expression": "2.99.1", "define": "CW_LIGHT_VOLUMES_3" }
     ],
     "noEngineReferences": false
 }

@@ -521,6 +521,8 @@ Udon 側の表は 0.5° ごとの 221 行で、太陽に向いた面に届く直
 
 建物（1.2.0）。Clearwater Sky は、`Sky Light Volumes` の最初の 4 つの箱を、world から箱（−0.5〜0.5）への行列としてグローバル（`_Udon_CWBuildings`、`_Udon_CWBuildingCount`）に渡します（起動時に 1 回）。浜と水は、Light Volumes の関数の代わりに `cwLightVolumesSH` で光を受け取ります。中身は `LightVolumeAdditiveSH` と同じですが、2 点だけ違います。1 つ目に、その点が箱の中なら Additive の Light Volume を読みません。そこにある空の光は浜がすでに `cwSkyIrr` で受けているので、読むと二重になり、砂が箱の形に明るくなっていました。2 つ目に、位置が箱の中にある Point Light Volume は読みません。Light Volume には壁がないので、室内のダウンライトの光が壁の下の砂に漏れていました。箱がない（Clearwater Sky に Sky Light Volumes がない）ワールドでは、1.1.0 と同じ光です。
 
+Light Volumes 3.0（1.2.0、3.0.0-dev.20 で確認）。3.0 の `LightVolumes.cginc` は、ボリュームを 3.0 の配列（`_UdonLightVolumeUvwScale` など）から読み、2.x のワールドでは壊れます。一方で、3.0 の Manager は 2.x のシェーダー向けの配列（`_UdonLightVolumeUvw`、float3 の `CustomID` など）も出し続けます。そのため、同梱するのは 2.1.3 の include のままにしています。これで 2.x と 3.0 のどちらのワールドでも、浜と水は光を受けます（3.0 のクッキーは平均の色になります）。エディターの側では、3.0 で `LightVolumeSetup`・`LightVolume`・`PointLightVolume` が移行用の空の型になりました。そこでデモの組み立ては、asmdef の versionDefines で分けています（`CW_LIGHT_VOLUMES_2` は `[2.0.0,2.99.0]`、`CW_LIGHT_VOLUMES_3` は `2.99.1` 以上。プレリリースの 3.0.0-dev.x も含む）。3.0 では、点光源の設定を `PointLightVolumeInstance` に直接書きます（`LightType`、`Angle` は半角のラジアン、`IsDynamic`）。そのあと 3.0 のエディターが自分で行う登録（`LightVolumeSceneSetup.OnboardHierarchy`）と設定の反映（`EditorApplyAuthoringData`）を、リフレクションで呼びます。どちらも internal なので、見つからないときは警告を出して、シーンを開いたときの 3.0 の自動の登録に任せます。
+
 ### 同期
 
 インスタンスのオーナーが、起点の時刻とそのサーバー時刻、時刻を進めるか、1 日の長さ、雲の量と流れる速さを同期します（`UdonSynced`、Manual）。今の時刻は各自がサーバー時刻から計算するので、送るのはインスタンスが開いたときと、パネルなどで値が変わったときだけです。

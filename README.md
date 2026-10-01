@@ -393,6 +393,7 @@ PPv2 に内蔵の ACES は使っていません。明るい所の丸め方が違
 VRChat で試せます：[Clearwater VRCLV demo](https://vrchat.com/home/world/wrld_364c34d1-7e60-4df8-9039-3248d77f2813)（下の「デモで試す」のデモを公開したワールド）
 
 - Light Volumes のパッケージがなくても動きます。シェーダーが読む部分（`LightVolumes.cginc`、MIT）を同梱しているためです。Light Volume のないワールドでは、見た目も負荷も変わりません
+- Light Volumes 2.x と 3.0（3.0.0-dev.20 で確認）のどちらでも動きます。3.0 でも、Clearwater は 2.x の読み方（3.0 も出し続けている）で光を読みます。そのため、3.0 で増えた画面の模様の光（クッキー）は、その平均の色で当たります
 - 読むのは、Additive の Light Volume と Point Light Volume だけです。Additive でない Light Volume には焼いたときの時刻の明るさが入っていて、時刻の空と合わないため読みません（夜に、砂だけが昼の明るさで浮きます）。時刻によらない光（ランプ・焚き火・建物の灯り）は、Additive か Point Light Volume で置いてください
 - 水の中の底に届く光は、空の光と同じだけ水に弱められます。水の中に置いた光も同じ扱いです
 - 自分の地形（Terrain source: User）は、そのマテリアルのシェーダーが Light Volumes に対応していれば照らされます。Clearwater が重ねる濡れと泡のうち、泡には光が当たります
