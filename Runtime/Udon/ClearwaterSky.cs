@@ -57,6 +57,21 @@ public class ClearwaterSky : UdonSharpBehaviour
     [Tooltip("Seconds between renders of the reflection probe while the day goes by")]
     public float probeInterval = 10f;
 
+    [Header("Buildings (VRC Light Volumes)")]
+    [Tooltip("Additive Light Volumes (their LightVolumeInstance) baked with a plain sky: Bakery's Skylight white, " +
+             "intensity 1, hemispherical, and nothing else. They carry the sky's light into buildings, given the light of " +
+             "the sky of the moment (the world's lightmaps keep the light they were baked with)")]
+    public UdonSharpBehaviour[] skyLightVolumes;
+    [Tooltip("Each volume's light times this (the same order; missing = 1). Indoors the eye gets used to far less light " +
+             "than outside: a volume over the rooms only, with a gain, lights them as they look rather than as they measure")]
+    public float[] skyLightGains;
+    [Tooltip("How much of the light the volumes bring in comes from low round the horizon (through windows, under " +
+             "eaves), the rest from high in the sky")]
+    [Range(0f, 1f)] public float skyLightHorizon = 0.6f;
+    [Tooltip("Sunlight given back by the ground and the floors into the volumes, as a part of the sun's light on level " +
+             "ground (it lights a room the sun shines into)")]
+    [Range(0f, 1f)] public float sunBounce = 0.15f;
+
     [Header("Baked (by Build Scene / Use Clearwater Sky and Sun)")]
     public Texture3D skyTable;
     [Tooltip("Per sun elevation: the sunlight on a surface facing the sun")]
@@ -396,6 +411,30 @@ public class ClearwaterSky : UdonSharpBehaviour
         RenderSettings.ambientSkyColor = GammaColor(skyT);
         RenderSettings.ambientEquatorColor = GammaColor(eqT);
         RenderSettings.ambientGroundColor = GammaColor(gndT);
+
+        // ---- the buildings' sky light: the sky alone (the ground's bounce of it is in the bake), from overhead and round
+        // the horizon, and the sun the ground gives back
+        if (skyLightVolumes != null && skyLightVolumes.Length > 0)
+        {
+            Vector3 skyUp = Night(Vector3.Scale(sky + Vector3.one * NightIrr, _sunScale) * (_ambScale * adapt), night) * _upGain;
+            Vector3 key = Vector3.Scale(keyC, _lightScale) * Mathf.Max(keyW.y, 0f);
+            LightBuildings(Vector3.Lerp(skyUp, side, skyLightHorizon) + key * sunBounce);
+        }
+    }
+
+    // The sky's light (linear) to the buildings' volumes: Light Volumes take a colour in gamma space and an intensity
+    void LightBuildings(Vector3 lin)
+    {
+        float mx = Mathf.Max(Mathf.Max(lin.x, lin.y), Mathf.Max(lin.z, 1e-6f));
+        Color c = new Color(Gamma(lin.x / mx), Gamma(lin.y / mx), Gamma(lin.z / mx));
+        for (int i = 0; i < skyLightVolumes.Length; i++)
+        {
+            UdonSharpBehaviour v = skyLightVolumes[i];
+            if (v == null) continue;
+            float gain = skyLightGains != null && i < skyLightGains.Length ? skyLightGains[i] : 1f;
+            v.SetProgramVariable("Color", c);
+            v.SetProgramVariable("Intensity", mx * gain);
+        }
     }
 
     // how much a light (on a face toward it, at elevation sin) counts toward the scene's brightness the eye adapts to:

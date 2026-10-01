@@ -320,7 +320,27 @@ Inspector で値を動かすと、Scene ビューと Game ビューにすぐ映�
 - アバターとワールドの環境光：Lighting の Environment Lighting を Gradient にして、空・地平線・地面の 3 色を時刻に合わせて変えます
 - 空の映り込み：太陽の子に置いた、空だけを映すリフレクションプローブ「Sky Reflection (Clearwater)」を描き直します（時刻を進めるときは 10 秒ごと）
 
-ワールドが自分で置いたリフレクションプローブとライトマップは、焼いたときの明るさのままです。夜のシーンで明るく浮くときは、それらを外すか、夜向けに焼き直してください。
+ワールドが自分で置いたリフレクションプローブとライトマップは、焼いたときの明るさのままです。夜のシーンで明るく浮くときは、それらを外すか、夜向けに焼き直してください。建物の中に空の光を入れるには、次の節の方法を使います。
+
+### 建物の中の空の光（VRC Light Volumes）
+
+ライトマップに空の光を焼くと、時刻を変えても室内はそのときの明るさのままです。[VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes) を入れたワールドでは、空の光だけを Additive の Light Volume に焼き、その色と強さを Clearwater Sky が時刻に合わせて変えられます。窓から入る空の光が、昼は白く、夕方は橙に、夜は月明かりになります。
+
+1. 建物を覆う Light Volume を置き、`Additive` にします。部屋の中だけを覆うものをもう 1 つ重ねると、室内だけを明るくできます（下の `Sky Light Gains`）
+2. 空だけで焼きます。Bakery なら Skylight を白・強さ 1・`Hemispherical`（上半分だけ）にし、ほかの光源はすべて切ります。地面からの照り返しが欲しいときは、焼く間だけ砂や海の色の板を置きます
+3. その Light Volume の `Bake` を切り（焼いた空の光が残ります）、ライトマップと残りの Light Volume を、照明など時刻によらない光だけで焼き直します
+4. Sun の Clearwater Sky の `Sky Light Volumes` に、その Light Volume（LightVolumeInstance）を入れます
+
+| 項目 | 内容 |
+| --- | --- |
+| `Sky Light Volumes` | 空だけで焼いた Additive の Light Volume |
+| `Sky Light Gains` | Light Volume ごとの倍率（同じ順。なければ 1）。室内の目は屋外よりずっと暗い光に慣れるので、部屋の中だけを覆う Light Volume を 3〜4 倍にすると、測った明るさではなく見た目の明るさになります |
+| `Sky Light Horizon` | 入る光のうち、地平線の近く（窓・軒の下）から来る割合（初期値 0.6）。残りは空の高い所から |
+| `Sun Bounce` | 地面や床が返す日差しの割合（水平な地面に当たる日差しに対して。初期値 0.15）。日の差し込む部屋が、その照り返しで明るくなります |
+
+- 日差しそのもの（窓から差し込む光と影）は、太陽の Directional Light がリアルタイムで描きます
+- 屋内のライトプローブは使わないでください。焼いたプローブがあると、屋外のアバターまでそのプローブで照らされ、時刻の環境光が届きません。屋内のアバターは Light Volume が照らします
+- 建物のマテリアルのシェーダーが Additive の Light Volume をライトマップの上に足せる必要があります（Filamented は `VRC Light Volumes` をオン。Mochie Standard は既定で足します）
 
 ### できないこと
 

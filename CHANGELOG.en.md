@@ -6,6 +6,18 @@ The changes in each version of Clearwater VRC (`com.vbamboo.clearwater`). The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 Each version's section, with the Japanese one in `CHANGELOG.md`, makes its release notes on GitHub.
 
+## [1.2.0] - Unreleased
+
+### Added
+
+- The sky's light in buildings: put additive Light Volumes (VRC Light Volumes) baked with the sky alone into
+  `Sky Light Volumes` of Clearwater Sky, and their color and strength follow the sky of the time. The sky's light
+  through the windows is white by day, orange in the evening and moonlight at night. With the lightmaps baked from
+  the light that does not change with the time (lamps and the like), rooms no longer stay as bright as by day
+  whatever the hour. A multiplier per Light Volume (`Sky Light Gains`, for the eye getting used to the dark
+  indoors), the part of the light that comes from the horizon (`Sky Light Horizon`) and the sunlight given back by
+  the ground (`Sun Bounce`) can be set too (see "The sky's light in buildings" in the [README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.en.md)).
+
 ## [1.1.0] - 2026-09-30
 
 ### Added
@@ -35,5 +47,6 @@ The first public release.
   at night, synced across the instance, and a panel to change it inside the world.
 - Tone mapping in post-processing (PPSv2) or in the shaders.
 
+[1.2.0]: https://github.com/bmbb93/clearwater-vrc/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/bmbb93/clearwater-vrc/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bmbb93/clearwater-vrc/releases/tag/v1.0.0

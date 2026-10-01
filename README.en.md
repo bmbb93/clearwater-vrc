@@ -320,7 +320,27 @@ To change things from your own Udon, call Clearwater Sky's `SetHour(hour)`, `Set
 - Ambient light on avatars and the world: Environment Lighting in Lighting is set to Gradient, and its three colors (sky, horizon, ground) change with the time
 - Sky reflections: "Sky Reflection (Clearwater)", a reflection probe under the sun that reflects only the sky, is redrawn (every 10 seconds when the time passes)
 
-Reflection probes and lightmaps that the world placed itself keep the brightness they were baked with. If they look too bright in a night scene, remove them or rebake them for night.
+Reflection probes and lightmaps that the world placed itself keep the brightness they were baked with. If they look too bright in a night scene, remove them or rebake them for night. To bring the sky's light into buildings, use the next section.
+
+### The sky's light in buildings (VRC Light Volumes)
+
+Sky light baked into lightmaps stays at that brightness whatever the time. In a world with [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes), you can bake the sky's light alone into an additive Light Volume, and Clearwater Sky changes its color and strength with the time. The sky's light through the windows is white by day, orange in the evening, and moonlight at night.
+
+1. Place a Light Volume over the building and make it `Additive`. A second one over the rooms only, on top of it, lets you brighten just the inside (`Sky Light Gains` below)
+2. Bake it with the sky alone. With Bakery, set the Skylight to white, intensity 1, `Hemispherical` (the upper half only), and switch every other light off. For the ground's bounce, put sand- or sea-colored boards under it while baking
+3. Turn that Light Volume's `Bake` off (the sky light it was baked with stays), and bake the lightmaps and the other Light Volumes again with only the light that does not change with the time, such as lamps
+4. Put that Light Volume (its LightVolumeInstance) into `Sky Light Volumes` of the Clearwater Sky on the Sun
+
+| Setting | What it does |
+| --- | --- |
+| `Sky Light Volumes` | The additive Light Volumes baked with the sky alone |
+| `Sky Light Gains` | A multiplier per Light Volume (same order; 1 if missing). Indoors the eye gets used to far less light than outside: a Light Volume over the rooms only at 3 to 4 times lights them as they look, not as they measure |
+| `Sky Light Horizon` | How much of the light comes from near the horizon (windows, under eaves); default 0.6. The rest comes from high in the sky |
+| `Sun Bounce` | Sunlight given back by the ground and floors, as a part of the sunlight on level ground; default 0.15. A room the sun shines into is brightened by it |
+
+- The sunlight itself (the light and shadows through the windows) is drawn in real time by the sun's Directional Light
+- Do not use light probes indoors. With baked probes, avatars outside are lit by them too, and the ambient light of the time does not reach them. Light Volumes light the avatars indoors
+- The building materials' shaders must add additive Light Volumes over lightmaps (Filamented: turn `VRC Light Volumes` on; Mochie Standard adds them by default)
 
 ### Limitations
 

@@ -4,6 +4,12 @@
 
 Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き方は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に、版の番号は[セマンティック バージョニング](https://semver.org/lang/ja/)に従います。各版の節は、英語の `CHANGELOG.en.md` の節と合わせて、GitHub のリリースノートになります。
 
+## [1.2.0] - Unreleased
+
+### 追加
+
+- 建物の中の空の光：空だけで焼いた Additive の Light Volume（VRC Light Volumes）を Clearwater Sky の `Sky Light Volumes` に入れると、その色と強さが時刻の空に合わせて変わります。窓から入る空の光が、昼は白く、夕方は橙に、夜は月明かりになります。ライトマップは照明など時刻によらない光だけで焼けば、時刻を変えても室内が昼のまま明るく残りません。Light Volume ごとの倍率（`Sky Light Gains`。室内の目の慣れの分）、地平線から来る光の割合（`Sky Light Horizon`）、日差しの照り返し（`Sun Bounce`）も決められます（[README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.md) の「建物の中の空の光」）
+
 ## [1.1.0] - 2026-09-30
 
 ### 追加
@@ -23,5 +29,6 @@ Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き
 - 時刻で変わる空：大気が日光を散らす様子から計算した色、夜の月と星、インスタンス内の同期、ワールドの中で時刻を変えるパネル
 - トーンマッピングは、ポストプロセス（PPSv2）とシェーダー内から選べます
 
+[1.2.0]: https://github.com/bmbb93/clearwater-vrc/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/bmbb93/clearwater-vrc/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bmbb93/clearwater-vrc/releases/tag/v1.0.0

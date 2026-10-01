@@ -2,7 +2,7 @@
 
 # How Clearwater VRC works
 
-This document explains how Clearwater VRC draws the sea. It is for people who want to change the code, and for people who want to know the reasons behind its cost and its look. How to use it is in the [README](../README.en.md). Here the same features are described from the side of "what happens inside". Numbers are as of package 1.1.0.
+This document explains how Clearwater VRC draws the sea. It is for people who want to change the code, and for people who want to know the reasons behind its cost and its look. How to use it is in the [README](../README.en.md). Here the same features are described from the side of "what happens inside". Numbers are as of package 1.2.0.
 
 **How to read this.** Chapter 1 (Overview) and chapter 2 (Terms) give you the overall flow; after that you can read the chapters in any order. Chapters 4–8 cover the look of the water, 9–10 baking and pools, 13–14 the sky, and chapter 15 onward is reference material for looking things up. If you are new to Unity, start with the term table in chapter 2. If you change the package, also see the tests in chapter 19. Terms are defined in [CONTEXT.md](../CONTEXT.md) (Japanese), and decisions that are hard to change later are collected in [docs/adr](adr/) (Japanese).
 
