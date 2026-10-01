@@ -19,6 +19,9 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
   the ground (`Sun Bounce`) can be set too. Reflection probes baked with the sky alone follow it as well
   (`Sky Reflection Probes`), and Light Volumes baked with the lamps alone can be brought up at night
   (`Lamp Light Volumes`, for the eye getting used to the lamps indoors) (see "The sky's light in buildings" in the [README](https://github.com/bmbb93/clearwater-vrc/blob/main/README.en.md)).
+- The boxes of the `Sky Light Volumes` are the buildings to the beach and the water: inside one, no additive Light
+  Volume is added to them (the sky's light was doubled there, a bright box on the sand), and a Point Light Volume
+  inside one does not light them (a room's lamps came through the walls onto the sand outside).
 
 ## [1.1.0] - 2026-09-30
 

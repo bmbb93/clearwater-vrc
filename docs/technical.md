@@ -519,6 +519,8 @@ Udon 側の表は 0.5° ごとの 221 行で、太陽に向いた面に届く直
 
 **VRC Light Volumes**。ワールドに VRC Light Volumes があると、Additive の Light Volume と Point Light Volume の光を、浜（Seabed）・水面が描く水底・泡・自分の地形の上の泡に足します（`ClearwaterFloor.cginc` の `cwLightVolumesIrr`）。Light Volumes の関数から、その位置の光を L1 の球面調和で受け取ります。これを面の向きで評価して π 倍し、空の光（`cwSkyIrr`）と同じ放射照度として足します。こうすると、アバターの Standard 系のシェーダーと同じ明るさになります。水の中の底へは、空の光と同じ `exp(-(σa + 0.4σs) × 深さ × 1.25)` で弱めます。水面には、光が主に来る向き（球面調和の L1 の和）からの照り返しを `LightVolumeSpecularDominant` で足します。粗さは、太陽のギラつきと同じく、画素の中の波の傾きのばらつきから決めます。Additive でない Light Volume は焼いた時刻の光なので読みません。関数の入った `LightVolumes.cginc`（2.1.3、MIT）は、無改変で `Runtime/Shaders/ThirdParty/` に同梱しています。そのためパッケージがなくてもコンパイルでき、`_UdonLightVolumeEnabled` が 0（Light Volume Manager のないワールド）なら分岐で飛ばします。水面のシェーダーはサンプラーを 16 個使い切っているので、Light Volumes のテクスチャは焼き込みデータと同じ `cw_linear_clamp_sampler` で読みます（`sampler_UdonLightVolume` をその名前に置き換えてから include します）。Light Volume のないワールドでは、画像も GPU 時間も 1.0.0 と差がありません（同じシェーダーを 2 回描いたときのぶれの範囲）。
 
+建物（1.2.0）。Clearwater Sky は、`Sky Light Volumes` の最初の 4 つの箱を、world から箱（−0.5〜0.5）への行列としてグローバル（`_Udon_CWBuildings`、`_Udon_CWBuildingCount`）に渡します（起動時に 1 回）。浜と水は、Light Volumes の関数の代わりに `cwLightVolumesSH` で光を受け取ります。中身は `LightVolumeAdditiveSH` と同じですが、2 点だけ違います。1 つ目に、その点が箱の中なら Additive の Light Volume を読みません。そこにある空の光は浜がすでに `cwSkyIrr` で受けているので、読むと二重になり、砂が箱の形に明るくなっていました。2 つ目に、位置が箱の中にある Point Light Volume は読みません。Light Volume には壁がないので、室内のダウンライトの光が壁の下の砂に漏れていました。箱がない（Clearwater Sky に Sky Light Volumes がない）ワールドでは、1.1.0 と同じ光です。
+
 ### 同期
 
 インスタンスのオーナーが、起点の時刻とそのサーバー時刻、時刻を進めるか、1 日の長さ、雲の量と流れる速さを同期します（`UdonSynced`、Manual）。今の時刻は各自がサーバー時刻から計算するので、送るのはインスタンスが開いたときと、パネルなどで値が変わったときだけです。

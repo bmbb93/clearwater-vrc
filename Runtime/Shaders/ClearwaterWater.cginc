@@ -418,7 +418,7 @@ float4 fragSide(v2f i)
     [branch] if (_UdonLightVolumeEnabled != 0)
     {
         float3 L0, L1r, L1g, L1b;
-        LightVolumeAdditiveSH(cwEnvPos, L0, L1r, L1g, L1b);
+        cwLightVolumesSH(cwEnvPos, L0, L1r, L1g, L1b);
         spec += LightVolumeSpecularDominant(F.xxx, saturate((1.0 - sqrt(sqrt(a2))) / 0.9), cwToJS(n), cwToJS(v), L0, L1r, L1g, L1b);
     }
 

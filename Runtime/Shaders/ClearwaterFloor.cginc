@@ -86,6 +86,36 @@ inline float3 cwSkyIrr()
 // volumes: they hold the light of the hour they were baked at, where the sky of the time of day is the light here.
 // Without them (_UdonLightVolumeEnabled 0: the world has no Light Volume Manager, or the package is not there) none of
 // it runs.
+// Buildings (Clearwater Sky's Sky Light Volumes: their boxes, as world-to-box matrices onto -0.5..0.5) keep their
+// volumes to themselves: in a box the ground takes no additive volume (there they hold the sky, which it has already),
+// and nowhere a lamp inside one (its light would come through the walls: the volumes do not know them).
+uniform float4x4 _Udon_CWBuildings[4];
+uniform float _Udon_CWBuildingCount;
+bool cwInBuilding(float3 wpos)
+{
+    uint n = min((uint)_Udon_CWBuildingCount, 4u);
+    [loop] for (uint i = 0; i < n; i++)
+    {
+        float3 b = mul(_Udon_CWBuildings[i], float4(wpos, 1.0)).xyz;
+        if (all(abs(b) <= 0.5)) return true;
+    }
+    return false;
+}
+// the volumes' light at a world point (as LightVolumeAdditiveSH, less the buildings')
+void cwLightVolumesSH(float3 wpos, out float3 L0, out float3 L1r, out float3 L1g, out float3 L1b)
+{
+    L0 = 0; L1r = 0; L1g = 0; L1b = 0;
+    float4 occlusion = 1;
+    [branch] if (!cwInBuilding(wpos)) LV_LightVolumeAdditiveSH(wpos, L0, L1r, L1g, L1b, occlusion);
+    uint pointCount = min((uint)_UdonPointLightVolumeCount, VRCLV_MAX_LIGHTS_COUNT);
+    uint maxOverdraw = min((uint)_UdonLightVolumeAdditiveMaxOverdraw, VRCLV_MAX_LIGHTS_COUNT);
+    uint count = 0;
+    [loop] for (uint pid = 0; pid < pointCount && count < maxOverdraw; pid++)
+    {
+        [branch] if (cwInBuilding(_UdonPointLightVolumePosition[pid].xyz)) continue;
+        LV_PointLight(pid, wpos, occlusion, L0, L1r, L1g, L1b, count);
+    }
+}
 // water space's origin in the world, for points given in water space (set by the shader that lights them)
 static float3 cwLvOrigin = 0.0;
 // their light on a surface facing n (water space) at a world point: irradiance, as cwSkyIrr's
@@ -95,7 +125,7 @@ float3 cwLightVolumesIrr(float3 wpos, float3 n)
     [branch] if (_UdonLightVolumeEnabled != 0)
     {
         float3 L0, L1r, L1g, L1b;
-        LightVolumeAdditiveSH(wpos, L0, L1r, L1g, L1b);
+        cwLightVolumesSH(wpos, L0, L1r, L1g, L1b);
         E = max(LightVolumeEvaluate(cwToJS(n), L0, L1r, L1g, L1b), 0.0) * CW_PI;
     }
     return E;

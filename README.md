@@ -343,6 +343,7 @@ Inspector で値を動かすと、Scene ビューと Game ビューにすぐ映�
 - 日差しそのもの（窓から差し込む光と影）は、太陽の Directional Light がリアルタイムで描きます
 - 屋内のライトプローブは使わないでください。焼いたプローブがあると、屋外のアバターまでそのプローブで照らされ、時刻の環境光が届きません。屋内のアバターは Light Volume が照らします
 - 建物のマテリアルのシェーダーが Additive の Light Volume をライトマップの上に足せる必要があります（Filamented は `VRC Light Volumes` をオン。Mochie Standard は既定で足します）
+- `Sky Light Volumes` の箱（最初の 4 つ）は、浜と水にとっての建物です。箱の中の浜と水には Additive の Light Volume を足しません（空の光は浜がもう受けているので、二重になって箱の形に明るくなるため）。箱の中にある Point Light Volume（室内のダウンライトなど）は、どこの浜と水も照らしません（Light Volume は壁を知らないので、光が壁を抜けて外の砂に漏れるため）
 
 ### できないこと
 

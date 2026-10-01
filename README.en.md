@@ -343,6 +343,7 @@ Sky light baked into lightmaps stays at that brightness whatever the time. In a 
 - The sunlight itself (the light and shadows through the windows) is drawn in real time by the sun's Directional Light
 - Do not use light probes indoors. With baked probes, avatars outside are lit by them too, and the ambient light of the time does not reach them. Light Volumes light the avatars indoors
 - The building materials' shaders must add additive Light Volumes over lightmaps (Filamented: turn `VRC Light Volumes` on; Mochie Standard adds them by default)
+- The boxes of the `Sky Light Volumes` (the first four) are the buildings to the beach and the water. Inside a box no additive Light Volume is added to them (the beach has the sky's light already: doubled, it showed as a bright box), and a Point Light Volume inside a box (a downlight in a room) lights them nowhere (Light Volumes know nothing of walls: its light came through them onto the sand outside)
 
 ### Limitations
 

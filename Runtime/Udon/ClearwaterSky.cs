@@ -60,7 +60,9 @@ public class ClearwaterSky : UdonSharpBehaviour
     [Header("Buildings (VRC Light Volumes)")]
     [Tooltip("Additive Light Volumes (their LightVolumeInstance) baked with a plain sky: Bakery's Skylight white, " +
              "intensity 1, hemispherical, and nothing else. They carry the sky's light into buildings, given the light of " +
-             "the sky of the moment (the world's lightmaps keep the light they were baked with)")]
+             "the sky of the moment (the world's lightmaps keep the light they were baked with). Their boxes are the " +
+             "buildings to the beach and the water: no additive volume lights them inside one, and no lamp inside one " +
+             "lights them anywhere (the first four)")]
     public UdonSharpBehaviour[] skyLightVolumes;
     [Tooltip("Each volume's light times this (the same order; missing = 1). Indoors the eye gets used to far less light " +
              "than outside: a volume over the rooms only, with a gain, lights them as they look rather than as they measure")]
@@ -297,6 +299,15 @@ public class ClearwaterSky : UdonSharpBehaviour
         _upGain = Lum(new Vector3(0.450f, 0.558f, 0.779f)) / Lum(fixedAmb);
         _sideGain = Lum(new Vector3(0.541f, 0.645f, 0.793f)) / Mathf.Max(Lum(horRef), 1e-20f);
         _downGain = Lum(new Vector3(0.574f, 0.678f, 0.781f)) / Mathf.Max(Lum(horRef), 1e-20f);
+        // the buildings' boxes (the sky volumes'), for the beach and the water to keep out of their volumes: in them the
+        // sky the ground has already, and lamps whose light would come through the walls (ClearwaterFloor.cginc)
+        Matrix4x4[] boxes = new Matrix4x4[4];
+        int nBoxes = 0;
+        if (skyLightVolumes != null)
+            for (int i = 0; i < skyLightVolumes.Length && nBoxes < 4; i++)
+                if (skyLightVolumes[i] != null) boxes[nBoxes++] = skyLightVolumes[i].transform.worldToLocalMatrix;
+        VRCShader.SetGlobalMatrixArray(VRCShader.PropertyToID("_Udon_CWBuildings"), boxes);
+        VRCShader.SetGlobalFloat(VRCShader.PropertyToID("_Udon_CWBuildingCount"), nBoxes);
         _ready = true;
     }
 
