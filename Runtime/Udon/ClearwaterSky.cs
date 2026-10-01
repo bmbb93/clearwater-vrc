@@ -83,6 +83,10 @@ public class ClearwaterSky : UdonSharpBehaviour
     [Tooltip("What the lamp volumes add at full night, as a part of the lamps' baked light")]
     public float lampNightGain = 2f;
 
+    /// <summary>How deep into the night the sky is: 0 by day and well into the dusk, 1 at full night (as the eye's
+    /// night vision). For other behaviours to follow, say lights brought up at night.</summary>
+    [HideInInspector] public float darkness;
+
     [Header("Baked (by Build Scene / Use Clearwater Sky and Sun)")]
     public Texture3D skyTable;
     [Tooltip("Per sun elevation: the sunlight on a surface facing the sun")]
@@ -431,10 +435,10 @@ public class ClearwaterSky : UdonSharpBehaviour
             Vector3 key = Vector3.Scale(keyC, _lightScale) * Mathf.Max(keyW.y, 0f);
             LightBuildings(Vector3.Lerp(skyUp, side, skyLightHorizon) + key * sunBounce);
         }
+        darkness = night * night * (3f - 2f * night);
         if (lampLightVolumes != null)
         {
-            // (night: 0 until well into the dusk, 1 by full night, as the eye's night vision)
-            float lamps = lampNightGain * night * night * (3f - 2f * night);
+            float lamps = lampNightGain * darkness;
             for (int i = 0; i < lampLightVolumes.Length; i++)
             {
                 UdonSharpBehaviour v = lampLightVolumes[i];
