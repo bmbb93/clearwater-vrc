@@ -10,7 +10,7 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
 
 ### Changed
 
-- The clouds are made anew. Their shapes come from a map of cumulus baked once, with flat bases and heaped tops: lit bright on the sun's side, grey on the far side and in their thick cores, with the shadows of their higher tops toward the sun. Low in the sky they show sunlit tops and flanks, overhead flat grey bases. Less cloud means fewer clouds, not smaller ones. Reading a map instead of working out noise, they cost less than before (the whole sky at 1080p: 0.03 ms instead of 0.05 ms at 19% cover)
+- The clouds are made anew. They are cumulus drawn as a volume, lit by the sun and the sky: flat bases and rounded, heaped tops, white on the sunlit side, light grey in the shade and underneath, with frayed edges the blue shows through. They are redrawn a little at a time into a cloud dome for each scene (a 2048 × 1024 CustomRenderTexture; a 64th of it each frame, the whole sky in about 0.7 seconds at 90 fps), and the sky, the reflections on the water and the sky seen from underwater just read it once. On an RTX 4070 Ti SUPER they cost about 0.25 ms per frame, once whatever the screen size and for both VR eyes. With less cloud, clouds go from the sparse places first, and the ones left are smaller. The dome is made in the scene's folder in `Generated` by Build Scene, by the Coast's Bake and when the scene is opened
 
 ### Added
 

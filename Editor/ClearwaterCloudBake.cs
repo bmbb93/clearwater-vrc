@@ -3,159 +3,254 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// The clouds' maps (CloudBake.shader): a seamless tile of cumulus as a height field (the tops and bases, the opacity,
-/// the slope of the tops, the light at the bases), in textures that ship with the package (Runtime/Textures/
-/// CloudMapA..D): fair weather (A, B) and a fuller sky (C, D). Baking them is a development tool (Tools > Clearwater > Development > Bake Cloud
-/// Maps); Ensure gives a material them.
+/// The clouds. Their shapes come from three noise textures that ship with the package (Runtime/Textures/CloudShape,
+/// CloudDetail, CloudWeather; baking them is a development tool: Tools > Clearwater > Development > Bake Cloud Noise).
+/// Each scene draws them into a dome of its own (Generated/(scene)/CloudDome, a CustomRenderTexture with its material,
+/// CRT_CloudDome.shader), which the sky, the water and the beach read (ClearwaterCommon.cginc); EnsureScene makes it and
+/// hands it and the noise to the scene's materials.
 /// </summary>
 public static class ClearwaterCloudBake
 {
-    internal static readonly string[] Props = { "_CloudMapA", "_CloudMapB", "_CloudMapC", "_CloudMapD" };
-    static string PathOf(string prop) => ClearwaterSetup.Pkg + "/Textures/" + prop.Substring(1) + ".asset";
+    static string PathOf(string name) => ClearwaterSetup.Pkg + "/Textures/" + name + ".asset";
+    const string ShapeName = "CloudShape", DetailName = "CloudDetail", WeatherName = "CloudWeather";
+    internal const string DomeName = "CloudDome";
+    internal const int DomeWidth = 2048, DomeHeight = 1024;
 
-    const int Res = 1024;        // texels across the map
-    const int VolumeRes = 512;   // the density field: voxels across the tile
-    const int VolumeHeight = 64; // and up it
-    // the strength from which there is cloud: fair weather (about a third of the sky), a fuller sky (about two thirds)
-    internal const float Fair = 0.28f, Full = 0.05f;
-    const float Sigma = 40f;     // extinction at density 1, per cloud size
+    const int ShapeN = 64, DetailN = 32, WeatherN = 256;
 
-    [MenuItem("Tools/Clearwater/Development/Bake Cloud Maps")]
+    [MenuItem("Tools/Clearwater/Development/Bake Cloud Noise")]
     public static void BakeMenu()
     {
-        Bake(Fair, out var a, out var b);
-        Save(a, PathOf(Props[0])); Save(b, PathOf(Props[1]));
-        Bake(Full, out var c, out var d);
-        Save(c, PathOf(Props[2])); Save(d, PathOf(Props[3]));
+        var t0 = System.DateTime.Now;
+        Save3D(BakeShape(), PathOf(ShapeName));
+        Save3D(BakeDetail(), PathOf(DetailName));
+        Save2D(BakeWeather(), PathOf(WeatherName));
         AssetDatabase.SaveAssets();
-        Debug.Log("[Clearwater] Cloud maps baked into " + ClearwaterSetup.Pkg + "/Textures");
+        Debug.Log("[Clearwater] Cloud noise baked into " + ClearwaterSetup.Pkg + "/Textures in " +
+                  (System.DateTime.Now - t0).TotalSeconds.ToString("0.0") + " s");
     }
 
-    /// <summary>Gives m the package's cloud maps where it has others or none (a material made before they came).
-    /// True if it changed.</summary>
-    internal static bool Ensure(Material m)
+    // ---------------------------------------------------------------- the scene's dome
+
+    /// <summary>The scene's dome (made if missing, its settings brought up to date), the controller pointed at its
+    /// material, and the dome and the noise handed to the controller's materials. The scene must have been saved.</summary>
+    internal static void EnsureScene(ClearwaterController ctl)
     {
-        if (m == null || !m.HasProperty(Props[0])) return false;
+        if (ctl == null || string.IsNullOrEmpty(ctl.gameObject.scene.path) || ctl.skyMaterial == null) return;
+        var weather = AssetDatabase.LoadAssetAtPath<Texture2D>(PathOf(WeatherName));
+        var shape = AssetDatabase.LoadAssetAtPath<Texture3D>(PathOf(ShapeName));
+        var detail = AssetDatabase.LoadAssetAtPath<Texture3D>(PathOf(DetailName));
+        string dir = ClearwaterSetup.SceneDir(ctl.gameObject.scene);
+        var mat = ClearwaterSetup.Mat("Clearwater/CRT/CloudDome", DomeName, dir);
         bool changed = false;
-        foreach (var p in Props)
+        changed |= SetTex(mat, "_CloudShape", shape);
+        changed |= SetTex(mat, "_CloudDetail", detail);
+        changed |= SetTex(mat, "_CloudWeather", weather);
+        changed |= CopyFloats(ctl.skyMaterial, mat);
+        if (mat.GetVector("_SunDir") != ctl.skyMaterial.GetVector("_SunDir")) { mat.SetVector("_SunDir", ctl.skyMaterial.GetVector("_SunDir")); changed = true; }
+        if (changed) { EditorUtility.SetDirty(mat); AssetDatabase.SaveAssetIfDirty(mat); }
+        var dome = ClearwaterSetup.LoadOrMakeCRT(dir + DomeName, DomeWidth, DomeHeight, RenderTextureFormat.ARGBHalf, mat,
+            FilterMode.Bilinear, TextureWrapMode.Repeat, doubleBuffered: true);
+        if (ctl.cloudDomeMaterial != mat)
         {
-            var t = AssetDatabase.LoadAssetAtPath<Texture2D>(PathOf(p));
-            if (t == null || m.GetTexture(p) == t) continue;
-            m.SetTexture(p, t);
-            changed = true;
+            Undo.RecordObject(ctl, "Clearwater clouds");
+            ctl.cloudDomeMaterial = mat;
+            EditorUtility.SetDirty(ctl);
         }
+        foreach (var m in Materials(ctl)) Ensure(m, dome, weather);
+    }
+
+    // what reads the clouds: the sky, the water, the seabed, the beach on the user terrain, the pools' water
+    static System.Collections.Generic.IEnumerable<Material> Materials(ClearwaterController ctl)
+    {
+        foreach (var m in new[] { ctl.skyMaterial, ctl.waterMaterial, ctl.seabedMaterial, ctl.userBeachMaterial }) if (m != null) yield return m;
+        if (ctl.poolWaterMaterials != null) foreach (var m in ctl.poolWaterMaterials) if (m != null) yield return m;
+    }
+
+    /// <summary>Gives m the dome and the weather map where it has others or none. True if it changed.</summary>
+    static bool Ensure(Material m, Texture dome, Texture weather)
+    {
+        if (m == null || !m.HasProperty("_CloudDome")) return false;
+        bool changed = SetTex(m, "_CloudDome", dome) | SetTex(m, "_CloudWeather", weather) | DropOldMaps(m);
         if (changed) { EditorUtility.SetDirty(m); AssetDatabase.SaveAssetIfDirty(m); } // (saved now: not lost with the scene's unsaved state)
         return changed;
     }
 
-    /// <summary>The two maps (A = top, base, opacity, the cloud's number; B = the top's slope x, z, the base's light, the
-    /// puffs), linear, with mipmaps, compressed.</summary>
-    internal static void Bake(float threshold, out Texture2D a, out Texture2D b, string previewDir = null)
+    // the clouds' maps of before (1.3's first try; the package has them no more): their slots left on the material
+    static bool DropOldMaps(Material m)
     {
-        var mat = new Material(Shader.Find("Hidden/Clearwater/CloudBake"));
-        mat.SetFloat("_Threshold", threshold);
-        mat.SetFloat("_Sigma", Sigma);
-        var vol = new RenderTexture(VolumeRes, VolumeRes, 0, RenderTextureFormat.RHalf, RenderTextureReadWrite.Linear)
+        var so = new SerializedObject(m);
+        var envs = so.FindProperty("m_SavedProperties.m_TexEnvs");
+        bool dropped = false;
+        for (int i = envs.arraySize - 1; i >= 0; i--)
         {
-            dimension = TextureDimension.Tex3D, volumeDepth = VolumeHeight,
-            wrapModeU = TextureWrapMode.Repeat, wrapModeV = TextureWrapMode.Repeat, wrapModeW = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Bilinear
-        };
-        vol.Create();
-        for (int s = 0; s < VolumeHeight; s++)
-        {
-            mat.SetFloat("_Slice", (s + 0.5f) / VolumeHeight);
-            Graphics.Blit(null, vol, mat, 0, s);
+            if (!envs.GetArrayElementAtIndex(i).FindPropertyRelative("first").stringValue.StartsWith("_CloudMap")) continue;
+            envs.DeleteArrayElementAtIndex(i);
+            dropped = true;
         }
-        mat.SetTexture("_Density", vol);
-        var rtA = new RenderTexture(Res, Res, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear)
-        {
-            useMipMap = true, autoGenerateMips = true, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear
-        };
-        rtA.Create();
-        Graphics.Blit(null, rtA, mat, 1);
-        a = Read(rtA, previewDir == null ? null : previewDir + "/CloudMapA.png", true);
-        mat.SetTexture("_MapA", rtA); // (B's slopes are A's tops' differences)
-        var rtB = RenderTexture.GetTemporary(Res, Res, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
-        Graphics.Blit(null, rtB, mat, 2);
-        b = Read(rtB, previewDir == null ? null : previewDir + "/CloudMapB.png");
-        RenderTexture.ReleaseTemporary(rtB);
-        rtA.Release();
-        Object.DestroyImmediate(rtA);
-        vol.Release();
-        Object.DestroyImmediate(vol);
-        Object.DestroyImmediate(mat);
+        if (dropped) so.ApplyModifiedPropertiesWithoutUndo();
+        return dropped;
     }
 
-    static Texture2D Read(RenderTexture rt, string preview, bool numberClouds = false)
+    static bool SetTex(Material m, string prop, Texture t)
     {
-        var prev = RenderTexture.active;
-        RenderTexture.active = rt;
-        var f = new Texture2D(Res, Res, TextureFormat.RGBAFloat, false, true);
-        f.ReadPixels(new Rect(0, 0, Res, Res), 0, 0);
-        f.Apply(false);
-        RenderTexture.active = prev;
-        var t = new Texture2D(Res, Res, TextureFormat.RGBA32, true, true)
+        if (t == null || !m.HasProperty(prop) || m.GetTexture(prop) == t) return false;
+        m.SetTexture(prop, t);
+        return true;
+    }
+
+    static readonly string[] Floats = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir", "_CloudShift" };
+    static bool CopyFloats(Material from, Material to)
+    {
+        bool changed = false;
+        foreach (var p in Floats)
         {
-            wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 8
+            if (!from.HasProperty(p) || !to.HasProperty(p) || to.GetFloat(p) == from.GetFloat(p)) continue;
+            to.SetFloat(p, from.GetFloat(p));
+            changed = true;
+        }
+        return changed;
+    }
+
+    // ---------------------------------------------------------------- the noise (tileable)
+
+    static float Hash3(int x, int y, int z, int seed)
+    {
+        unchecked
+        {
+            uint h = (uint)x * 374761393u + (uint)y * 668265263u + (uint)z * 2147483647u + (uint)seed * 144269504u;
+            h = (h ^ (h >> 13)) * 1274126177u;
+            h ^= h >> 16;
+            return h / 4294967295f;
+        }
+    }
+
+    static int Wrap(int i, int n) => ((i % n) + n) % n;
+
+    // the distance to the nearest of one random point per cell, cells of 1 on a grid n across (periodic)
+    static float Worley3(float x, float y, float z, int n, int seed)
+    {
+        int xi = Mathf.FloorToInt(x), yi = Mathf.FloorToInt(y), zi = Mathf.FloorToInt(z);
+        float d = 9f;
+        for (int k = -1; k <= 1; k++)
+        for (int j = -1; j <= 1; j++)
+        for (int i = -1; i <= 1; i++)
+        {
+            int cx = xi + i, cy = yi + j, cz = zi + k;
+            int wx = Wrap(cx, n), wy = Wrap(cy, n), wz = Wrap(cz, n);
+            float dx = cx + Hash3(wx, wy, wz, seed) - x, dy = cy + Hash3(wx, wy, wz, seed + 1) - y, dz = cz + Hash3(wx, wy, wz, seed + 2) - z;
+            float dd = dx * dx + dy * dy + dz * dz;
+            if (dd < d) d = dd;
+        }
+        return Mathf.Sqrt(d);
+    }
+
+    static float Fade(float t) => t * t * t * (t * (t * 6f - 15f) + 10f);
+
+    static float Grad3(int ix, int iy, int iz, int n, int seed, float x, float y, float z)
+    {
+        int wx = Wrap(ix, n), wy = Wrap(iy, n), wz = Wrap(iz, n);
+        float a = Hash3(wx, wy, wz, seed) * Mathf.PI * 2f, b = Mathf.Acos(Hash3(wx, wy, wz, seed + 7) * 2f - 1f);
+        return Mathf.Sin(b) * Mathf.Cos(a) * x + Mathf.Sin(b) * Mathf.Sin(a) * y + Mathf.Cos(b) * z;
+    }
+
+    // gradient noise, -1..1 roughly, periodic over n
+    static float Perlin3(float x, float y, float z, int n, int seed)
+    {
+        int xi = Mathf.FloorToInt(x), yi = Mathf.FloorToInt(y), zi = Mathf.FloorToInt(z);
+        float xf = x - xi, yf = y - yi, zf = z - zi;
+        float u = Fade(xf), v = Fade(yf), w = Fade(zf);
+        float C(int i, int j, int k) => Grad3(xi + i, yi + j, zi + k, n, seed, xf - i, yf - j, zf - k);
+        return Mathf.Lerp(Mathf.Lerp(Mathf.Lerp(C(0, 0, 0), C(1, 0, 0), u), Mathf.Lerp(C(0, 1, 0), C(1, 1, 0), u), v),
+                          Mathf.Lerp(Mathf.Lerp(C(0, 0, 1), C(1, 0, 1), u), Mathf.Lerp(C(0, 1, 1), C(1, 1, 1), u), v), w);
+    }
+
+    // 1 at a cell's point, 0 a cell away: billows
+    static float WF(float x, float y, float z, int f, int seed) => 1f - Mathf.Min(1f, Worley3(x * f, y * f, z * f, f, seed));
+
+    static Texture3D Make3D(int n, System.Func<float, float, float, Color> fn)
+    {
+        var px = new Color32[n * n * n];
+        System.Threading.Tasks.Parallel.For(0, n, z =>
+        {
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+                px[(z * n + y) * n + x] = fn((float)x / n, (float)y / n, (float)z / n);
+        });
+        var t = new Texture3D(n, n, n, TextureFormat.RGBA32, false)
+        {
+            wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear
         };
-        var px = f.GetPixels();
-        if (numberClouds) NumberClouds(px);
-        t.SetPixels(px);
-        t.Apply(true);
-        if (preview != null) System.IO.File.WriteAllBytes(preview, t.EncodeToPNG());
-        Object.DestroyImmediate(f);
-        EditorUtility.CompressTexture(t, TextureFormat.BC7, TextureCompressionQuality.Best);
+        t.SetPixels32(px);
+        t.Apply(false);
         return t;
     }
 
-    /// <summary>Gives each cloud (the texels of opacity over a tenth that touch, across the map's edges too: it repeats) a
-    /// number of its own, 0..1, in a: the shaders keep the clouds whose number is under the cover, whole.</summary>
-    static void NumberClouds(Color[] px)
+    // The big shape, 64 across a tile 1.8 cloud sizes wide (Schneider's): r Perlin-Worley (round lobes on a cloudy
+    // field), g, b, a Worley at rising frequencies
+    static Texture3D BakeShape() => Make3D(ShapeN, (x, y, z) =>
     {
-        var label = new int[px.Length];
-        var rng = new System.Random(1234);
-        var stack = new System.Collections.Generic.Stack<int>();
-        for (int i = 0; i < px.Length; i++)
+        float p = 0.5f + 0.5f * (0.6f * Perlin3(x * 4, y * 4, z * 4, 4, 11) + 0.3f * Perlin3(x * 8, y * 8, z * 8, 8, 12) + 0.1f * Perlin3(x * 16, y * 16, z * 16, 16, 13));
+        float w1 = WF(x, y, z, 4, 21) * 0.625f + WF(x, y, z, 8, 22) * 0.25f + WF(x, y, z, 16, 23) * 0.125f;
+        float pw = Mathf.Clamp01((p - (1f - w1)) / (w1 + 1e-4f) * 0.5f + p * 0.5f);
+        float g = WF(x, y, z, 4, 31) * 0.625f + WF(x, y, z, 8, 32) * 0.25f + WF(x, y, z, 16, 33) * 0.125f;
+        float b = WF(x, y, z, 8, 41) * 0.625f + WF(x, y, z, 16, 42) * 0.25f + WF(x, y, z, 32, 43) * 0.125f;
+        float a = WF(x, y, z, 16, 51) * 0.625f + WF(x, y, z, 32, 52) * 0.25f + WF(x, y, z, 64, 53) * 0.125f;
+        return new Color(pw, g, b, a);
+    });
+
+    // the fine detail that frays the edges, 32 across a tile a fifth of a cloud size wide
+    static Texture3D BakeDetail() => Make3D(DetailN, (x, y, z) => new Color(
+        WF(x, y, z, 2, 61) * 0.625f + WF(x, y, z, 4, 62) * 0.25f + WF(x, y, z, 8, 63) * 0.125f,
+        WF(x, y, z, 4, 71) * 0.625f + WF(x, y, z, 8, 72) * 0.25f + WF(x, y, z, 16, 73) * 0.125f,
+        WF(x, y, z, 8, 81), 1f));
+
+    // Where the clouds are, 12 cloud sizes across: r how strongly (spread evenly over 0..1, so a cover of c lets clouds
+    // over about a share c of the sky), g how tall they grow
+    static Texture2D BakeWeather()
+    {
+        int n = WeatherN;
+        var r = new float[n * n];
+        var px = new Color[n * n];
+        for (int y = 0; y < n; y++)
+        for (int x = 0; x < n; x++)
         {
-            if (label[i] != 0 || px[i].b < 0.1f) continue;
-            float number = (float)rng.NextDouble();
-            label[i] = 1;
-            stack.Push(i);
-            while (stack.Count > 0)
-            {
-                int k = stack.Pop(), x = k % Res, y = k / Res;
-                px[k].a = number;
-                int[] next = { y * Res + (x + 1) % Res, y * Res + (x + Res - 1) % Res, ((y + 1) % Res) * Res + x, ((y + Res - 1) % Res) * Res + x };
-                foreach (int m in next)
-                {
-                    if (label[m] != 0 || px[m].b < 0.1f) continue;
-                    label[m] = 1;
-                    stack.Push(m);
-                }
-            }
+            float u = (float)x / n, v = (float)y / n;
+            r[y * n + x] = Mathf.Clamp01(0.55f * (1f - Mathf.Min(1f, Worley3(u * 6, v * 6, 0.5f, 6, 91)))
+                                         + 0.3f * (0.5f + 0.5f * Perlin3(u * 8, v * 8, 0.3f, 8, 92))
+                                         + 0.15f * (0.5f + 0.5f * Perlin3(u * 16, v * 16, 0.7f, 16, 93)));
+            px[y * n + x].g = 0.5f + 0.5f * Perlin3(u * 3, v * 3, 0.2f, 3, 94);
+            px[y * n + x].a = 1f;
         }
-        // the clear sky round a cloud takes its nearest cloud's number (so the mips and the edges' blur keep it)
-        for (int pass = 0; pass < 8; pass++)
+        var order = new int[n * n];
+        for (int i = 0; i < order.Length; i++) order[i] = i;
+        System.Array.Sort(order, (a, b) => r[a].CompareTo(r[b]));
+        for (int k = 0; k < order.Length; k++) px[order[k]].r = (float)k / (order.Length - 1);
+        var t = new Texture2D(n, n, TextureFormat.RGBA32, true, true)
         {
-            for (int i = 0; i < px.Length; i++)
-            {
-                if (label[i] != 0) continue;
-                int x = i % Res, y = i / Res;
-                int[] next = { y * Res + (x + 1) % Res, y * Res + (x + Res - 1) % Res, ((y + 1) % Res) * Res + x, ((y + Res - 1) % Res) * Res + x };
-                foreach (int m in next)
-                    if (label[m] == 1) { px[i].a = px[m].a; label[i] = 2; break; }
-            }
-            for (int i = 0; i < px.Length; i++) if (label[i] == 2) label[i] = 1;
-        }
+            wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear
+        };
+        t.SetPixels(px);
+        t.Apply(true);
+        return t;
     }
 
-    static void Save(Texture2D t, string path)
+    static void Save3D(Texture3D t, string path)
+    {
+        t.name = System.IO.Path.GetFileNameWithoutExtension(path);
+        var existing = AssetDatabase.LoadAssetAtPath<Texture3D>(path);
+        if (existing == null) { AssetDatabase.CreateAsset(t, path); return; }
+        EditorUtility.CopySerialized(t, existing); // (the same asset, so what points at it still does)
+        EditorUtility.SetDirty(existing);
+        Object.DestroyImmediate(t);
+    }
+
+    static void Save2D(Texture2D t, string path)
     {
         t.name = System.IO.Path.GetFileNameWithoutExtension(path);
         var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         if (existing == null) { AssetDatabase.CreateAsset(t, path); return; }
-        EditorUtility.CopySerialized(t, existing); // (the same asset, so what points at it still does)
+        EditorUtility.CopySerialized(t, existing);
         EditorUtility.SetDirty(existing);
         Object.DestroyImmediate(t);
     }

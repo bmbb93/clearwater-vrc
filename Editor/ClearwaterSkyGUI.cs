@@ -1,8 +1,9 @@
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>Inspector for the Clearwater sky material: its clouds and its distant land are copied straight to the water
-/// and the seabed (they reflect and refract the same sky), so what you set shows everywhere at once.</summary>
+/// <summary>Inspector for the Clearwater sky material: its clouds and its distant land are copied straight to the water,
+/// the seabed and the beach (they reflect and refract the same sky) and its clouds to the scene's cloud dome (they are
+/// drawn there), so what you set shows everywhere at once.</summary>
 public class ClearwaterSkyGUI : ShaderGUI
 {
     static readonly string[] Props = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir", "_LandCover", "_LandSetback", "_LandHeight" };
@@ -29,14 +30,13 @@ public class ClearwaterSkyGUI : ShaderGUI
     public static int CopyClouds(Material sky, bool apply)
     {
         int n = 0;
-        if (apply) ClearwaterCloudBake.Ensure(sky);
         foreach (var ctl in Object.FindObjectsOfType<ClearwaterController>(true))
         {
             if (ctl.skyMaterial != sky) continue;
-            foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial })
+            if (apply) ClearwaterCloudBake.EnsureScene(ctl);
+            foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial, ctl.userBeachMaterial, ctl.cloudDomeMaterial })
             {
                 if (m == null) continue;
-                if (apply && ClearwaterCloudBake.Ensure(m)) n++;
                 foreach (var p in Props)
                 {
                     if (!m.HasProperty(p) || Mathf.Approximately(m.GetFloat(p), sky.GetFloat(p))) continue;

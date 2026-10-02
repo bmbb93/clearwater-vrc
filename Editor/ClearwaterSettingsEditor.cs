@@ -52,7 +52,9 @@ public class ClearwaterSettingsEditor : Editor
     {
         var ctl = settings.controller;
         if (ctl == null) return;
-        SetAll(Mats(ctl.skyMaterial, ctl.waterMaterial, ctl.seabedMaterial, ctl.poolWaterMaterials), "Clouds",
+        var cloudy = new System.Collections.Generic.List<Material> { ctl.userBeachMaterial, ctl.cloudDomeMaterial };
+        if (ctl.poolWaterMaterials != null) cloudy.AddRange(ctl.poolWaterMaterials);
+        SetAll(Mats(ctl.skyMaterial, ctl.waterMaterial, ctl.seabedMaterial, cloudy.ToArray()), "Clouds",
             m => { m.SetFloat("_CloudCover", settings.clouds); m.SetFloat("_CloudSpeed", settings.cloudDrift); });
         SetAll(Mats(ctl.waterMaterial, ctl.seabedMaterial, ctl.underwaterMaterial, new[] { ctl.userBeachMaterial }), "Shore waves",
             m => m.SetFloat("_SwashHeight", settings.shoreWaves));

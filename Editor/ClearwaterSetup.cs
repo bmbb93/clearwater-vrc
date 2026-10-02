@@ -27,6 +27,7 @@ public static class ClearwaterSetup
         "Water.mat", "Seabed.mat", "Underwater.mat", "AvatarCaustics.mat", "Sky.mat", "UserBeach.mat",
         "WaterPlane.asset", "SeabedGrid.asset", "SeabedCollider.asset", "CoastField.asset", "CoastFieldOuter.asset",
         "ShoreExposure.asset", "CoastProfile.asset", "StampHeights.asset", "UserTerrain.asset",
+        "CloudDome.mat", "CloudDome.asset",
     };
     internal const string ScenePath = Root + "/Scenes/Clearwater.unity";
     internal const string Pkg = "Packages/com.vbamboo.clearwater/Runtime";
@@ -76,6 +77,7 @@ public static class ClearwaterSetup
         var coast = Object.FindObjectOfType<ClearwaterCoast>();
         if (coast == null) coast = CreateDefaultCoast();
         ClearwaterCoastBake.Bake(coast);
+        ClearwaterCloudBake.EnsureScene(Object.FindObjectOfType<ClearwaterController>());
         var scene = coast.gameObject.scene;
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
@@ -232,7 +234,6 @@ public static class ClearwaterSetup
         a.water.SetVector("_SunDir", SunVector());
         if (IsNew(a.water)) a.water.EnableKeyword("_CW_TONEMAP");
         a.sky = Mat("Clearwater/Skybox", "Sky", dir);
-        ClearwaterCloudBake.Ensure(a.sky);
         a.sky.SetVector("_SunDir", SunVector());
         if (IsNew(a.sky)) a.sky.EnableKeyword("_CW_TONEMAP");
         float seaSize = SceneSeaSize();
@@ -309,7 +310,7 @@ public static class ClearwaterSetup
     static bool IsNew(Material m) => _made.Contains(m);
 
     // (dir: a scene's folder, SceneDir; none: the shared ones)
-    static Material Mat(string shader, string name, string dir = "")
+    internal static Material Mat(string shader, string name, string dir = "")
     {
         var s = Shader.Find(shader);
         if (s == null) throw new System.Exception("Shader not found: " + shader);
@@ -344,6 +345,32 @@ public static class ClearwaterSetup
             anisoLevel = aniso,
         };
         return Save(crt, name + ".asset");
+    }
+
+    /// <summary>The CustomRenderTexture at Generated/file.asset, made if missing, with these settings (a dome's: wider
+    /// than tall). Left as it is when they are already so (nothing to save).</summary>
+    internal static CustomRenderTexture LoadOrMakeCRT(string file, int width, int height, RenderTextureFormat fmt, Material mat,
+        FilterMode filter, TextureWrapMode wrap, bool doubleBuffered)
+    {
+        var crt = AssetDatabase.LoadAssetAtPath<CustomRenderTexture>(Gen + "/" + file + ".asset");
+        if (crt != null && crt.width == width && crt.height == height && crt.format == fmt && crt.material == mat &&
+            crt.filterMode == filter && crt.wrapMode == wrap && crt.doubleBuffered == doubleBuffered &&
+            crt.updateMode == CustomRenderTextureUpdateMode.Realtime)
+            return crt;
+        var made = new CustomRenderTexture(width, height, fmt, RenderTextureReadWrite.Linear)
+        {
+            material = mat,
+            initializationMode = CustomRenderTextureUpdateMode.OnLoad,
+            initializationSource = CustomRenderTextureInitializationSource.TextureAndColor,
+            initializationColor = Color.clear,
+            updateMode = CustomRenderTextureUpdateMode.Realtime,
+            doubleBuffered = doubleBuffered,
+            filterMode = filter,
+            wrapMode = wrap,
+        };
+        crt = Save(made, file + ".asset");
+        AssetDatabase.SaveAssetIfDirty(crt);
+        return crt;
     }
 
     static string Dir(string path) => System.IO.Path.GetDirectoryName(path).Replace('\\', '/');

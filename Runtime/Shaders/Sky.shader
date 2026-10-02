@@ -12,10 +12,8 @@ Shader "Clearwater/Skybox"
         _CloudSpeed ("Drift speed (m/s, 0 = still)", Float) = 8
         _CloudDir ("Drift direction (degrees clockwise from +Z)", Range(0, 360)) = 60
         [HideInInspector] _CloudShift ("Drift so far (m, set while the world runs)", Float) = 0
-        [HideInInspector] [NoScaleOffset] _CloudMapA ("Clouds: the map A (the package's)", 2D) = "black" {}
-        [HideInInspector] [NoScaleOffset] _CloudMapB ("Clouds: the map B (the package's)", 2D) = "black" {}
-        [HideInInspector] [NoScaleOffset] _CloudMapC ("Clouds: the map C (the package's)", 2D) = "black" {}
-        [HideInInspector] [NoScaleOffset] _CloudMapD ("Clouds: the map D (the package's)", 2D) = "black" {}
+        [HideInInspector] [NoScaleOffset] _CloudDome ("Clouds: the scene's dome (made with the scene)", 2D) = "black" {}
+        [HideInInspector] [NoScaleOffset] _CloudWeather ("Clouds: where they are (the package's)", 2D) = "black" {}
         [Header(Distant land (copied to the water and the seabed as well))]
         _LandCover ("How much of the horizon (0 = open sea all round, 1 = all round; round the side away from the sea)", Range(0, 1)) = 0.5
         _LandSetback ("How far inland of the shoreline it rises, m (with a coast baked)", Range(0, 1500)) = 0

@@ -32,6 +32,8 @@ public class ClearwaterController : UdonSharpBehaviour
     public Material avatarCausticsMaterial;
     [Tooltip("The beach drawn on the coast's user terrain (set by the coast bake; none without one)")]
     public Material userBeachMaterial;
+    [Tooltip("The clouds' dome: the clouds are drawn into it and the sky reads them there (made with the scene)")]
+    public Material cloudDomeMaterial;
 
     [Header("Avatar caustics")]
     [Tooltip("Projector (player layers only) that puts the caustics on avatars; kept over the local player")]
@@ -150,13 +152,20 @@ public class ClearwaterController : UdonSharpBehaviour
             underwaterMaterial.SetFloat("_SwellDepth", waterMaterial.GetFloat("_SwellDepth"));
         }
         if (skyMaterial != null) skyMaterial.SetFloat("_CloudShift", 0f); // (none left over from the editor's play)
-        CopyClouds(waterMaterial);
-        CopyClouds(seabedMaterial);
-        for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
+        CopyCloudsAll();
         SetRipCenters(new Vector4(1e5f, 1e5f, 0, 0)); // (the ripples are put on the viewer's water in Update)
     }
 
-    // the water and the seabed reflect and refract the sky: give them its clouds
+    // the water and the seabed reflect and refract the sky, and the dome draws its clouds: give them the sky's clouds
+    void CopyCloudsAll()
+    {
+        CopyClouds(waterMaterial);
+        CopyClouds(seabedMaterial);
+        CopyClouds(userBeachMaterial);
+        CopyClouds(cloudDomeMaterial);
+        for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
+    }
+
     void CopyClouds(Material m)
     {
         if (m == null || skyMaterial == null) return;
@@ -169,10 +178,6 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetFloat("_LandSetback", skyMaterial.GetFloat("_LandSetback"));
         m.SetFloat("_LandHeight", skyMaterial.GetFloat("_LandHeight"));
         m.SetVector("_SeaDir", skyMaterial.GetVector("_SeaDir"));
-        m.SetTexture("_CloudMapA", skyMaterial.GetTexture("_CloudMapA"));
-        m.SetTexture("_CloudMapB", skyMaterial.GetTexture("_CloudMapB"));
-        m.SetTexture("_CloudMapC", skyMaterial.GetTexture("_CloudMapC"));
-        m.SetTexture("_CloudMapD", skyMaterial.GetTexture("_CloudMapD"));
     }
 
     /// <summary>The clouds' cover (0..1) on the sky, the water, the seabed and the pools at once (ClearwaterSettings).</summary>
@@ -180,9 +185,7 @@ public class ClearwaterController : UdonSharpBehaviour
     {
         if (skyMaterial == null) return;
         skyMaterial.SetFloat("_CloudCover", cover);
-        CopyClouds(waterMaterial);
-        CopyClouds(seabedMaterial);
-        for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
+        CopyCloudsAll();
     }
 
     public float CloudCover() { return skyMaterial != null ? skyMaterial.GetFloat("_CloudCover") : 0f; }
@@ -197,9 +200,7 @@ public class ClearwaterController : UdonSharpBehaviour
         // the shaders put the layer at speed * time + shift (time since the scene loaded): keep that where it is now
         skyMaterial.SetFloat("_CloudShift", skyMaterial.GetFloat("_CloudShift") + (was - speed) * Time.timeSinceLevelLoad);
         skyMaterial.SetFloat("_CloudSpeed", speed);
-        CopyClouds(waterMaterial);
-        CopyClouds(seabedMaterial);
-        for (int i = 0; i < _poolCount; i++) CopyClouds(poolWaterMaterials[i]);
+        CopyCloudsAll();
     }
 
     public float CloudSpeed() { return skyMaterial != null ? skyMaterial.GetFloat("_CloudSpeed") : 0f; }
@@ -325,6 +326,7 @@ public class ClearwaterController : UdonSharpBehaviour
             if (underwaterMaterial != null) underwaterMaterial.SetVector("_SunDir", sd);
             if (avatarCausticsMaterial != null) avatarCausticsMaterial.SetVector("_SunDir", sd);
             if (userBeachMaterial != null) userBeachMaterial.SetVector("_SunDir", sd);
+            if (cloudDomeMaterial != null) cloudDomeMaterial.SetVector("_SunDir", sd);
             for (int i = 0; i < _poolCount; i++)
             {
                 if (poolWaterMaterials[i] != null) poolWaterMaterials[i].SetVector("_SunDir", sd);
