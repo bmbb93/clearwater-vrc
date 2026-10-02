@@ -33,6 +33,10 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
 - `Sound Volume` on Clearwater Controller: one multiplier (0 to 1, default 1) for the three sea sounds (the surf, the
   distant sea, under water). The world's U# can set it, to turn the sea down while a video plays or off with a switch.
 
+### Changed
+
+- The relief on the beach face the swash washes (shallower than 0.3 m) and on the land is a third of what it was. On a gentle beach the run-up's edge turned back short of the mounds, leaving dry islands, and filled the hollows with pools. Bake the Coast again for the collider to match
+
 ## [1.1.0] - 2026-09-30
 
 ### Added

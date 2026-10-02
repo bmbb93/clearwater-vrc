@@ -332,7 +332,11 @@ float2 cwUserTerrain(float2 xz)
 // waves feel (the ground, or an obstacle's top where one stands higher)
 float2 cwFloorDepth2(float2 xz)
 {
-    float d = cwFloorBaseDepth(cwShoreU(xz)) + 0.30 * (cwNoise(xz * 0.22) - 0.5) + 0.10 * (cwNoise(xz * 0.9 + 7.0) - 0.5) - cwRock(xz);
+    float d0 = cwFloorBaseDepth(cwShoreU(xz));
+    // the relief: mounds and hollows on the bed; the beach face the swash washes (and the land above it) is planed
+    // to a third of it, else the run-up's edge stranded dry islands on the mounds and pools in the hollows
+    float relief = lerp(0.33, 1.0, smoothstep(0.3, 1.0, d0));
+    float d = d0 + relief * (0.30 * (cwNoise(xz * 0.22) - 0.5) + 0.10 * (cwNoise(xz * 0.9 + 7.0) - 0.5)) - cwRock(xz);
     float3 s = float3(-50.0, 50.0, -50.0);
     [branch] if (_StampArea.w > 0.0)
     {
