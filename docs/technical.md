@@ -675,6 +675,7 @@ Sky の雲と遠景の陸は、Inspector で変えると Water と Seabed にも
 | `Touch Height` | 0.18 m | 水面からこの距離内の体の部位を「水に触れている」とみなす |
 | `Max Tap Distance` | 40 m | これより遠い水面はタップできない |
 | `Shore Level` / `Bed Level` / `Underwater Level` | 0.9 / 0.3 / 0.8 | 3 つの波音の音量 |
+| `Sound Volume` | 1 | 3 つの波音にまとめて掛ける倍率（0〜1）。ワールドの U# が動画の再生中に下げる、などに使う |
 | `Ripple Resolution` / `Ripple Size` | 512 / 14 m | 波紋の窓。CRT と合わせる（Build Scene が設定） |
 
 ### Clearwater Sky と小石

@@ -258,7 +258,7 @@ Where to find the settings for waves, brightness, clouds and volume. The materia
   - The same clouds appear in the water surface's reflection, in the round area where the sky is visible when looking up from underwater, and in the reflections on wet sand. When changed in the Inspector, they are copied automatically to the water surface and Seabed materials
   - Clouds drift while the world is running (in the Scene view, turn on Always Refresh)
 - Distant land: `Distant land` in the sky material (Sky). Sets how much of the horizon is land (pine-covered headlands), from 0 to 1 (0 = sea all around, 1 = land all around, default 0.5). The land spreads centered on the side opposite the sea, and its ends slope gently down to the sea surface. Which side is the sea is decided by the Coast's Bake from the direction the swell comes from (+Z if there is no coast). Like the clouds, it is copied to the water surface and Seabed materials
-- Volume of ripples and surf sound: "Clearwater Controller" in the scene
+- Volume of ripples and surf sound: "Clearwater Controller" in the scene. `Sound Volume` (0 to 1) scales all three sea sounds together, and the world's U# can change it (to turn them down while a video plays, or off with a switch)
 - The underwater view: in the underwater material (Underwater), `Fog density` (visibility; 1 is the same density as the water seen from above the surface, smaller values let you see farther; default 0.2) / `Fog saturation` (how saturated the water color reached in the distance is; default 0.7) / `Fog brightness` (brightness of that color; default 1). The water color seen from above the surface does not change
 
 ## Time of day and the sky (Clearwater Sky)

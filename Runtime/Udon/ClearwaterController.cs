@@ -87,6 +87,9 @@ public class ClearwaterController : UdonSharpBehaviour
     public float shoreLevel = 0.9f;
     public float bedLevel = 0.3f;
     public float underwaterLevel = 0.8f;
+    [Tooltip("All the sea's sounds (surf, distant sea, under water) times this, 0..1: for the world to turn them down, " +
+             "say while a video plays, or off with a switch. Set it with SetProgramVariable or directly from U#")]
+    [Range(0f, 1f)] public float soundVolume = 1f;
     [Tooltip("Length of the break timing track (= the shore loop)")]
     public float swashLoop = 90f;
     float _submerged;
@@ -471,9 +474,9 @@ public class ClearwaterController : UdonSharpBehaviour
         _submerged = Mathf.MoveTowards(_submerged, under ? 1f : 0f, Time.deltaTime * 5f);
         // (the surf as loud as built at the built wave height, louder or softer as the waves are set higher or lower)
         float surf = _builtHeight > 0f ? Mathf.Sqrt(ShoreWaveHeight() / _builtHeight) : 1f;
-        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? shoreLevel * surf * _shoreLoud * (1f - _submerged) : 0f;
-        if (bedAudio != null) bedAudio.volume = bedLevel * (1f - _submerged);
-        if (underwaterAudio != null) underwaterAudio.volume = underwaterLevel * _submerged;
+        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? soundVolume * shoreLevel * surf * _shoreLoud * (1f - _submerged) : 0f;
+        if (bedAudio != null) bedAudio.volume = soundVolume * bedLevel * (1f - _submerged);
+        if (underwaterAudio != null) underwaterAudio.volume = soundVolume * underwaterLevel * _submerged;
     }
 
     void GatherBodyTouches()

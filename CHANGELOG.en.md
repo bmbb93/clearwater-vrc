@@ -26,6 +26,8 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
   with 3.0 compiles, and Build Demo Scenes makes Demo_LightVolumes the 3.0 way (each light's settings on its Point
   Light Volume Instance, registered with the Light Volume Manager). The beach, the bottom and the foam take Light
   Volumes' light with 3.0 as with 2.x. Projects with 2.x, and without Light Volumes, work as before.
+- `Sound Volume` on Clearwater Controller: one multiplier (0 to 1, default 1) for the three sea sounds (the surf, the
+  distant sea, under water). The world's U# can set it, to turn the sea down while a video plays or off with a switch.
 
 ## [1.1.0] - 2026-09-30
 
