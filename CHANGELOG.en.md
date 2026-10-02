@@ -26,6 +26,9 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
   with 3.0 compiles, and Build Demo Scenes makes Demo_LightVolumes the 3.0 way (each light's settings on its Point
   Light Volume Instance, registered with the Light Volume Manager). The beach, the bottom and the foam take Light
   Volumes' light with 3.0 as with 2.x. Projects with 2.x, and without Light Volumes, work as before.
+- The distant land follows the coast. With a coast, it stands only where the ground goes on 2 km out, and where the
+  shoreline turns away from the walkable beach it comes down to the sea with it (with a shore running off at an
+  angle, the headland stood over the open sea). Bake the Coast again for it.
 - `Sound Volume` on Clearwater Controller: one multiplier (0 to 1, default 1) for the three sea sounds (the surf, the
   distant sea, under water). The world's U# can set it, to turn the sea down while a video plays or off with a switch.
 

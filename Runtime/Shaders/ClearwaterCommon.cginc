@@ -155,6 +155,27 @@ float cwFbm2(float2 p) { float v = 0., a = 0.5; for (int i = 0; i < 4; i++) { v 
 // bake sets it from the swell's direction; +Z without a coast)
 float _LandCover;
 float4 _SeaDir;
+// the coast over the whole sea (baked; z = 0: none): a field of u = signed distance from the shore line, + towards the
+// sea (ClearwaterFloor reads it for the far shore; the distant land for where the ground goes on to the horizon)
+sampler2D _CoastFarTex;
+float4 _CoastFarTex_TexelSize, _CoastFarArea;
+// a field at xz, carried on linearly past its edge (the shore line goes on as it left it)
+float2 cwCoastField(sampler2D tex, float4 texel, float4 area, float2 xz)
+{
+    float2 uv = (xz - area.xy) / max(area.z, 1e-3) + 0.5;
+    float2 h = 0.5 * texel.xy;
+    float2 uvc = clamp(uv, h, 1.0 - h);
+    float2 c = tex2Dlod(tex, float4(uvc, 0, 0)).rg;
+    float2 out_ = uv - uvc;
+    [branch] if (any(out_ != 0.0))
+    {
+        float2 s = sign(out_), e = 4.0 * texel.xy;
+        float2 cx = tex2Dlod(tex, float4(uvc - float2(s.x * e.x, 0), 0, 0)).rg;
+        float2 cz = tex2Dlod(tex, float4(uvc - float2(0, s.y * e.y), 0, 0)).rg;
+        c += (c - cx) * abs(out_.x) / e.x + (c - cz) * abs(out_.y) / e.y;
+    }
+    return c;
+}
 float cwRidge(float a) // periodic headland silhouette, elevation in radians (~1.5-4 deg)
 {
     return 0.040 + 0.016 * sin(a * 2.0 + 0.7) + 0.011 * sin(a * 5.0 + 2.1) + 0.006 * sin(a * 11.0 + 0.3) + 0.003 * sin(a * 23.0 + 1.7);
@@ -258,14 +279,26 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
 // the distant headland's ridge along d (its elevation, radians), and how much of d it covers (with its antialiased
 // edge; fwE = fwidth(d.y)): the sun, the moon and the stars go behind it
 // how much land stands along d (JS space): 1 within its share of the horizon round the landward side, sloping down to
-// the sea over some 20 degrees at its ends, 0 out over the open sea
+// the sea over some 20 degrees at its ends, 0 out over the open sea. With a coast baked, only where the ground goes
+// on there (2 km off, as far as the headland stands), rising over the first 600 m behind the shore line: where the
+// shore turns away from the walkable beach, the headland comes down to the sea with it rather than standing over
+// the open water beyond it
 float cwLandHere(float3 d)
 {
-    [branch] if (_LandCover >= 0.999) return 1.0;
-    float2 sea = normalize(float2(_SeaDir.x, -_SeaDir.y) + float2(0.0, -1e-4)); // (JS space; +Z without a coast)
-    float fromLand = acos(clamp(-dot(normalize(d.xz + float2(1e-6, 0.0)), sea), -1.0, 1.0)); // (0 straight away from the sea)
-    float end = _LandCover * CW_PI, taper = min(0.35, end);
-    return end <= 0.0 ? 0.0 : smoothstep(end, end - taper, fromLand);
+    float land = 1.0;
+    [branch] if (_LandCover < 0.999)
+    {
+        float2 sea = normalize(float2(_SeaDir.x, -_SeaDir.y) + float2(0.0, -1e-4)); // (JS space; +Z without a coast)
+        float fromLand = acos(clamp(-dot(normalize(d.xz + float2(1e-6, 0.0)), sea), -1.0, 1.0)); // (0 straight away from the sea)
+        float end = _LandCover * CW_PI, taper = min(0.35, end);
+        land = end <= 0.0 ? 0.0 : smoothstep(end, end - taper, fromLand);
+    }
+    [branch] if (_CoastFarArea.z > 0.0 && land > 0.0)
+    {
+        float2 p = normalize(d.xz + float2(1e-6, 0.0)) * 2000.0; // (from the water's origin: the walkable area is small beside 2 km)
+        land *= saturate(-cwCoastField(_CoastFarTex, _CoastFarTex_TexelSize, _CoastFarArea, p).x / 600.0);
+    }
+    return land;
 }
 float cwHeadlandRidge(float3 d, out float land)
 {

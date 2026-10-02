@@ -33,8 +33,8 @@ float _PatchSize, _Depth, _RipSize, _SunIntensity;
 //                 so the coast drawn far outside the walkable area shapes the distant shore too
 //  _CoastProfile  the cross-section as a table over u in [_CoastProfileU.x, .y]: R = depth of the relief-free
 //                 floor, G = seconds for a wave at u to reach the waterline; _CoastProfileU.z = the waterline's u
-sampler2D _CoastTex, _CoastProfile, _CoastFarTex;
-float4 _CoastTex_TexelSize, _CoastProfile_TexelSize, _CoastArea, _CoastProfileU, _CoastFarTex_TexelSize, _CoastFarArea;
+sampler2D _CoastTex, _CoastProfile; // (_CoastFarTex and cwCoastField: ClearwaterCommon, for the distant land too)
+float4 _CoastTex_TexelSize, _CoastProfile_TexelSize, _CoastArea, _CoastProfileU;
 
 // The pools (ClearwaterPool, each its own water) cut through the sea's water and ground: _PoolMask over _PoolMaskArea
 // (xy = world x, z of its corner, z = size in m, w = 1 when there are pools; the sea's materials only) holds, per
@@ -138,23 +138,6 @@ float cwSmax(float a, float b, float k) { float h = max(k - abs(a - b), 0.0) / k
 
 // A baked shore field at a water-space point. Outside its area the coast carries on the way it leaves it: the
 // field is extended along its own slope at the edge (exact for a straight coast).
-float2 cwCoastField(sampler2D tex, float4 texel, float4 area, float2 xz)
-{
-    float2 uv = (xz - area.xy) / max(area.z, 1e-3) + 0.5;
-    float2 h = 0.5 * texel.xy;
-    float2 uvc = clamp(uv, h, 1.0 - h);
-    float2 c = tex2Dlod(tex, float4(uvc, 0, 0)).rg;
-    float2 out_ = uv - uvc;
-    [branch] if (any(out_ != 0.0))
-    {
-        float2 s = sign(out_), e = 4.0 * texel.xy;
-        float2 cx = tex2Dlod(tex, float4(uvc - float2(s.x * e.x, 0), 0, 0)).rg;
-        float2 cz = tex2Dlod(tex, float4(uvc - float2(0, s.y * e.y), 0, 0)).rg;
-        c += (c - cx) * abs(out_.x) / e.x + (c - cz) * abs(out_.y) / e.y;
-    }
-    return c;
-}
-
 // Shore coordinates (u, v) at a water-space point: the fine field around the walkable area, the coarse one over
 // the rest of the sea (blended over the fine area's outer 10%).
 float2 cwShoreUV(float2 xz)

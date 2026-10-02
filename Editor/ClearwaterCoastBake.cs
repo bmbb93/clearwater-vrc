@@ -134,12 +134,18 @@ public static class ClearwaterCoastBake
             m.SetVector("_UserMean", user != null ? user.mean : new Vector4(0.2f, 0.2f, 0.2f, 1));
             EditorUtility.SetDirty(m);
         }
-        // which way the sea is, for the distant land round the other side (the sky and what reflects it)
+        // which way the sea is, for the distant land round the other side (the sky and what reflects it), and the coast
+        // over the whole sea, for the land to stand only where the ground goes on
         Vector3 seaward = coast.SwellFrom();
         foreach (var m in new[] { ctl.skyMaterial, ctl.waterMaterial, ctl.seabedMaterial, ctl.userBeachMaterial })
         {
             if (m == null || !m.HasProperty("_SeaDir")) continue;
             m.SetVector("_SeaDir", new Vector4(seaward.x, seaward.z, 0, 1));
+            if (m == ctl.skyMaterial && m.HasProperty("_CoastFarTex"))
+            {
+                m.SetTexture("_CoastFarTex", farField);
+                m.SetVector("_CoastFarArea", new Vector4(0, 0, seaSize, 0));
+            }
             EditorUtility.SetDirty(m);
         }
         floorBake.SetTexture("_RockTex", ctl.waterMaterial.GetTexture("_RockTex"));
