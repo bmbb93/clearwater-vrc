@@ -552,6 +552,8 @@ sequenceDiagram
 | `SetDayMinutes(分)` | 1 日の長さ。今の時刻から新しい速さで進む |
 | `ResetTime()` | 時刻・時刻を進めるか・1 日の長さを、シーンを保存したときにエディターが控えた Inspector の値（`startHour` など。同期する欄は実行中に変わるため）に戻す |
 
+読むだけの値もあります。`Hours()` は今の時刻、`darkness` は夜の深さです（昼と夕暮れの前半は 0、真夜中は 1。目が夜に慣れるのと同じ曲線）。`darkness` は空を更新するたびに書き換わるので、夜に明るくする照明などがこれを読めます。
+
 パネルで変える雲と波は、別のオブジェクト「Sky & Waves Settings (Clearwater)」（`ClearwaterSettings`、Manual 同期）が同期します。役割は、Clearwater Sky が空の時計、Settings がメニューの初期値と同期、コントローラーが水の描画と音です。Settings は、実行中に誰も変えていない項目（同期値が負）には Inspector の初期値を使い、起動時と同期を受けたときにコントローラー経由でマテリアルに入れます。
 
 | Settings の呼び出し | 何が変わるか |

@@ -6,7 +6,7 @@ The changes in each version of Clearwater VRC (`com.vbamboo.clearwater`). The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 Each version's section, with the Japanese one in `CHANGELOG.md`, makes its release notes on GitHub.
 
-## [1.2.0] - Unreleased
+## [1.2.0] - 2026-10-03
 
 ### Added
 
@@ -30,6 +30,7 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
   shoreline turns away from the walkable beach it comes down to the sea with it (with a shore running off at an
   angle, the headland stood over the open sea). Bake the Coast again for it. `Land setback` on the sky material moves
   the mountains inland from the shoreline, and `Land height` scales them (0: none).
+- Clearwater Sky's `darkness`: how deep into the night it is (0 by day and well into the dusk, 1 at full night). A world's U# can read it, say to bring its lights up at night
 - `Sound Volume` on Clearwater Controller: one multiplier (0 to 1, default 1) for the three sea sounds (the surf, the
   distant sea, under water). The world's U# can set it, to turn the sea down while a video plays or off with a switch.
 

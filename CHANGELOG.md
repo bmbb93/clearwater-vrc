@@ -4,7 +4,7 @@
 
 Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き方は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に、版の番号は[セマンティック バージョニング](https://semver.org/lang/ja/)に従います。各版の節は、英語の `CHANGELOG.en.md` の節と合わせて、GitHub のリリースノートになります。
 
-## [1.2.0] - Unreleased
+## [1.2.0] - 2026-10-03
 
 ### 追加
 
@@ -12,6 +12,7 @@ Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き
 - `Sky Light Volumes` の箱は、浜と水にとっての建物になります。箱の中の浜と水には Additive の Light Volume を足さず（空の光が二重になり、箱の形に明るくなっていました）、箱の中の Point Light Volume は浜と水を照らしません（室内の照明が壁を抜けて、外の砂に漏れていました）
 - [VRC Light Volumes](https://github.com/REDSIM/VRCLightVolumes) 3.0 に対応しました（3.0.0-dev.20 で確認）。3.0 を入れたプロジェクトでもコンパイルが通り、Build Demo Scenes が Demo_LightVolumes を 3.0 の作り方（点光源の設定を Point Light Volume Instance に持たせ、Light Volume Manager に登録する）で作ります。浜・水底・泡は、3.0 でも 2.x と同じように Light Volumes の光を受けます。2.x のプロジェクトと、Light Volumes のないプロジェクトの動作は変わりません
 - 遠景の陸が海岸に沿うようになりました。海岸があれば、陸は 2 km 先まで地面が続く方角にだけ立ち、海岸線が歩ける浜から離れていく所では、海岸と一緒に海面まで下がります（海岸が斜めに延びていると、山が海の上に浮いて見えていました）。Coast を Bake し直すと効きます。空のマテリアルの `Land setback` で山を海岸線から内陸へ下げ、`Land height` で高さを変えられます（0 で山なし）
+- Clearwater Sky の `darkness`：夜の深さ（昼と夕暮れの前半は 0、真夜中は 1）。ワールドの U# から読んで、夜に明るくする照明などに使えます
 - Clearwater Controller の `Sound Volume`：波音 3 つ（波打ち際・遠くの海・水中）にまとめて掛ける倍率（0〜1、初期値 1）。ワールドの U# から変えて、動画の再生中に波音を下げたり、スイッチで消したりできます
 
 ### 変更
