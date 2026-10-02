@@ -6,6 +6,16 @@ The changes in each version of Clearwater VRC (`com.vbamboo.clearwater`). The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 Each version's section, with the Japanese one in `CHANGELOG.md`, makes its release notes on GitHub.
 
+## [1.3.0] - Unreleased
+
+### Changed
+
+- The clouds are made anew. Their shapes come from a map of cumulus baked once, with flat bases and heaped tops: lit bright on the sun's side, grey on the far side and in their thick cores, with the shadows of their higher tops toward the sun. Low in the sky they show sunlit tops and flanks, overhead flat grey bases. Less cloud means fewer clouds, not smaller ones. Reading a map instead of working out noise, they cost less than before (the whole sky at 1080p: 0.03 ms instead of 0.05 ms at 19% cover)
+
+### Added
+
+- Cloud shadows: the clouds cast soft shadows on the sea and the beach, drifting with them (at night they cut the moonlight)
+
 ## [1.2.0] - 2026-10-03
 
 ### Added

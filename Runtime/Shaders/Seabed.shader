@@ -36,6 +36,10 @@ Shader "Clearwater/Seabed"
         [HideInInspector] _CloudSpeed ("Clouds: drift (m/s)", Float) = 8
         [HideInInspector] _CloudDir ("Clouds: drift direction (deg)", Float) = 60
         [HideInInspector] _CloudShift ("Clouds: drift so far (m)", Float) = 0
+        [HideInInspector] [NoScaleOffset] _CloudMapA ("Clouds: the map A (the package's)", 2D) = "black" {}
+        [HideInInspector] [NoScaleOffset] _CloudMapB ("Clouds: the map B (the package's)", 2D) = "black" {}
+        [HideInInspector] [NoScaleOffset] _CloudMapC ("Clouds: the map C (the package's)", 2D) = "black" {}
+        [HideInInspector] [NoScaleOffset] _CloudMapD ("Clouds: the map D (the package's)", 2D) = "black" {}
         [HideInInspector] _LandCover ("Distant land: share of the horizon (copied from the sky)", Range(0, 1)) = 0.5
         [HideInInspector] _LandSetback ("Distant land: how far inland it rises (copied from the sky)", Range(0, 1500)) = 0
         [HideInInspector] _LandHeight ("Distant land: height (copied from the sky)", Range(0, 2)) = 1
@@ -181,6 +185,7 @@ Shader "Clearwater/Seabed"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 cwLvOrigin = _WaterOrigin.xyz;
+                cwCloudShade = cwCloudShadow(i.wpos); // (the clouds' shadow, here)
                 float3 sun = cwSun();
                 float2 p = float2(i.wpos.x - _WaterOrigin.x, -(i.wpos.z - _WaterOrigin.z));
                 clip(0.985 - cwUserTerrain(p).y); // (on the user terrain the ground is its own mesh)

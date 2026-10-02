@@ -232,6 +232,7 @@ public static class ClearwaterSetup
         a.water.SetVector("_SunDir", SunVector());
         if (IsNew(a.water)) a.water.EnableKeyword("_CW_TONEMAP");
         a.sky = Mat("Clearwater/Skybox", "Sky", dir);
+        ClearwaterCloudBake.Ensure(a.sky);
         a.sky.SetVector("_SunDir", SunVector());
         if (IsNew(a.sky)) a.sky.EnableKeyword("_CW_TONEMAP");
         float seaSize = SceneSeaSize();

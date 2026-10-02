@@ -29,12 +29,14 @@ public class ClearwaterSkyGUI : ShaderGUI
     public static int CopyClouds(Material sky, bool apply)
     {
         int n = 0;
+        if (apply) ClearwaterCloudBake.Ensure(sky);
         foreach (var ctl in Object.FindObjectsOfType<ClearwaterController>(true))
         {
             if (ctl.skyMaterial != sky) continue;
             foreach (var m in new[] { ctl.waterMaterial, ctl.seabedMaterial })
             {
                 if (m == null) continue;
+                if (apply && ClearwaterCloudBake.Ensure(m)) n++;
                 foreach (var p in Props)
                 {
                     if (!m.HasProperty(p) || Mathf.Approximately(m.GetFloat(p), sky.GetFloat(p))) continue;

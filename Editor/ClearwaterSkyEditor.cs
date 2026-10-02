@@ -531,6 +531,12 @@ public static class ClearwaterSkySetup
     static void ShowAll()
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+        // (the clouds' maps, on materials made before the package had them)
+        foreach (var ctl in Object.FindObjectsOfType<ClearwaterController>(true))
+        {
+            foreach (var m in new[] { ctl.skyMaterial, ctl.waterMaterial, ctl.seabedMaterial, ctl.userBeachMaterial }) ClearwaterCloudBake.Ensure(m);
+            if (ctl.poolWaterMaterials != null) foreach (var m in ctl.poolWaterMaterials) ClearwaterCloudBake.Ensure(m);
+        }
         var skies = Object.FindObjectsOfType<ClearwaterSky>();
         foreach (var s in skies) if (s.isActiveAndEnabled) { Show(s); return; }
         Shader.SetGlobalVector("_Udon_CWSunColor", Vector4.zero);

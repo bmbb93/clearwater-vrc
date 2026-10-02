@@ -12,7 +12,7 @@ sampler2D _Peb, _Caus, _Rip;
 // their textures with the first too: the include below declares it, under the name it gives its own.)
 #define sampler_UdonLightVolume cw_linear_clamp_sampler
 #include "ThirdParty/LightVolumes.cginc"
-SamplerState cw_trilinear_repeat_sampler;
+// (cw_trilinear_repeat_sampler, the bed look's, is declared in ClearwaterCommon: the clouds' maps share it)
 // The bed look (ClearwaterBedLook, copied onto the materials by the coast; the defaults are the pebbles):
 //  _Peb the colour texture, _BedHeight its height (when _BedHasHeight; else guessed from the colour's brightness),
 //  one tile over _BedTile m; _BedCoarse = share of the same texture at 1.7x the size in patches; _BedSandFill = sand
@@ -65,11 +65,11 @@ static const float3 SIG_S = float3(0.028, 0.052, 0.068);
 static const float3 SIG_T = SIG_A + SIG_S;
 
 // the light that shades (none indoors): the time of day's (the sun, or the moon at night; Sun intensity scales it as
-// against its 6), or the fixed sky's sun
+// against its 6), or the fixed sky's sun; under a cloud's shadow (cwCloudShade) less
 // (the sky of the time of day: none while the sun, or the moon, is behind the distant headland round the horizon)
 inline float3 cwSunColor()
 {
-    float3 c = (CW_TOD ? cwKeyColor() * (_SunIntensity / 6.0) : float3(1.0, 0.90, 0.74) * _SunIntensity) * (1.0 - _Indoor);
+    float3 c = (CW_TOD ? cwKeyColor() * (_SunIntensity / 6.0) : float3(1.0, 0.90, 0.74) * _SunIntensity) * (1.0 - _Indoor) * cwCloudShade;
     [branch] if (CW_TOD && _Udon_CWKey.y < 0.08) c *= 1.0 - cwHeadlandCover(cwSun(), 0.003);
     return c;
 }

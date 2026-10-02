@@ -259,6 +259,7 @@ float4 fragSide(v2f i)
     float3 P = uCam + wd * t;
     cwEnvPos = i.origin + cwToJS(P); // (indoors the room is reflected from here)
     cwLvOrigin = i.origin; // (the floor it traces is lit by the light volumes there)
+    cwCloudShade = cwCloudShadow(i.origin + cwToJS(P)); // (the clouds' shadow, there)
     // (the sea: none in a pool's basin, whose own water is there)
     [branch] if (_PoolMaskArea.w > 0.0) clip(cwInPool(i.origin + cwToJS(P)) ? -1.0 : 1.0);
     // Anything standing out of the water between the raised plane and the surface (an avatar's waist, a post) is

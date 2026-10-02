@@ -169,6 +169,10 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetFloat("_LandSetback", skyMaterial.GetFloat("_LandSetback"));
         m.SetFloat("_LandHeight", skyMaterial.GetFloat("_LandHeight"));
         m.SetVector("_SeaDir", skyMaterial.GetVector("_SeaDir"));
+        m.SetTexture("_CloudMapA", skyMaterial.GetTexture("_CloudMapA"));
+        m.SetTexture("_CloudMapB", skyMaterial.GetTexture("_CloudMapB"));
+        m.SetTexture("_CloudMapC", skyMaterial.GetTexture("_CloudMapC"));
+        m.SetTexture("_CloudMapD", skyMaterial.GetTexture("_CloudMapD"));
     }
 
     /// <summary>The clouds' cover (0..1) on the sky, the water, the seabed and the pools at once (ClearwaterSettings).</summary>
