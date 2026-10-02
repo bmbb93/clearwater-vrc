@@ -37,6 +37,8 @@ Shader "Clearwater/Seabed"
         [HideInInspector] _CloudDir ("Clouds: drift direction (deg)", Float) = 60
         [HideInInspector] _CloudShift ("Clouds: drift so far (m)", Float) = 0
         [HideInInspector] _LandCover ("Distant land: share of the horizon (copied from the sky)", Range(0, 1)) = 0.5
+        [HideInInspector] _LandSetback ("Distant land: how far inland it rises (copied from the sky)", Range(0, 1500)) = 0
+        [HideInInspector] _LandHeight ("Distant land: height (copied from the sky)", Range(0, 2)) = 1
         [HideInInspector] _SeaDir ("Which way the sea is (world xz, set by the coast bake)", Vector) = (0, 1, 0, 0)
         [Toggle(_CW_TONEMAP)] _Tonemap ("Tone map in shader", Float) = 1
         _Exposure ("Exposure", Float) = 0.63

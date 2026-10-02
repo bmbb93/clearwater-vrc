@@ -166,6 +166,8 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetFloat("_CloudDir", skyMaterial.GetFloat("_CloudDir"));
         m.SetFloat("_CloudShift", skyMaterial.GetFloat("_CloudShift"));
         m.SetFloat("_LandCover", skyMaterial.GetFloat("_LandCover"));
+        m.SetFloat("_LandSetback", skyMaterial.GetFloat("_LandSetback"));
+        m.SetFloat("_LandHeight", skyMaterial.GetFloat("_LandHeight"));
         m.SetVector("_SeaDir", skyMaterial.GetVector("_SeaDir"));
     }
 

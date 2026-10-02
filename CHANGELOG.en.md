@@ -28,7 +28,8 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
   Volumes' light with 3.0 as with 2.x. Projects with 2.x, and without Light Volumes, work as before.
 - The distant land follows the coast. With a coast, it stands only where the ground goes on 2 km out, and where the
   shoreline turns away from the walkable beach it comes down to the sea with it (with a shore running off at an
-  angle, the headland stood over the open sea). Bake the Coast again for it.
+  angle, the headland stood over the open sea). Bake the Coast again for it. `Land setback` on the sky material moves
+  the mountains inland from the shoreline, and `Land height` scales them (0: none).
 - `Sound Volume` on Clearwater Controller: one multiplier (0 to 1, default 1) for the three sea sounds (the surf, the
   distant sea, under water). The world's U# can set it, to turn the sea down while a video plays or off with a switch.
 

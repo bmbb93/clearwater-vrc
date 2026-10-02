@@ -154,6 +154,8 @@ float cwFbm2(float2 p) { float v = 0., a = 0.5; for (int i = 0; i < 4; i++) { v 
 // it takes, round the side away from the sea (0 none, 1 all round), and which way the sea is (world xz; the coast
 // bake sets it from the swell's direction; +Z without a coast)
 float _LandCover;
+float _LandSetback; // m inland of the shoreline it starts to rise (with a coast)
+float _LandHeight;  // its height, times the built one (0: none)
 float4 _SeaDir;
 // the coast over the whole sea (baked; z = 0: none): a field of u = signed distance from the shore line, + towards the
 // sea (ClearwaterFloor reads it for the far shore; the distant land for where the ground goes on to the horizon)
@@ -280,7 +282,7 @@ float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float 
 // edge; fwE = fwidth(d.y)): the sun, the moon and the stars go behind it
 // how much land stands along d (JS space): 1 within its share of the horizon round the landward side, sloping down to
 // the sea over some 20 degrees at its ends, 0 out over the open sea. With a coast baked, only where the ground goes
-// on there (2 km off, as far as the headland stands), rising over the first 600 m behind the shore line: where the
+// on there (2 km off, as far as the headland stands), rising over 600 m from _LandSetback behind the shore line: where the
 // shore turns away from the walkable beach, the headland comes down to the sea with it rather than standing over
 // the open water beyond it
 float cwLandHere(float3 d)
@@ -296,7 +298,7 @@ float cwLandHere(float3 d)
     [branch] if (_CoastFarArea.z > 0.0 && land > 0.0)
     {
         float2 p = normalize(d.xz + float2(1e-6, 0.0)) * 2000.0; // (from the water's origin: the walkable area is small beside 2 km)
-        land *= saturate(-cwCoastField(_CoastFarTex, _CoastFarTex_TexelSize, _CoastFarArea, p).x / 600.0);
+        land *= saturate((-cwCoastField(_CoastFarTex, _CoastFarTex_TexelSize, _CoastFarArea, p).x - _LandSetback) / 600.0);
     }
     return land;
 }
@@ -304,7 +306,7 @@ float cwHeadlandRidge(float3 d, out float land)
 {
     land = cwLandHere(d);
     float a = atan2(d.z, d.x);
-    return land * (cwRidge(a) + 0.0045 * (cwNoise(float2(a * 260.0, 0.0)) - 0.5) + 0.002 * (cwNoise(float2(a * 900.0, 3.0)) - 0.5));
+    return land * _LandHeight * (cwRidge(a) + 0.0045 * (cwNoise(float2(a * 260.0, 0.0)) - 0.5) + 0.002 * (cwNoise(float2(a * 900.0, 3.0)) - 0.5));
 }
 float cwHeadlandCover(float3 d, float fwE)
 {

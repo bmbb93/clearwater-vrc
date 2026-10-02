@@ -14,6 +14,8 @@ Shader "Clearwater/Skybox"
         [HideInInspector] _CloudShift ("Drift so far (m, set while the world runs)", Float) = 0
         [Header(Distant land (copied to the water and the seabed as well))]
         _LandCover ("How much of the horizon (0 = open sea all round, 1 = all round; round the side away from the sea)", Range(0, 1)) = 0.5
+        _LandSetback ("How far inland of the shoreline it rises, m (with a coast baked)", Range(0, 1500)) = 0
+        _LandHeight ("Height (1 = as built, 0 = none)", Range(0, 2)) = 1
         [HideInInspector] _SeaDir ("Which way the sea is (world xz, set by the coast bake)", Vector) = (0, 1, 0, 0)
         [HideInInspector] _CoastFarTex ("The coast over the whole sea (set by the coast bake): the land stands where the ground goes on", 2D) = "black" {}
         [HideInInspector] _CoastFarArea ("Its area (centre xz in water space, size m; 0 = none)", Vector) = (0, 0, 0, 0)
