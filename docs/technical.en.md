@@ -493,7 +493,7 @@ flowchart LR
 ```
 
 1. **Computation in the editor** (`Editor/ClearwaterAtmosphere.cs`). Computes the brightness of the sky seen from the ground for each sun elevation, and makes it into a table. This takes about 5 seconds.
-2. **Udon** (`Runtime/Udon/ClearwaterSky.cs`). Finds the positions of the sun and the moon from the time, looks up the table, and passes the values, with eye adaptation applied, to all shaders at once through global variables (`_Udon_CW*`). While time advances, this runs every 0.1 seconds and takes about 0.07 ms each time. While time is stopped, it computes only when a value changes.
+2. **Udon** (`Runtime/Udon/ClearwaterSky.cs`). Finds the positions of the sun and the moon from the time, looks up the table, and passes the values, with eye adaptation applied, to all shaders at once through global variables (`_Udon_CW*`). While time advances, this runs every 0.1 seconds and takes about 0.07 ms each time. In between, the directions of the sun, the moon and the stars and the Directional Light's rotation are still worked out and moved every frame (their colours and brightness keep the 0.1-second step): turned every 0.1 seconds, with a day of a few minutes the sun and the shadows moved in jerks. The time of each frame runs on the player's own clock, its offset to the server's time eased over a few seconds (so the synced clock's small corrections do not make the motion shake). While time is stopped, it computes only when a value changes.
 3. **Shaders** (`cwAtmosphere` in `ClearwaterCommon.cginc`). They look up the table once per view direction. When `_Udon_CWSunColor.w` is 0 (a scene without `ClearwaterSky`), they fall back to the formula of the fixed sky, the sky without a time of day.
 
 **The atmosphere model** is a 100 km layer of air on an Earth with a radius of 6360 km. It has air molecules (Rayleigh scattering; they thin out by 1/e every 8 km of height), fine particles (Mie scattering; they thin out over 1.2 km and scatter strongly forward, with g = 0.8) and ozone (centered at a height of 25 km; it absorbs red and green). Light scattered two or more times is added with the approximation of Hillaire (2020). The ground albedo is 0.1 (mostly sea), the eye height is 20 m, and three colors (RGB) are computed. The values come from the Earth atmosphere in Bruneton (2017) and Hillaire (2020).
@@ -695,7 +695,7 @@ When you change the Sky's clouds and distant land in the Inspector, they are cop
 | `North` | Computed by Build Scene | The direction of north. With the defaults, the sun comes to the same position as in the fixed sky |
 | `Moon` / `Night brightness` / `Stars` | On / 0.05 / 1 | The full moon, the brightness of a moonlit night, the brightness of the stars |
 | `Underwater Glow` | 1 | The blue-green brightness kept underwater at night (a multiplier on the floor for underwater darkness; 0 = no floor; range 0–3) |
-| `Update interval` / `Probe interval` | 0.1 s / 10 s | Update intervals for the sky and for the reflections while time advances |
+| `Update interval` / `Probe interval` | 0.1 s / 10 s | Update intervals for the sky's light and for the reflections while time advances (the sun's and the moon's directions move every frame) |
 | The pebble's `Close Distance` | 6 m | How far from the panel you can go before it hides (0 = it never hides) |
 | The pebble's `Show Above` | On | Shows the panel above the pebble. When Off, it appears where it was placed |
 

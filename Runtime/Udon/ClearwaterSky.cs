@@ -126,6 +126,10 @@ public class ClearwaterSky : UdonSharpBehaviour
     Vector3 _sunScale, _wb, _lightScale;
     float _ambScale, _skyScale, _yRef, _meanRef, _x0, _upGain, _sideGain, _downGain;
     float _nextApply, _nextProbe;
+    float _sunSky, _moonSky; // (the last Apply's sky brightness of each body, kept by Move)
+    bool _byMoon;
+    double _offset; // (the server's time less this player's clock, smoothed)
+    bool _haveOffset;
     // the server time the instance's day started at (the owner's, shared), and whether it has come
     [UdonSynced] double _start;
     bool _started;
@@ -218,9 +222,15 @@ public class ClearwaterSky : UdonSharpBehaviour
 
     void Update()
     {
-        if (!cycle || Time.time < _nextApply) return;
+        if (!cycle) return;
+        float hours = !_started ? timeOfDay : HoursAt(SmoothServerTime());
+        if (_ready && Time.time < _nextApply)
+        {
+            Move(hours); // (in between, the sun, the moon and the stars go on moving every frame)
+            return;
+        }
         _nextApply = Time.time + updateInterval;
-        Apply(Hours());
+        Apply(hours);
         if (reflectionProbe != null && Time.time >= _nextProbe)
         {
             _nextProbe = Time.time + probeInterval;
@@ -245,9 +255,26 @@ public class ClearwaterSky : UdonSharpBehaviour
     public float Hours()
     {
         if (!cycle || !_started) return timeOfDay;
-        double h = timeOfDay + (Networking.GetServerTimeInSeconds() - _start) / (Mathf.Max(dayMinutes, 0.01f) * 60.0) * 24.0;
+        return HoursAt(Networking.GetServerTimeInSeconds());
+    }
+
+    float HoursAt(double serverTime)
+    {
+        double h = timeOfDay + (serverTime - _start) / (Mathf.Max(dayMinutes, 0.01f) * 60.0) * 24.0;
         h = h % 24.0;
         return (float)(h < 0.0 ? h + 24.0 : h);
+    }
+
+    // The server's time for the frames: this player's own clock, its offset to the server's eased over a few seconds, so
+    // the sun moving every frame moves evenly whatever small corrections the synced clock makes. A jump of over a second
+    // (a hitch, the server's clock set) is taken at once
+    double SmoothServerTime()
+    {
+        double now = Time.time;
+        double offset = Networking.GetServerTimeInSeconds() - now;
+        if (!_haveOffset || offset - _offset > 1.0 || _offset - offset > 1.0) { _offset = offset; _haveOffset = true; }
+        else _offset += (offset - _offset) * Mathf.Min(Time.deltaTime * 0.5f, 1f);
+        return now + _offset;
     }
 
     // the light at the reference, and the scales that make it the fixed sky's there
@@ -317,18 +344,8 @@ public class ClearwaterSky : UdonSharpBehaviour
         if (sunDirect == null || sunDirect.Length < 2 || skyLight == null || horizon == null) return;
         if (!_ready) Init();
 
-        // ---- where the sun is: its declination for the season, its hour angle, at the latitude (east, north, up)
-        float dec = -23.44f * Mathf.Deg2Rad * Mathf.Cos(2f * Mathf.PI / 365f * (dayOfYear + 10));
-        float ha = (hours - 12f) * 15f * Mathf.Deg2Rad, lat = latitude * Mathf.Deg2Rad;
-        float cd = Mathf.Cos(dec), sd = Mathf.Sin(dec), cl = Mathf.Cos(lat), sl = Mathf.Sin(lat);
-        float ch = Mathf.Cos(ha), sh = Mathf.Sin(ha);
-        float yaw = north * Mathf.Deg2Rad;
-        Vector3 northW = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw)), eastW = new Vector3(Mathf.Cos(yaw), 0f, -Mathf.Sin(yaw));
-        Vector3 sunW = (eastW * (-cd * sh) + northW * (sd * cl - cd * ch * sl) + Vector3.up * (sd * sl + cd * ch * cl)).normalized;
+        Vector3 sunW = SunAt(hours);
         Vector3 moonW = -sunW; // (the full moon)
-        Vector3 pole = northW * cl + Vector3.up * sl;
-        // the stars turn with the hour, and through the year against the sun
-        float starAngle = ha + 2f * Mathf.PI * (dayOfYear - 80) / 365.25f;
         float sEl = Mathf.Asin(Mathf.Clamp(sunW.y, -1f, 1f)) * Mathf.Rad2Deg, mEl = -sEl;
         // (below astronomical twilight the sun's light in the sky is under the night's own: gone by the table's end)
         float dusk = Mathf.Clamp01((sEl - tableStart) / 4f);
@@ -367,13 +384,8 @@ public class ClearwaterSky : UdonSharpBehaviour
         Vector3 horC = Night(Vector3.Scale(hor, _wb) * (_skyScale * adapt) + new Vector3(0.35f, 0.45f, 0.75f) * airglow, night);
         // the light that shades: the sun, or the moon once it gives more light
         bool byMoon = moon && (Lum(moonD) > Lum(sunD) || (Lum(sunD) <= 0f && mEl > sEl));
-        Vector3 keyW = byMoon ? moonW : sunW;
-        if (keyW.y < 0.0175f) // (never from under the horizon, where it gives no light: at least 1 degree up)
-        {
-            Vector3 flat = new Vector3(keyW.x, 0f, keyW.z);
-            flat = flat.sqrMagnitude > 1e-8f ? flat.normalized : Vector3.forward;
-            keyW = flat * 0.99985f + Vector3.up * 0.0175f;
-        }
+        Vector3 keyW = Key(byMoon ? moonW : sunW);
+        _byMoon = byMoon;
         Vector3 keyC = byMoon ? moonC : sunC;
         // the clouds, a couple of km up, see the sun over a lower horizon: lit red a while after it has set below
         Vector3 cloudSun = Night(Vector3.Scale(Row(sunDirect, sEl + CloudDip), _sunScale) * adapt, night);
@@ -386,8 +398,10 @@ public class ClearwaterSky : UdonSharpBehaviour
         float sunSky = skyS.w * dusk, moonSky = moonMean;
         if (moonSky < 1e-3f * sunSky) moonSky = 0f;
         if (sunSky < 1e-3f * moonSky) sunSky = 0f;
-        VRCShader.SetGlobalVector(_idSun, new Vector4(sunW.x, sunW.y, sunW.z, sunSky * _skyScale * adapt));
-        VRCShader.SetGlobalVector(_idMoon, new Vector4(moonW.x, moonW.y, moonW.z, moonSky * _skyScale * adapt));
+        _sunSky = sunSky * _skyScale * adapt;
+        _moonSky = moonSky * _skyScale * adapt;
+        VRCShader.SetGlobalVector(_idSun, new Vector4(sunW.x, sunW.y, sunW.z, _sunSky));
+        VRCShader.SetGlobalVector(_idMoon, new Vector4(moonW.x, moonW.y, moonW.z, _moonSky));
         VRCShader.SetGlobalVector(_idSunColor, new Vector4(sunC.x, sunC.y, sunC.z, 1f));
         VRCShader.SetGlobalVector(_idMoonColor, new Vector4(moonC.x, moonC.y, moonC.z, moon && moonW.y > -0.01f ? 1f : 0f));
         // the disc: its radiance (its light over the sky it covers, 6.4e-5 sr: as bright as the day's sky), seen as
@@ -399,7 +413,7 @@ public class ClearwaterSky : UdonSharpBehaviour
         VRCShader.SetGlobalVector(_idMoonDisc, new Vector4(discC.x, discC.y, discC.z, 0f));
         VRCShader.SetGlobalVector(_idKey, new Vector4(keyW.x, keyW.y, keyW.z, byMoon ? 1f : 0f));
         VRCShader.SetGlobalVector(_idAmbient, new Vector4(ambC.x, ambC.y, ambC.z, airglow));
-        VRCShader.SetGlobalVector(_idStars, new Vector4(pole.x, pole.y, pole.z, starAngle));
+        SetStars(hours);
         float starSeen = stars * Mathf.Min(adapt / Adaptation(MoonlitNight), 4f);
         if (starSeen < 1e-3f) starSeen = 0f; // (not a star shows: the sky shader skips them)
         VRCShader.SetGlobalVector(_idNight, new Vector4(starSeen, night, adapt, underwaterGlow));
@@ -458,6 +472,54 @@ public class ClearwaterSky : UdonSharpBehaviour
                 v.SetProgramVariable("Intensity", lamps);
             }
         }
+    }
+
+    // ---- where the sun is at the hour: its declination for the season, its hour angle, at the latitude (east, north, up)
+    Vector3 SunAt(float hours)
+    {
+        float dec = -23.44f * Mathf.Deg2Rad * Mathf.Cos(2f * Mathf.PI / 365f * (dayOfYear + 10));
+        float ha = (hours - 12f) * 15f * Mathf.Deg2Rad, lat = latitude * Mathf.Deg2Rad;
+        float cd = Mathf.Cos(dec), sd = Mathf.Sin(dec), cl = Mathf.Cos(lat), sl = Mathf.Sin(lat);
+        float ch = Mathf.Cos(ha), sh = Mathf.Sin(ha);
+        float yaw = north * Mathf.Deg2Rad;
+        Vector3 northW = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw)), eastW = new Vector3(Mathf.Cos(yaw), 0f, -Mathf.Sin(yaw));
+        return (eastW * (-cd * sh) + northW * (sd * cl - cd * ch * sl) + Vector3.up * (sd * sl + cd * ch * cl)).normalized;
+    }
+
+    // the celestial pole, and the stars turned with the hour, and through the year against the sun
+    void SetStars(float hours)
+    {
+        float lat = latitude * Mathf.Deg2Rad, yaw = north * Mathf.Deg2Rad;
+        Vector3 pole = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw)) * Mathf.Cos(lat) + Vector3.up * Mathf.Sin(lat);
+        float starAngle = (hours - 12f) * 15f * Mathf.Deg2Rad + 2f * Mathf.PI * (dayOfYear - 80) / 365.25f;
+        VRCShader.SetGlobalVector(_idStars, new Vector4(pole.x, pole.y, pole.z, starAngle));
+    }
+
+    // the light that shades comes never from under the horizon, where it gives no light: at least 1 degree up
+    Vector3 Key(Vector3 w)
+    {
+        if (w.y >= 0.0175f) return w;
+        Vector3 flat = new Vector3(w.x, 0f, w.z);
+        flat = flat.sqrMagnitude > 1e-8f ? flat.normalized : Vector3.forward;
+        return flat * 0.99985f + Vector3.up * 0.0175f;
+    }
+
+    // Between the Applies (every updateInterval): the sun, the moon, the stars and the light's direction moved on to the
+    // hour, every frame, their light as it was. Stepped every tenth of a second, a day of a few minutes moved the sun
+    // and the shadows in visible jerks
+    void Move(float hours)
+    {
+        Vector3 sunW = SunAt(hours), moonW = -sunW;
+        float sEl = Mathf.Asin(Mathf.Clamp(sunW.y, -1f, 1f)) * Mathf.Rad2Deg;
+        VRCShader.SetGlobalVector(_idSun, new Vector4(sunW.x, sunW.y, sunW.z, _sunSky));
+        VRCShader.SetGlobalVector(_idMoon, new Vector4(moonW.x, moonW.y, moonW.z, _moonSky));
+        Vector3 keyW = Key(_byMoon ? moonW : sunW);
+        VRCShader.SetGlobalVector(_idKey, new Vector4(keyW.x, keyW.y, keyW.z, _byMoon ? 1f : 0f));
+        SetStars(hours);
+        Vector2 sunH = Across(sunW), moonH = Across(moonW);
+        VRCShader.SetGlobalVector(_idBodies, new Vector4(sunH.x, sunH.y, moonH.x, moonH.y));
+        VRCShader.SetGlobalVector(_idSlices, new Vector4(Slice(sEl), Slice(-sEl), 0f, 0f));
+        if (sunLight != null) sunLight.transform.rotation = Quaternion.LookRotation(-keyW);
     }
 
     // The sky's light (linear) to the buildings' volumes: Light Volumes take a colour in gamma space and an intensity
