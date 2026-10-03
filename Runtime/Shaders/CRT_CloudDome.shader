@@ -104,9 +104,12 @@ Shader "Clearwater/CRT/CloudDome"
                 // a low sun's light crosses the layer side on, through the clouds' tops and their neighbours: shaded as
                 // deep as overhead, the frayed tops at sunset went grey, dirty smudges on the lit clouds; shaded half as deep
                 // with twice the light scattered many times, the undersides went flat and too bright. So the lower the sun,
-                // the less the clouds shade themselves (x3 against x4) and the more of that light gets through (0.8 against 0.6)
+                // the less the clouds shade themselves (x3 against x4) and the more of that light gets through (0.8 against 0.6).
+                // And the sun's light is three quarters of it (with the sky's light on them 1.6 times, in cwCloudLit): lit
+                // full, the undersides glared against the dark tops, too hard a contrast
                 float hi = smoothstep(0.05, 0.3, L.y);
                 float tauK = sigma * lerp(3.0, 4.0, hi), msK = lerp(0.8, 0.6, hi), msT = lerp(0.2, 0.25, hi);
+                float sunK = lerp(0.75, 1.0, hi);
                 // (no jitter of the steps: a texel's own random start speckled the clouds with a fine grain, a sponge
                 // that showed most on the low sun's lit faces. The 64 steps leave no visible slices)
                 float T = 1.0;
@@ -129,7 +132,7 @@ Shader "Clearwater/CRT/CloudDome"
                         tau *= tauK; // (deeper than the cloud seen through, x4 overhead: a see-through cloud still shades itself)
                         float powder = 1.0 - exp(-den * sigma * 200.0);
                         float h = heightFrac(p.y);
-                        float2 S = float2((exp(-tau) * ph1 + msK * exp(-tau * msT) * ph2) * lerp(1.0, powder, 0.6) * 10.0,
+                        float2 S = float2((exp(-tau) * ph1 + msK * exp(-tau * msT) * ph2) * lerp(1.0, powder, 0.6) * 10.0 * sunK,
                                           lerp(0.65, 1.0, h));
                         float at = exp(-den * sigma * dt);
                         C += T * S * (1.0 - at);

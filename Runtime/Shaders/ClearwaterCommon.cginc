@@ -368,6 +368,7 @@ float3 cwCloudLit(float4 cl, float3 hor)
 {
     float3 sunC = CW_TOD ? _Udon_CWCloudLight.rgb : float3(1.0, 0.86, 0.66) * 6.0;
     float3 amb = (cwClearSky(float3(0.0, 1.0, 0.0), cwCloudSunDir()) * 1.1 + hor * 0.4) * 0.85;
+    amb *= lerp(1.6, 1.0, smoothstep(0.05, 0.3, cwCloudSunDir().y)); // (a low sun: the shaded tops lit more by the sky, see CRT_CloudDome)
     return sunC * cl.r + amb * cl.g;
 }
 
