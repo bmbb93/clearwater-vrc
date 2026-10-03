@@ -95,7 +95,7 @@ public static class ClearwaterSkySetup
         probe.clearFlags = ReflectionProbeClearFlags.Skybox;
         probe.size = Vector3.one * 100000f;
         probe.importance = 0;
-        probe.resolution = 128;
+        probe.resolution = 512; // (128 blurred the clouds and the sun on smooth glass; the sky alone renders cheaply)
         probe.hdr = true;
         probe.boxProjection = false;
         sky.reflectionProbe = probe;
