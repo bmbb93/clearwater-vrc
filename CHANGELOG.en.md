@@ -15,6 +15,7 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
 ### Added
 
 - Cloud shadows: the clouds cast soft shadows on the sea and the beach, drifting with them (at night they cut the moonlight)
+- The pebble's `Hand Reach`: the panel called up on the left hand in VR shows 25 cm beyond the hand (away from the eyes); right over the hand it was too close to work. `Hand Size` now defaults to 0.55 instead of 0.4 to match (pebbles already in a scene keep their values)
 
 ## [1.2.0] - 2026-10-03
 

@@ -6,7 +6,7 @@ using VRC.Udon.Common;
 /// <summary>
 /// Something to use (a pebble on the beach, say) that shows the sky panel above it, facing the viewer, a little below
 /// their eyes, or puts it away; the panel goes away by itself when the viewer walks off. It can also be called up
-/// anywhere: in VR a double tap of the left trigger shows it over the left hand, following it; on a desktop a key
+/// anywhere: in VR a double tap of the left trigger shows it over and beyond the left hand, following it; on a desktop a key
 /// (Tab) shows it in front of the view. The same again puts it away. For the viewer alone: the others' panels stay as
 /// they are. Tools > Clearwater > Add Sky Control Panel puts one on the beach by the panel.
 /// </summary>
@@ -28,7 +28,9 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
     [Tooltip("The two taps of the left trigger come within this (seconds)")]
     public float doubleTapTime = 0.4f;
     [Tooltip("The panel's size over the hand, as a share of its size in the world")]
-    [Range(0.2f, 1f)] public float handSize = 0.4f;
+    [Range(0.2f, 1f)] public float handSize = 0.55f;
+    [Tooltip("How far beyond the hand, away from the eyes, it shows (metres): at the hand, it is too close to work")]
+    public float handReach = 0.25f;
     [Tooltip("How far in front of the eyes it shows on a desktop (metres)")]
     public float desktopDistance = 1.2f;
 
@@ -110,14 +112,16 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
         panel.transform.localScale = mode == OnHand ? _worldScale * handSize : _worldScale;
     }
 
-    // over the left hand, a hand's width above it, turned to the eyes
+    // over the left hand, a hand's width above it and a little beyond it (away from the eyes), turned to the eyes
     void FollowHand()
     {
         VRCPlayerApi me = Networking.LocalPlayer;
         if (me == null) return;
         Vector3 hand = me.GetTrackingData(VRCPlayerApi.TrackingDataType.LeftHand).position;
         Vector3 eye = me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
-        Vector3 at = hand + Vector3.up * 0.16f;
+        Vector3 out_ = hand - eye;
+        out_.y = 0f;
+        Vector3 at = hand + Vector3.up * 0.16f + (out_.sqrMagnitude > 1e-4f ? out_.normalized * handReach : Vector3.zero);
         Vector3 away = at - eye;
         if (away.sqrMagnitude > 1e-4f) panel.transform.SetPositionAndRotation(at, Quaternion.LookRotation(away, Vector3.up));
         else panel.transform.position = at;
