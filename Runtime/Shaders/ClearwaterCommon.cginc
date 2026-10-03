@@ -200,17 +200,43 @@ SamplerState cw_trilinear_repeat_sampler; // (shared with the bed look: the shad
 #define CW_CLOUD_H 1500.0
 #define CW_CLOUD_HAZE 45000.0 // m: the air between hides 1/e of a cloud this far off (it fades into the horizon)
 
-// how far the layer has drifted (m across the ground, JS space): the clouds at p are the weather's at p - this
-float2 cwCloudWind()
-{
-    float a = radians(_CloudDir);
-    return float2(sin(a), -cos(a)) * (_CloudSpeed * _Time.y + _CloudShift);
-}
+// how far the layer has drifted at time (s; m across the ground, JS space): the clouds at p are the weather's at p - this
+inline float2 cwCloudDriftDir() { float a = radians(_CloudDir); return float2(sin(a), -cos(a)); }
+float2 cwCloudWindAt(float time) { return cwCloudDriftDir() * (_CloudSpeed * time + _CloudShift); }
+float2 cwCloudWind() { return cwCloudWindAt(_Time.y); }
 
-// the clouds along d (JS space, d.y > 0) from the dome: rgb their light (premultiplied), a how much of the sky they hide
+// The dome is drawn again a strip of columns at a time, the strips taking turns by the clock: the strip k (of
+// CW_DOME_STRIPS across the azimuth) at each window w of CW_DOME_STRIP_TIME with w mod strips = k, the windows counted
+// within CW_DOME_CLOCK (for the float's precision). Each update writes the window it was at, mod CW_DOME_WRAP (a half
+// float holds whole numbers to 2048), into the dome's top row: the readers count the strips' turns from it, so they agree
+// with the dome even when the two see the clock a frame apart.
+#define CW_DOME_STRIPS 64.0
+#define CW_DOME_STRIP_TIME (1.0 / 90.0) // s: the whole sky in 0.71 s
+#define CW_DOME_WRAP 2048.0
+#define CW_DOME_CLOCK (CW_DOME_WRAP * 32.0 * CW_DOME_STRIP_TIME)
+inline float cwModPos(float a, float n) { return a - n * floor(a / n); }
+// the clock's window now
+inline float cwDomeWindow() { return floor(fmod(_Time.y, CW_DOME_CLOCK) / CW_DOME_STRIP_TIME); }
+// the window (counted as cwDomeWindow) the strip at u (its azimuth, 0..1) last had its turn at, by the dome's update at
+// window wUpd
+inline float cwDomeTurn(float u, float wUpd) { return wUpd - cwModPos(wUpd - floor(frac(u) * CW_DOME_STRIPS), CW_DOME_STRIPS); }
+// how long ago (s) the window w began
+inline float cwDomeSince(float w) { return fmod(_Time.y, CW_DOME_CLOCK) - w * CW_DOME_STRIP_TIME; }
+
+// the clouds along d (JS space, d.y > 0) from the dome: rgb their light (premultiplied), a how much of the sky they hide.
+// That part of the dome shows them as they were at its strip's turn: look where they were then (on the layer's middle),
+// so they drift on smoothly between turns
 float4 cwCloudDome(float3 d)
 {
-    float H = max(_CloudDome_TexelSize.w, 2.0);
+    float W = max(_CloudDome_TexelSize.z, 2.0), H = max(_CloudDome_TexelSize.w, 2.0);
+    float w = cwDomeWindow();
+    float wUpd = w - cwModPos(w - _CloudDome.SampleLevel(cw_trilinear_repeat_sampler, float2(0.5 / W, (H - 0.5) / H), 0).r, CW_DOME_WRAP);
+    float age = cwDomeSince(cwDomeTurn(atan2(d.x, d.z) / (2.0 * CW_PI), wUpd));
+    float h = CW_CLOUD_H + 200.0; // (the lower parts, mostly: what shows from below)
+    float3 p = float3(d.x, 0.0, d.z) * (h / max(d.y, 0.01));
+    p.xz -= cwCloudDriftDir() * _CloudSpeed * age;
+    p.y = h;
+    d = normalize(p);
     float s = sqrt(asin(saturate(d.y)) / (0.5 * CW_PI));
     float2 uv = float2(atan2(d.x, d.z) / (2.0 * CW_PI), clamp(s * (H - 1.0) / H, 0.5 / H, (H - 1.5) / H));
     return _CloudDome.SampleLevel(cw_trilinear_repeat_sampler, uv, 0);
@@ -243,14 +269,20 @@ float cwCloudShadow(float3 wpos)
 // Henyey-Greenstein phase function: how much of the sunlight a droplet sends off at angle acos(mu) from it
 inline float cwPhaseHG(float mu, float g) { return (1.0 - g * g) / (4.0 * CW_PI * pow(max(1.0 + g * g - 2.0 * g * mu, 1e-4), 1.5)); }
 
-// the sky c seen along d with the clouds in front of it (hor = the horizon's colour that way: far ones fade into it)
-float3 cwCloudsOver(float3 c, float3 d, float3 hor)
+// the sky c seen along d with the clouds in front of it (the far ones fade into the horizon's colour that way: the sky
+// low over it, looked up here, where there are clouds. The sky's own hor is the sky itself higher than 17 degrees, and
+// the clouds there, still a tenth faded, showed a line where it changed)
+float3 cwCloudsOver(float3 c, float3 d)
 {
     [branch] if (_CloudCover > 0.0 && d.y > 0.0)
     {
         float4 cl = cwCloudDome(d);
-        float far = 1.0 - exp(-CW_CLOUD_H / max(d.y, 1e-3) / CW_CLOUD_HAZE);
-        c = c * (1.0 - cl.a) + lerp(cl.rgb, hor * cl.a, far);
+        [branch] if (cl.a > 0.002)
+        {
+            float3 hor = CW_TOD ? cwAtmosphere(normalize(float3(d.x, 0.02, d.z) + float3(0.0, 1e-3, 0.0))) : float3(0.66, 0.78, 0.90);
+            float far = 1.0 - exp(-CW_CLOUD_H / max(d.y, 1e-3) / CW_CLOUD_HAZE);
+            c = c * (1.0 - cl.a) + lerp(cl.rgb, hor * cl.a, far);
+        }
     }
     return c;
 }
@@ -316,7 +348,7 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
         c = lerp(hor, zen, pow(saturate(e), 0.42));
         c += float3(1.0, 0.86, 0.66) * (0.22 * pow(max(mu, 0.), 6.) + 0.30 * pow(max(mu, 0.), 64.) + 1.6 * pow(max(mu, 0.), 2400.));
     }
-    c = cwCloudsOver(c, d, hor);
+    c = cwCloudsOver(c, d);
     // distant headland: pine canopy, some 2 km off
     float a = atan2(d.z, d.x);
     float landHere, r = cwHeadlandRidge(d, landHere);

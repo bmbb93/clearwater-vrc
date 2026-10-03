@@ -4,9 +4,13 @@
 // wisps. Each texel marches its direction through the layer from the eye, lit by the sun (a few steps toward it, two
 // octaves of scattering: the second, the light scattered many times, softer and much less forward) and by the sky.
 // The dome: u = azimuth (JS space, atan2(x, z) / 2pi), rows 0 .. H-2 = the elevation's square root (more of them low
-// down, where the clouds are far and small); the top row is bookkeeping (texel 0: which strip is next).
-// Double-buffered: each update draws one of Slices strips of columns again and copies the rest (the whole dome on the
-// first), so a full turn of the sky takes Slices frames. Its material gets the sky's clouds (ClearwaterController).
+// down, where the clouds are far and small); the top row is bookkeeping (texel 0: r the clock's window at the last
+// update, mod CW_DOME_WRAP; g 1 once the whole dome is drawn).
+// Double-buffered: the strips of columns take turns by the clock (ClearwaterCommon: cwDomeTurn), each update drawing
+// again those whose turn came since the last and copying the rest, so a full turn of the sky takes CW_DOME_STRIPS *
+// CW_DOME_STRIP_TIME seconds whatever the frame rate. Each strip is drawn as the clouds were at its turn: the readers
+// move it on by the wind since then, so the clouds drift smoothly between turns. Its material gets the sky's clouds
+// (ClearwaterController).
 Shader "Clearwater/CRT/CloudDome"
 {
     Properties
@@ -35,14 +39,13 @@ Shader "Clearwater/CRT/CloudDome"
 
             sampler3D _CloudShape, _CloudDetail;
 
-            #define SLICES 64
             #define CLOUD_TOP (CW_CLOUD_H + 900.0)
             #define EYE 2.0
 
             float heightFrac(float y) { return saturate((y - CW_CLOUD_H) / (CLOUD_TOP - CW_CLOUD_H)); }
 
             // the density at p (m, JS space, from the eye's foot); cheap: the big shape only (for the light toward the sun)
-            float density(float3 p, float2 wind, bool cheap)
+            float density(float3 p, float2 wind, float time, bool cheap)
             {
                 float h = heightFrac(p.y);
                 float size = max(_CloudSize, 50.0);
@@ -64,8 +67,9 @@ Shader "Clearwater/CRT/CloudDome"
                 if (cheap) return d * 0.8;
                 if (d <= 0.0) return 0.0;
                 // the edges frayed into wisps by the fine detail (the gaps between its cells), less so right at the base;
-                // the detail drifts a little faster than the shape and rises, so the edges keep changing
-                float3 dp = (p - wind3 * 1.3 - float3(0.0, _Time.y * 3.0, 0.0)) / (size * 0.2);
+                // the detail drifts with the shape and rises slowly, so the edges change little by little (faster, they
+                // changed visibly at each strip's turn)
+                float3 dp = (p - wind3 - float3(0.0, time * 0.7, 0.0)) / (size * 0.2);
                 float3 dn = tex3Dlod(_CloudDetail, float4(dp, 0.0)).rgb;
                 float er = (1.0 - (dn.r * 0.625 + dn.g * 0.25 + dn.b * 0.125)) * lerp(0.35, 1.0, smoothstep(0.0, 0.15, h));
                 float e = er * (1.0 - d); // (the edges eroded, the cores kept)
@@ -75,15 +79,19 @@ Shader "Clearwater/CRT/CloudDome"
             float phase1(float mu) { return lerp(cwPhaseHG(mu, 0.8), cwPhaseHG(mu, -0.3), 0.35); }
             float phase2(float mu) { return lerp(cwPhaseHG(mu, 0.35), cwPhaseHG(mu, -0.15), 0.35); } // (the light scattered many times)
 
-            // the clouds along d (JS space, d.y > 0) from the eye: rgb their light (premultiplied), a how much they hide
-            float4 march(float3 d)
+            // the clouds along d (JS space, d.y > 0) from the eye as they are at time: rgb their light (premultiplied), a
+            // how much they hide
+            float4 march(float3 d, float time)
             {
                 float3 ro = float3(0.0, EYE, 0.0);
                 float t0 = (CW_CLOUD_H - EYE) / d.y, t1 = min((CLOUD_TOP - EYE) / d.y, t0 + 30000.0);
                 if (t0 > 100000.0) return 0.0; // (past 100 km, under the horizon's haze: none)
-                // steps of 40 to 250 m (longer far off), as many as it takes, up to 256
-                float dt = clamp((t1 - t0) / 64.0, 60.0, 375.0);
-                int n = (int)min(ceil((t1 - t0) / dt), 256.0);
+                // 64 steps across the layer, whatever its length: 14 m overhead to 470 m far off (a GPU waits for its
+                // longest ray anyway. With steps of 60 m at least, the near clouds overhead were grainy, a scaly speckle
+                // that showed most against the light; and a count of steps that changed with the elevation drew arcs
+                // across the clouds where it changed)
+                float dt = (t1 - t0) / 64.0;
+                const int n = 64;
                 // the light on them: the sun's (it lights them from its side after it has set for the ground; else the
                 // moon's), or the fixed sky's; the sky's from above and round about
                 float3 L = normalize(cwToJS(_SunDir.xyz)), sunC = float3(1.0, 0.86, 0.66) * 6.0;
@@ -96,23 +104,22 @@ Shader "Clearwater/CRT/CloudDome"
                 float mu = dot(d, L), ph1 = phase1(mu), ph2 = phase2(mu);
                 float size = max(_CloudSize, 50.0);
                 float sigma = 0.02 * 900.0 / size; // extinction per m at density 1 (scaled with the cloud size)
-                float a = radians(_CloudDir);
-                float2 wind = float2(sin(a), -cos(a)) * (_CloudSpeed * _Time.y + _CloudShift);
+                float2 wind = cwCloudWindAt(time);
                 float jitter = frac(sin(dot(d.xz, float2(12.9898, 78.233))) * 43758.5453);
                 float T = 1.0;
                 float3 C = 0.0;
-                [loop] for (int i = 0; i < 256; i++)
+                [loop] for (int i = 0; i < n; i++)
                 {
-                    if (i >= n || T < 0.01) break;
+                    if (T < 0.01) break;
                     float3 p = ro + d * (t0 + (i + jitter) * dt);
-                    float den = density(p, wind, false);
+                    float den = density(p, wind, time, false);
                     [branch] if (den > 0.001)
                     {
                         // the cloud toward the sun, by its big shape (shaded by the lobes, never marbled by the detail)
                         float tau = 0.0, ls = 60.0;
                         [loop] for (int j = 0; j < 6; j++)
                         {
-                            tau += density(p + L * ls * (j + 0.5), wind, true) * ls;
+                            tau += density(p + L * ls * (j + 0.5), wind, time, true) * ls;
                             ls *= 1.6;
                         }
                         tau *= sigma * 4.0; // (deeper than the cloud seen through: a see-through cloud still shades itself)
@@ -133,20 +140,19 @@ Shader "Clearwater/CRT/CloudDome"
                 float W = _CustomRenderTextureWidth, H = _CustomRenderTextureHeight;
                 float2 uv = IN.localTexcoord.xy;
                 uint2 px = uint2(uv * float2(W, H));
-                float count = tex2Dlod(_SelfTexture2D, float4(0.5 / W, (H - 0.5) / H, 0.0, 0.0)).r;
-                // the bookkeeping row
-                // (1 .. Slices round and round, 0 only before the first: a half float holds no big counts)
-                if (px.y >= (uint)H - 1) return px.x == 0 ? float4(fmod(count, SLICES) + 1.0, 0.0, 0.0, 0.0) : 0.0;
-                // only this update's strip (all of it the first time)
-                uint slice = (uint)fmod(count, SLICES);
-                bool mine = count < 0.5 || (px.x * SLICES) / (uint)W == slice;
-                if (!mine) return tex2Dlod(_SelfTexture2D, float4(uv, 0.0, 0.0));
+                float2 last = tex2Dlod(_SelfTexture2D, float4(0.5 / W, (H - 0.5) / H, 0.0, 0.0)).rg;
+                float w = cwDomeWindow();
+                if (px.y >= (uint)H - 1) return px.x == 0 ? float4(cwModPos(w, CW_DOME_WRAP), 1.0, 0.0, 0.0) : 0.0; // (the bookkeeping row)
+                // only the strips whose turn came since the last update (all of the dome the first time, or after a pause)
+                float since = last.g > 0.5 ? cwModPos(w - last.r, CW_DOME_WRAP) : CW_DOME_WRAP;
+                float turn = cwDomeTurn(uv.x, w);
+                if (w - turn >= since) return tex2Dlod(_SelfTexture2D, float4(uv, 0.0, 0.0));
                 if (_CloudCover <= 0.0) return 0.0;
                 float az = uv.x * 2.0 * CW_PI;
                 float s = min(uv.y * H / (H - 1.0), 1.0);
                 float el = s * s * 0.5 * CW_PI;
                 float3 d = float3(cos(el) * sin(az), sin(el), cos(el) * cos(az));
-                return march(normalize(d + float3(0.0, 1e-4, 0.0)));
+                return march(normalize(d + float3(0.0, 1e-4, 0.0)), _Time.y - cwDomeSince(turn));
             }
             ENDCG
         }
