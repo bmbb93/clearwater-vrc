@@ -224,8 +224,9 @@ float2 cwCloudWind() { return cwCloudWindAt(_Time.y); }
 // within CW_DOME_CLOCK (for the float's precision). Each update writes the window it was at, mod CW_DOME_WRAP (a half
 // float holds whole numbers to 2048), into the dome's top row: the readers count the strips' turns from it, so they agree
 // with the dome even when the two see the clock a frame apart.
-#define CW_DOME_STRIPS 64.0
-#define CW_DOME_STRIP_TIME (1.0 / 90.0) // s: the whole sky in 0.71 s
+#define CW_DOME_STRIPS 16.0 // (a strip's time is set by its longest rays, not its width: 64 thinner ones cost 0.30 ms a
+                           // frame against 0.40, but took 0.71 s round the sky, and the shading lagged the sun that long)
+#define CW_DOME_STRIP_TIME (1.0 / 90.0) // s: the whole sky in 0.18 s
 #define CW_DOME_WRAP 2048.0
 #define CW_DOME_CLOCK (CW_DOME_WRAP * 32.0 * CW_DOME_STRIP_TIME)
 inline float cwModPos(float a, float n) { return a - n * floor(a / n); }
