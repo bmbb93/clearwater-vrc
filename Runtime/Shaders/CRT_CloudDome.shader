@@ -97,6 +97,9 @@ Shader "Clearwater/CRT/CloudDome"
                 float dt = (t1 - t0) / 64.0;
                 const int n = 64;
                 float3 L = cwCloudSunDir();
+                // (after sunset the light that still reaches them comes level across the earth's rim, not up from under the
+                // horizon: taken from below, it lit the clouds' flat bases alone, glowing saucers over dark bodies)
+                L = normalize(float3(L.x, max(L.y, 0.05), L.z));
                 float mu = dot(d, L), ph1 = phase1(mu), ph2 = phase2(mu);
                 float size = max(_CloudSize, 50.0);
                 float sigma = 0.02 * 900.0 / size; // extinction per m at density 1 (scaled with the cloud size)
@@ -105,11 +108,12 @@ Shader "Clearwater/CRT/CloudDome"
                 // deep as overhead, the frayed tops at sunset went grey, dirty smudges on the lit clouds; shaded half as deep
                 // with twice the light scattered many times, the undersides went flat and too bright. So the lower the sun,
                 // the less the clouds shade themselves (x3 against x4) and the more of that light gets through (0.8 against 0.6).
-                // And the sun's light is three quarters of it (with the sky's light on them 1.6 times, in cwCloudLit): lit
-                // full, the undersides glared against the dark tops, too hard a contrast
+                // And the sun's light is 0.6 of it, and the light scattered many times goes deeper (x0.12 against x0.25),
+                // with the sky's light on them 2.4 times (cwCloudLit): lit full, the undersides glared against dark tops,
+                // too hard a contrast (three quarters and 1.6 times still did, with a third of the sky covered)
                 float hi = smoothstep(0.05, 0.3, L.y);
-                float tauK = sigma * lerp(3.0, 4.0, hi), msK = lerp(0.8, 0.6, hi), msT = lerp(0.2, 0.25, hi);
-                float sunK = lerp(0.75, 1.0, hi);
+                float tauK = sigma * lerp(3.0, 4.0, hi), msK = lerp(0.8, 0.6, hi), msT = lerp(0.12, 0.25, hi);
+                float sunK = lerp(0.6, 1.0, hi);
                 // (no jitter of the steps: a texel's own random start speckled the clouds with a fine grain, a sponge
                 // that showed most on the low sun's lit faces. The 64 steps leave no visible slices)
                 float T = 1.0;
