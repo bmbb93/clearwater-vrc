@@ -6,7 +6,7 @@ The changes in each version of Clearwater VRC (`com.vbamboo.clearwater`). The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 Each version's section, with the Japanese one in `CHANGELOG.md`, makes its release notes on GitHub.
 
-## [1.3.0] - Unreleased
+## [1.3.0] - 2026-10-03
 
 ### Changed
 
