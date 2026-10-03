@@ -2,7 +2,9 @@
 // cwCloudDome). A layer of fair-weather cumulus 1.5 to 2.4 km up, as a volume: a weather map says where clouds are and
 // how tall they grow; a 3D noise gives their big rounded lobes (Perlin-Worley) and a finer one frays their edges into
 // wisps. Each texel marches its direction through the layer from the eye, lit by the sun (a few steps toward it, two
-// octaves of scattering: the second, the light scattered many times, softer and much less forward) and by the sky.
+// octaves of scattering: the second, the light scattered many times, softer and much less forward) and by the sky. It
+// keeps how much of each light the clouds pass on (r the sun's, g the sky's) rather than their colour: the readers
+// multiply by the lights of the moment (cwCloudLit), which change at once when the day goes by fast.
 // The dome: u = azimuth (JS space, atan2(x, z) / 2pi), rows 0 .. H-2 = the elevation's square root (more of them low
 // down, where the clouds are far and small); the top row is bookkeeping (texel 0: r the clock's window at the last
 // update, mod CW_DOME_WRAP; g 1 once the whole dome is drawn).
@@ -49,12 +51,12 @@ Shader "Clearwater/CRT/CloudDome"
             {
                 float h = heightFrac(p.y);
                 float size = max(_CloudSize, 50.0);
-                float4 w = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, (p.xz - wind) / (size * 12.0), 0);
-                // where the weather lets a cloud be (a share of the sky as large as the cover), and how strongly
-                float cl = saturate((w.r - (1.0 - _CloudCover)) * 4.0);
+                // where the weather lets a cloud be, and how strongly (x) and how tall it may grow (y)
+                float2 w = cwCloudWeather(p.xz - wind, 0.0);
+                float cl = w.x;
                 if (cl <= 0.0) return 0.0;
                 // cumulus: a flat, sharp base; the stronger ones heaped higher; rounded toward the top
-                float topH = lerp(0.35, 1.0, cl * lerp(0.6, 1.0, w.g));
+                float topH = lerp(0.35, 1.0, cl * lerp(0.6, 1.0, w.y));
                 float grad = smoothstep(0.0, 0.025, h) * (1.0 - smoothstep(topH * 0.55, topH, h));
                 if (grad <= 0.0) return 0.0;
                 float3 wind3 = float3(wind.x, 0.0, wind.y);
@@ -79,8 +81,8 @@ Shader "Clearwater/CRT/CloudDome"
             float phase1(float mu) { return lerp(cwPhaseHG(mu, 0.8), cwPhaseHG(mu, -0.3), 0.35); }
             float phase2(float mu) { return lerp(cwPhaseHG(mu, 0.35), cwPhaseHG(mu, -0.15), 0.35); } // (the light scattered many times)
 
-            // the clouds along d (JS space, d.y > 0) from the eye as they are at time: rgb their light (premultiplied), a
-            // how much they hide
+            // the clouds along d (JS space, d.y > 0) from the eye as they are at time: r how much sunlight they pass on, g how
+            // much skylight (each premultiplied), a how much they hide
             float4 march(float3 d, float time)
             {
                 float3 ro = float3(0.0, EYE, 0.0);
@@ -92,22 +94,14 @@ Shader "Clearwater/CRT/CloudDome"
                 // across the clouds where it changed)
                 float dt = (t1 - t0) / 64.0;
                 const int n = 64;
-                // the light on them: the sun's (it lights them from its side after it has set for the ground; else the
-                // moon's), or the fixed sky's; the sky's from above and round about
-                float3 L = normalize(cwToJS(_SunDir.xyz)), sunC = float3(1.0, 0.86, 0.66) * 6.0;
-                [branch] if (CW_TOD)
-                {
-                    L = normalize(cwToJS(_Udon_CWCloudLight.w > 0.5 ? _Udon_CWSun.xyz : _Udon_CWKey.xyz));
-                    sunC = _Udon_CWCloudLight.rgb;
-                }
-                float3 amb = (cwClearSky(float3(0.0, 1.0, 0.0), L) * 1.1 + cwClearSky(normalize(float3(d.x, 0.2, d.z)), L) * 0.4) * 0.85;
+                float3 L = cwCloudSunDir();
                 float mu = dot(d, L), ph1 = phase1(mu), ph2 = phase2(mu);
                 float size = max(_CloudSize, 50.0);
                 float sigma = 0.02 * 900.0 / size; // extinction per m at density 1 (scaled with the cloud size)
                 float2 wind = cwCloudWindAt(time);
                 float jitter = frac(sin(dot(d.xz, float2(12.9898, 78.233))) * 43758.5453);
                 float T = 1.0;
-                float3 C = 0.0;
+                float2 C = 0.0;
                 [loop] for (int i = 0; i < n; i++)
                 {
                     if (T < 0.01) break;
@@ -125,14 +119,14 @@ Shader "Clearwater/CRT/CloudDome"
                         tau *= sigma * 4.0; // (deeper than the cloud seen through: a see-through cloud still shades itself)
                         float powder = 1.0 - exp(-den * sigma * 200.0);
                         float h = heightFrac(p.y);
-                        float3 S = sunC * (exp(-tau) * ph1 + 0.6 * exp(-tau * 0.25) * ph2) * lerp(1.0, powder, 0.6) * 10.0
-                                 + amb * lerp(0.65, 1.0, h);
+                        float2 S = float2((exp(-tau) * ph1 + 0.6 * exp(-tau * 0.25) * ph2) * lerp(1.0, powder, 0.6) * 10.0,
+                                          lerp(0.65, 1.0, h));
                         float at = exp(-den * sigma * dt);
                         C += T * S * (1.0 - at);
                         T *= at;
                     }
                 }
-                return float4(C, 1.0 - T);
+                return float4(C, 0.0, 1.0 - T);
             }
 
             float4 frag(v2f_customrendertexture IN) : SV_Target

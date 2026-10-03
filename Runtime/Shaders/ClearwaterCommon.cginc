@@ -200,6 +200,20 @@ SamplerState cw_trilinear_repeat_sampler; // (shared with the bed look: the shad
 #define CW_CLOUD_H 1500.0
 #define CW_CLOUD_HAZE 45000.0 // m: the air between hides 1/e of a cloud this far off (it fades into the horizon)
 
+// The weather at xz (m across the ground, JS space, before the drift): x how strongly it puts a cloud there (0: none), y
+// how tall it lets it grow. Clouds over a share of the sky as large as the cover, the cover itself raised and lowered
+// over some 25 km by the weather's slow field (b): fuller skies here, clear gaps there (alike everywhere, the clouds
+// lay evenly spaced on to the horizon)
+float2 cwCloudWeather(float2 xz, float lod)
+{
+    float s = 1.0 / (max(_CloudSize, 50.0) * 12.0);
+    float4 w = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, xz * s, lod);
+    float m = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, xz * (s * 0.2) + 0.37, lod + 2.0).b;
+    float c = saturate(_CloudCover);
+    float cover = saturate(c + (m - 0.5) * 2.4 * min(c, 1.0 - c));
+    return float2(saturate((w.r - (1.0 - cover)) * 4.0), w.g);
+}
+
 // how far the layer has drifted at time (s; m across the ground, JS space): the clouds at p are the weather's at p - this
 inline float2 cwCloudDriftDir() { float a = radians(_CloudDir); return float2(sin(a), -cos(a)); }
 float2 cwCloudWindAt(float time) { return cwCloudDriftDir() * (_CloudSpeed * time + _CloudShift); }
@@ -223,7 +237,8 @@ inline float cwDomeTurn(float u, float wUpd) { return wUpd - cwModPos(wUpd - flo
 // how long ago (s) the window w began
 inline float cwDomeSince(float w) { return fmod(_Time.y, CW_DOME_CLOCK) - w * CW_DOME_STRIP_TIME; }
 
-// the clouds along d (JS space, d.y > 0) from the dome: rgb their light (premultiplied), a how much of the sky they hide.
+// the clouds along d (JS space, d.y > 0) from the dome: r, g how much sunlight and skylight they pass on (premultiplied:
+// cwCloudLit), a how much of the sky they hide.
 // That part of the dome shows them as they were at its strip's turn: look where they were then (on the layer's middle),
 // so they drift on smoothly between turns
 float4 cwCloudDome(float3 d)
@@ -261,13 +276,28 @@ float cwCloudShadow(float3 wpos)
     if (s.y <= 0.0) return 1.0;
     float3 pj = cwToJS(wpos);
     float2 at = pj.xz + s.xz / max(s.y, 0.15) * (CW_CLOUD_H + 300.0 - pj.y);
-    float w = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, (at - cwCloudWind()) / (max(_CloudSize, 50.0) * 12.0), 2.0).r;
-    float cl = saturate((w - (1.0 - _CloudCover)) * 4.0);
+    float cl = cwCloudWeather(at - cwCloudWind(), 2.0).x;
     return 1.0 - 0.8 * smoothstep(0.05, 0.6, cl) * smoothstep(0.0, 0.15, s.y);
 }
 
 // Henyey-Greenstein phase function: how much of the sunlight a droplet sends off at angle acos(mu) from it
 inline float cwPhaseHG(float mu, float g) { return (1.0 - g * g) / (4.0 * CW_PI * pow(max(1.0 + g * g - 2.0 * g * mu, 1e-4), 1.5)); }
+
+// the light that lights the clouds: the sun's (it lights them from its side after it has set for the ground; else the
+// moon's), or the fixed sky's
+float3 cwCloudSunDir()
+{
+    [branch] if (CW_TOD) return normalize(cwToJS(_Udon_CWCloudLight.w > 0.5 ? _Udon_CWSun.xyz : _Udon_CWKey.xyz));
+    return normalize(cwToJS(_SunDir.xyz));
+}
+// the clouds' light from the dome's cl (r how much sunlight they pass on, g how much skylight) and the lights of the
+// moment: the sun's (or the moon's), and the sky's from above and round about (hor = the sky low over the horizon there)
+float3 cwCloudLit(float4 cl, float3 hor)
+{
+    float3 sunC = CW_TOD ? _Udon_CWCloudLight.rgb : float3(1.0, 0.86, 0.66) * 6.0;
+    float3 amb = (cwClearSky(float3(0.0, 1.0, 0.0), cwCloudSunDir()) * 1.1 + hor * 0.4) * 0.85;
+    return sunC * cl.r + amb * cl.g;
+}
 
 // the sky c seen along d with the clouds in front of it (the far ones fade into the horizon's colour that way: the sky
 // low over it, looked up here, where there are clouds. The sky's own hor is the sky itself higher than 17 degrees, and
@@ -281,7 +311,7 @@ float3 cwCloudsOver(float3 c, float3 d)
         {
             float3 hor = CW_TOD ? cwAtmosphere(normalize(float3(d.x, 0.02, d.z) + float3(0.0, 1e-3, 0.0))) : float3(0.66, 0.78, 0.90);
             float far = 1.0 - exp(-CW_CLOUD_H / max(d.y, 1e-3) / CW_CLOUD_HAZE);
-            c = c * (1.0 - cl.a) + lerp(cl.rgb, hor * cl.a, far);
+            c = c * (1.0 - cl.a) + lerp(cwCloudLit(cl, hor), hor * cl.a, far);
         }
     }
     return c;
