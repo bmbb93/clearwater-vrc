@@ -6,8 +6,9 @@ using VRC.Udon.Common;
 /// <summary>
 /// Something to use (a pebble on the beach, say) that shows the sky panel above it, facing the viewer, a little below
 /// their eyes, or puts it away; the panel goes away by itself when the viewer walks off. It can also be called up
-/// anywhere: in VR a double tap of the left trigger shows it over and beyond the left hand, following it; on a desktop a key
-/// (Tab) shows it in front of the view. The same again puts it away. For the viewer alone: the others' panels stay as
+/// anywhere: in VR a double tap of the left trigger shows it over and beyond the left hand, where it then stays (it went
+/// with the hand, which made it hard to touch) until the viewer moves off from it; on a desktop a key (Tab) shows it in
+/// front of the view. The same again puts it away. For the viewer alone: the others' panels stay as
 /// they are. Tools > Clearwater > Add Sky Control Panel puts one on the beach by the panel.
 /// </summary>
 [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -31,6 +32,8 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
     [Range(0.2f, 1f)] public float handSize = 0.55f;
     [Tooltip("How far beyond the hand, away from the eyes, it shows (metres): at the hand, it is too close to work")]
     public float handReach = 0.25f;
+    [Tooltip("The panel called up by the hand goes away when the viewer's eyes are this far from it (metres); 0: it stays until called again")]
+    public float handCloseDistance = 1.5f;
     [Tooltip("How far in front of the eyes it shows on a desktop (metres)")]
     public float desktopDistance = 1.2f;
 
@@ -82,7 +85,7 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
         if (panel == null) return;
         if (panel.activeSelf && _mode == OnHand) { panel.SetActive(false); return; }
         Place(OnHand);
-        FollowHand();
+        PlaceByHand();
         panel.SetActive(true);
     }
 
@@ -112,8 +115,9 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
         panel.transform.localScale = mode == OnHand ? _worldScale * handSize : _worldScale;
     }
 
-    // over the left hand, a hand's width above it and a little beyond it (away from the eyes), turned to the eyes
-    void FollowHand()
+    // over the left hand, a hand's width above it and a little beyond it (away from the eyes), turned to the eyes; it stays
+    // there (it used to go with the hand every frame: the panel moved away under the other hand's pointer)
+    void PlaceByHand()
     {
         VRCPlayerApi me = Networking.LocalPlayer;
         if (me == null) return;
@@ -132,12 +136,14 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
         if (panel == null) return;
         VRCPlayerApi me = Networking.LocalPlayer;
         if (callAnywhere && me != null && !me.IsUserInVR() && Input.GetKeyDown(desktopKey)) ToggleInFront();
-        if (closeDistance <= 0f || !panel.activeSelf || _mode == OnHand) return;
-        if (me != null && Vector3.Distance(me.GetPosition(), panel.transform.position) > closeDistance) panel.SetActive(false);
-    }
-
-    public override void PostLateUpdate()
-    {
-        if (panel != null && _mode == OnHand && panel.activeSelf) FollowHand();
+        if (!panel.activeSelf || me == null) return;
+        if (_mode == OnHand)
+        {
+            // (from the eyes: the feet are already a metre and a half from a panel just called up)
+            Vector3 eye = me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
+            if (handCloseDistance > 0f && Vector3.Distance(eye, panel.transform.position) > handCloseDistance) panel.SetActive(false);
+            return;
+        }
+        if (closeDistance > 0f && Vector3.Distance(me.GetPosition(), panel.transform.position) > closeDistance) panel.SetActive(false);
     }
 }

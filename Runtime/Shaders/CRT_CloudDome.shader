@@ -22,6 +22,7 @@ Shader "Clearwater/CRT/CloudDome"
         _CloudSpeed ("Drift (m/s)", Float) = 8
         _CloudDir ("Drift direction (deg)", Float) = 60
         _CloudShift ("Drift so far (m)", Float) = 0
+        _CloudClassic ("The clouds of 1.2 instead: the dome is left empty (copied from the sky)", Float) = 0
         _SunDir ("Sun direction (world, towards the sun; the fixed sky's)", Vector) = (0, 0.5, 0.86, 0)
         [NoScaleOffset] _CloudShape ("The big shape (the package's)", 3D) = "black" {}
         [NoScaleOffset] _CloudDetail ("The fine detail (the package's)", 3D) = "black" {}
@@ -101,10 +102,11 @@ Shader "Clearwater/CRT/CloudDome"
                 float sigma = 0.02 * 900.0 / size; // extinction per m at density 1 (scaled with the cloud size)
                 float2 wind = cwCloudWindAt(time);
                 // a low sun's light crosses the layer side on, through the clouds' tops and their neighbours: shaded as
-                // deep as overhead, the frayed tops at sunset went grey, dirty smudges on the lit clouds. So the lower the
-                // sun, the less the clouds shade themselves and the more of the light scattered many times gets through
+                // deep as overhead, the frayed tops at sunset went grey, dirty smudges on the lit clouds; shaded half as deep
+                // with twice the light scattered many times, the undersides went flat and too bright. So the lower the sun,
+                // the less the clouds shade themselves (x3 against x4) and the more of that light gets through (0.8 against 0.6)
                 float hi = smoothstep(0.05, 0.3, L.y);
-                float tauK = sigma * lerp(2.0, 4.0, hi), msK = lerp(1.0, 0.6, hi), msT = lerp(0.15, 0.25, hi);
+                float tauK = sigma * lerp(3.0, 4.0, hi), msK = lerp(0.8, 0.6, hi), msT = lerp(0.2, 0.25, hi);
                 // (no jitter of the steps: a texel's own random start speckled the clouds with a fine grain, a sponge
                 // that showed most on the low sun's lit faces. The 64 steps leave no visible slices)
                 float T = 1.0;
@@ -134,7 +136,10 @@ Shader "Clearwater/CRT/CloudDome"
                         T *= at;
                     }
                 }
-                return float4(C, 0.0, 1.0 - T);
+                // under a low sun, the far clouds (6 to 30 km off) thinned to half: packed toward the horizon, each lit bright
+                // against the dusk, they clumped into scales
+                float thin = lerp(1.0, lerp(0.55, 1.0, hi), smoothstep(6000.0, 30000.0, t0));
+                return float4(C * thin, 0.0, (1.0 - T) * thin);
             }
 
             float4 frag(v2f_customrendertexture IN) : SV_Target
@@ -149,7 +154,7 @@ Shader "Clearwater/CRT/CloudDome"
                 float since = last.g > 0.5 ? cwModPos(w - last.r, CW_DOME_WRAP) : CW_DOME_WRAP;
                 float turn = cwDomeTurn(uv.x, w);
                 if (w - turn >= since) return tex2Dlod(_SelfTexture2D, float4(uv, 0.0, 0.0));
-                if (_CloudCover <= 0.0) return 0.0;
+                if (_CloudCover <= 0.0 || _CloudClassic > 0.5) return 0.0; // (1.2's clouds are drawn by the sky itself)
                 float az = uv.x * 2.0 * CW_PI;
                 float s = min(uv.y * H / (H - 1.0), 1.0);
                 float el = s * s * 0.5 * CW_PI;

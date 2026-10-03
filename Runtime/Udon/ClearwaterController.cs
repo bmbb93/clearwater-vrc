@@ -94,7 +94,15 @@ public class ClearwaterController : UdonSharpBehaviour
     [Range(0f, 1f)] public float soundVolume = 1f;
     [Tooltip("Length of the break timing track (= the shore loop)")]
     public float swashLoop = 90f;
+    [Tooltip("The buildings' boxes (scaled unit cubes; the same as Clearwater Sky's Sky Light Volumes): inside one the sea's " +
+             "sounds are shut out (Indoor Level), and the waterline under one makes no sound (no surf is heard from under a floor)")]
+    public Transform[] buildings;
+    [Tooltip("The surf and the distant sea indoors (in Buildings), times this")]
+    [Range(0f, 1f)] public float indoorLevel = 0.3f;
     float _submerged;
+    float _indoors; // 0 outside .. 1 in a building (eased)
+    bool[] _shoreUnder; // the shore points under a building (in plan)
+    Vector3 _shorePos;
     // the shore waves as the world was built: the breaker height (m; the surf is as loud as built at it) and whether the
     // coast has shore waves at all (the materials' _ShoreWaves)
     float _builtHeight = -1f;
@@ -132,6 +140,7 @@ public class ClearwaterController : UdonSharpBehaviour
         RefreshPlayers();
         if (!shoreWaves && shoreAudio != null) shoreAudio.Stop(); // still water: no surf
         RememberBuilt();
+        MarkShoreUnderBuildings();
         // where the swell starts to show, as set on the water (the others work out the surface's height too: the
         // waterline across a camera's view)
         if (waterMaterial != null)
@@ -174,6 +183,7 @@ public class ClearwaterController : UdonSharpBehaviour
         m.SetFloat("_CloudSpeed", skyMaterial.GetFloat("_CloudSpeed"));
         m.SetFloat("_CloudDir", skyMaterial.GetFloat("_CloudDir"));
         m.SetFloat("_CloudShift", skyMaterial.GetFloat("_CloudShift"));
+        m.SetFloat("_CloudClassic", skyMaterial.GetFloat("_CloudClassic"));
         m.SetFloat("_LandCover", skyMaterial.GetFloat("_LandCover"));
         m.SetFloat("_LandSetback", skyMaterial.GetFloat("_LandSetback"));
         m.SetFloat("_LandHeight", skyMaterial.GetFloat("_LandHeight"));
@@ -431,6 +441,35 @@ public class ClearwaterController : UdonSharpBehaviour
     float _shoreLoud = 1f;
     float _shoreDelayNow, _clockShift; // the swell's delay where the surf sounds from, and the shift eased toward it
     bool _clockShiftSet;
+    // which shore points lie under a building (in plan: a house stands over the beach, its floor above the waterline)
+    void MarkShoreUnderBuildings()
+    {
+        int n = shorePoints != null ? shorePoints.Length : 0;
+        _shoreUnder = new bool[n];
+        if (n > 0) _shorePos = shorePoints[0];
+        if (buildings == null) return;
+        for (int i = 0; i < n; i++)
+            for (int k = 0; k < buildings.Length; k++)
+            {
+                Transform b = buildings[k];
+                if (b == null) continue;
+                Vector3 l = b.InverseTransformPoint(new Vector3(shorePoints[i].x, b.position.y, shorePoints[i].z));
+                if (Mathf.Abs(l.x) <= 0.5f && Mathf.Abs(l.z) <= 0.5f) { _shoreUnder[i] = true; break; }
+            }
+    }
+
+    bool InBuilding(Vector3 p)
+    {
+        if (buildings == null) return false;
+        for (int k = 0; k < buildings.Length; k++)
+        {
+            if (buildings[k] == null) continue;
+            Vector3 l = buildings[k].InverseTransformPoint(p);
+            if (Mathf.Abs(l.x) <= 0.5f && Mathf.Abs(l.y) <= 0.5f && Mathf.Abs(l.z) <= 0.5f) return true;
+        }
+        return false;
+    }
+
     Vector3 NearestOnShore(Vector3 p)
     {
         int n = shorePoints.Length;
@@ -441,11 +480,13 @@ public class ClearwaterController : UdonSharpBehaviour
         Vector3 bestP = shorePoints[0];
         bool weighted = shoreExposure != null && shoreExposure.Length == n;
         bool timed = shoreDelay != null && shoreDelay.Length == n;
+        bool under = _shoreUnder != null && _shoreUnder.Length == n;
         for (int k = from; k <= to; k++)
         {
             int s = shoreClosed ? (k % segs + segs) % segs : Mathf.Clamp(k, 0, segs - 1);
             Vector3 a = shorePoints[s], b = shorePoints[(s + 1) % n];
             if (a.y < BreakY || b.y < BreakY) continue; // between two pieces of the line
+            if (under && (_shoreUnder[s] || _shoreUnder[(s + 1) % n])) continue; // (under a building's floor)
             Vector3 ab = b - a;
             float t = Mathf.Clamp01(((p.x - a.x) * ab.x + (p.z - a.z) * ab.z) / Mathf.Max(ab.x * ab.x + ab.z * ab.z, 1e-6f));
             Vector3 q = a + ab * t;
@@ -458,7 +499,8 @@ public class ClearwaterController : UdonSharpBehaviour
                 _shoreDelayNow = timed ? Mathf.Lerp(shoreDelay[s], shoreDelay[(s + 1) % n], t) : 0f;
             }
         }
-        return bestP;
+        if (best < float.MaxValue) _shorePos = bestP; // (else none near but under buildings: it stays where it was)
+        return _shorePos;
     }
 
     void UpdateAudio(Vector3 headPos, bool under)
@@ -480,10 +522,13 @@ public class ClearwaterController : UdonSharpBehaviour
 
         // quick crossfade into / out of the muffled underwater loop
         _submerged = Mathf.MoveTowards(_submerged, under ? 1f : 0f, Time.deltaTime * 5f);
+        // walls between: indoors the sea is heard muffled, eased over half a second through a door
+        _indoors = Mathf.MoveTowards(_indoors, InBuilding(headPos) ? 1f : 0f, Time.deltaTime * 2f);
+        float walls = Mathf.Lerp(1f, indoorLevel, _indoors);
         // (the surf as loud as built at the built wave height, louder or softer as the waves are set higher or lower)
         float surf = _builtHeight > 0f ? Mathf.Sqrt(ShoreWaveHeight() / _builtHeight) : 1f;
-        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? soundVolume * shoreLevel * surf * _shoreLoud * (1f - _submerged) : 0f;
-        if (bedAudio != null) bedAudio.volume = soundVolume * bedLevel * (1f - _submerged);
+        if (shoreAudio != null) shoreAudio.volume = shoreWaves ? soundVolume * shoreLevel * surf * _shoreLoud * (1f - _submerged) * walls : 0f;
+        if (bedAudio != null) bedAudio.volume = soundVolume * bedLevel * (1f - _submerged) * walls;
         if (underwaterAudio != null) underwaterAudio.volume = soundVolume * underwaterLevel * _submerged;
     }
 

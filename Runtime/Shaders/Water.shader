@@ -41,6 +41,7 @@ Shader "Clearwater/Water"
         [HideInInspector] _CloudSpeed ("Clouds: drift (m/s)", Float) = 8
         [HideInInspector] _CloudDir ("Clouds: drift direction (deg)", Float) = 60
         [HideInInspector] _CloudShift ("Clouds: drift so far (m)", Float) = 0
+        [HideInInspector] _CloudClassic ("Clouds: as in 1.2 (copied from the sky)", Float) = 0
         [HideInInspector] [NoScaleOffset] _CloudDome ("Clouds: the scene's dome (made with the scene)", 2D) = "black" {}
         [HideInInspector] [NoScaleOffset] _CloudWeather ("Clouds: where they are (the package's)", 2D) = "black" {}
         [HideInInspector] _LandCover ("Distant land: share of the horizon (copied from the sky)", Range(0, 1)) = 0.5

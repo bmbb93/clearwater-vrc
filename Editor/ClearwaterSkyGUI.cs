@@ -6,7 +6,7 @@ using UnityEngine;
 /// drawn there), so what you set shows everywhere at once.</summary>
 public class ClearwaterSkyGUI : ShaderGUI
 {
-    static readonly string[] Props = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir", "_LandCover", "_LandSetback", "_LandHeight" };
+    static readonly string[] Props = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir", "_CloudClassic", "_LandCover", "_LandSetback", "_LandHeight" };
 
     public override void OnGUI(MaterialEditor editor, MaterialProperty[] props)
     {

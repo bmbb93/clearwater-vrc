@@ -17,6 +17,9 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
 
 - Cloud shadows: the clouds cast soft shadows on the sea and the beach, drifting with them (at night they cut the moonlight)
 - The pebble's `Hand Reach`: the panel called up on the left hand in VR shows 25 cm beyond the hand (away from the eyes); right over the hand it was too close to work. `Hand Size` now defaults to 0.55 instead of 0.4 to match (pebbles already in a scene keep their values)
+- The panel called up on the left hand stays where it appeared (following the hand, it moved away when the right hand reached for it). It hides when the eyes are `Hand Close Distance` (1.5 m by default) away from it
+- `Buildings` and `Indoor Level` on Clearwater Controller: with the buildings' boxes (the same as the Sky Light Volumes) in it, the sea is shut out indoors (0.3 by default), and the surf no longer sounds from the waterline under a floor. In a house built over the beach, the surf sounded loud from the waterline under the floor
+- `As in 1.2` on the sky material: the clouds can go back to those up to 1.2 (flat clouds the sky draws for each pixel; no shadows), to keep the look of worlds made with 1.2. It is off by default (the new clouds). While it is on, the cloud dome is not drawn, so they cost the same as in 1.2
 
 ## [1.2.0] - 2026-10-03
 

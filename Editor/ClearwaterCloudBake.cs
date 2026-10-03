@@ -99,7 +99,7 @@ public static class ClearwaterCloudBake
         return true;
     }
 
-    static readonly string[] Floats = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir", "_CloudShift" };
+    static readonly string[] Floats = { "_CloudCover", "_CloudSize", "_CloudSpeed", "_CloudDir", "_CloudShift", "_CloudClassic" };
     static bool CopyFloats(Material from, Material to)
     {
         bool changed = false;

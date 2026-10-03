@@ -11,6 +11,7 @@ Shader "Clearwater/Skybox"
         _CloudSize ("Size (m across a cloud)", Float) = 900
         _CloudSpeed ("Drift speed (m/s, 0 = still)", Float) = 8
         _CloudDir ("Drift direction (degrees clockwise from +Z)", Range(0, 360)) = 60
+        [ToggleUI] _CloudClassic ("As in 1.2 (flat, drawn for each pixel; no shadows)", Float) = 0
         [HideInInspector] _CloudShift ("Drift so far (m, set while the world runs)", Float) = 0
         [HideInInspector] [NoScaleOffset] _CloudDome ("Clouds: the scene's dome (made with the scene)", 2D) = "black" {}
         [HideInInspector] [NoScaleOffset] _CloudWeather ("Clouds: where they are (the package's)", 2D) = "black" {}

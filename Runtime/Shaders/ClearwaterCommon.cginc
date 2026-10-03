@@ -192,6 +192,7 @@ float _CloudSize;  // m across a typical cloud
 float _CloudSpeed; // m/s the layer drifts
 float _CloudDir;   // degrees, the way it drifts: clockwise from world +z
 float _CloudShift; // m the layer has drifted on top of _CloudSpeed * time (the speed changed while the world ran)
+float _CloudClassic; // 1: the clouds of 1.2 instead (flat, drawn for each pixel by the sky; no shadows, no dome): see below
 Texture2D _CloudDome;          // the scene's (ClearwaterCloudBake.EnsureScene)
 float4 _CloudDome_TexelSize;
 Texture2D _CloudWeather;       // where the clouds are and how tall they grow (the package's; r strength, g height)
@@ -277,10 +278,61 @@ float4 cwCloudDome(float3 d)
     return _CloudDome.SampleLevel(cw_trilinear_repeat_sampler, uv, 0);
 }
 
+// The clouds of 1.2 (_CloudClassic), kept for the scenes made with them: a flat layer 1.5 km up, its noise drawn for each
+// pixel of the sky (and of its reflections), lit by which side of a cloud faces the sun. No shadows, and the dome is not
+// drawn (CRT_CloudDome.shader leaves it empty). As in 1.2.0, line for line.
+// where along d (JS space, d.y > 0) the ray meets the layer, in cloud sizes (drifted and warped: the shapes
+// change as they go); fp = how many cloud sizes a pixel spans there (fwE = fwidth(d.y))
+float2 cwClassicCloudUV(float3 d, float fwE, out float fp)
+{
+    float y = d.y + 0.06;                          // (the layer flattened toward the horizon: never infinitely far)
+    float s = 1.0 / max(_CloudSize, 50.0);
+    float2 p = d.xz * (CW_CLOUD_H / y) * s;
+    fp = fwE * CW_CLOUD_H * (length(d.xz) + y) / (y * y) * s;
+    float a = radians(_CloudDir);
+    float t = _Time.y;
+    float2 q = p - float2(sin(a), -cos(a)) * ((_CloudSpeed * t + _CloudShift) * s);
+    // a slow warp of its own, so they grow, shrink and part rather than slide past like a picture
+    float tw = t * 0.012;
+    q += 0.45 * float2(cwNoise(q * 0.7 + float2(tw, 3.1)), cwNoise(q * 0.7 + float2(5.7, -tw))) - 0.225;
+    return q;
+}
+
+// the clouds' two broadest octaves (as in cwFbm2): enough to tell which side of a cloud faces the sun
+inline float cwClassicCloudCoarse(float2 q) { return 0.5 * cwNoise(q) + 0.25 * cwNoise(q * 2.03 + 17.1); }
+
+// density 0..1 of the layer at q, a pixel spanning fp there (far off, the detail averages out to haze);
+// coarse = its two broadest octaves there, tau = its optical depth (~1 at the frayed edges, tens in the core)
+float cwClassicCloudDensity(float2 q, float fp, out float coarse, out float tau)
+{
+    float far = smoothstep(0.15, 0.6, fp);
+    coarse = cwClassicCloudCoarse(q);
+    // the finer octaves turned off the lattice's axes, so its squares don't show along the edges
+    float2 p = mul(float2x2(0.80, -0.60, 0.60, 0.80), q) * 4.12 + 3.3;
+    float2 pd = mul(float2x2(0.28, 0.96, -0.96, 0.28), q) * 17.3 + 7.7;
+    float n = coarse + 0.125 * cwNoise(p) + 0.0625 * cwNoise(mul(float2x2(0.80, -0.60, 0.60, 0.80), p) * 2.03 + 11.9)
+            + 0.05 * (cwNoise(pd) - 0.5) * (1.0 - smoothstep(0.01, 0.04, fp)); // (crisp edges)
+    n = lerp(n, 0.47, far);
+    float thr = lerp(0.74, 0.30, saturate(_CloudCover));
+    float dens = smoothstep(thr, thr + 0.12 + 0.3 * far, n);
+    // what its opacity says across the edge (so the sky shows through only as much as the sunlight does: no darker
+    // ring between a bright edge and the inside), then climbing into the tens once it is opaque
+    float x = (n - thr) / 0.12;
+    tau = (-log(1.0 - 0.99 * dens) + min(60.0 * max(x - 1.0, 0.0), 60.0)) * (1.0 - 0.8 * far);
+    return dens;
+}
+
 // how much of the sun's direct light gets through the clouds seen along d (for the sun's disc)
 float cwCloudSunT(float3 d)
 {
     if (_CloudCover <= 0.0 || d.y <= 0.0) return 1.0;
+    [branch] if (_CloudClassic > 0.5)
+    {
+        // (1.2's: exp(-optical depth), so a cumulus hides it entirely and only its frayed edges let a dimmed disc through)
+        float fp, coarse, tau; float2 q = cwClassicCloudUV(d, 0.0, fp);
+        cwClassicCloudDensity(q, 0.0, coarse, tau);
+        return exp(-tau);
+    }
     return 1.0 - cwCloudDome(d).a;
 }
 
@@ -291,7 +343,7 @@ float cwCloudSunT(float3 d)
 static float cwCloudShade = 1.0;
 float cwCloudShadow(float3 wpos)
 {
-    [branch] if (_CloudCover <= 0.0) return 1.0;
+    [branch] if (_CloudCover <= 0.0 || _CloudClassic > 0.5) return 1.0; // (1.2's clouds cast none)
     float3 s = cwSun();
     if (s.y <= 0.0) return 1.0;
     float3 pj = cwToJS(wpos);
@@ -322,8 +374,33 @@ float3 cwCloudLit(float4 cl, float3 hor)
 // the sky c seen along d with the clouds in front of it (the far ones fade into the horizon's colour that way: the sky
 // low over it, looked up here, where there are clouds. The sky's own hor is the sky itself higher than 17 degrees, and
 // the clouds there, still a tenth faded, showed a line where it changed)
-float3 cwCloudsOver(float3 c, float3 d)
+float3 cwCloudsOver(float3 c, float3 d, float3 sun, float mu, float3 hor, float fwE)
 {
+    [branch] if (_CloudCover > 0.0 && d.y > 0.0 && _CloudClassic > 0.5)
+    {
+        // 1.2's (sun = the sun along which the sky is lit, mu = the cosine to it, hor = the sky's horizon colour there,
+        // fwE = fwidth(d.y)): after sunset the sun still lights them from its side while the moon lights the ground
+        [branch] if (CW_TOD && _Udon_CWCloudLight.w > 0.5) { sun = normalize(cwToJS(_Udon_CWSun.xyz)); mu = dot(d, sun); }
+        float fp, coarse, tau; float2 q = cwClassicCloudUV(d, fwE, fp);
+        float dens = cwClassicCloudDensity(q, fp, coarse, tau);
+        [branch] if (dens > 0.0)
+        {
+            // lit from the sun's side, shaded where the cloud thickens toward the sun
+            float2 toSun = normalize(sun.xz + 1e-5) * 0.12;
+            float lit = saturate(0.55 + 3.5 * (coarse - cwClassicCloudCoarse(q + toSun)));
+            lit = lerp(lit, 0.6, smoothstep(0.15, 0.6, fp));
+            float3 shade = float3(0.46, 0.52, 0.61), lamp = float3(1.30, 1.24, 1.12);
+            [branch] if (CW_TOD) { shade = cwAmbientIrr() * 0.97; lamp = shade + _Udon_CWCloudLight.rgb * 0.14; } // (the fixed ones, at its reference)
+            float3 col = lerp(shade, lamp, lit) * lerp(0.75, 1.0, saturate(sun.y * 3.0));
+            // close to the sun they glow with the sunlight they pass on, sent forward by the droplets
+            float3 sunC = CW_TOD ? _Udon_CWCloudLight.rgb : float3(1.0, 0.86, 0.66) * 6.0;
+            float3 fwd = sunC * 0.4 * cwPhaseHG(mu, 0.9) * dens * exp(-tau / 12.0);
+            col = lerp(hor, col, smoothstep(0.0, 0.25, d.y)); // far ones fade into the haze
+            float hz = smoothstep(0.0, 0.04, d.y);
+            c = lerp(c, col, dens * hz) + fwd * hz;
+        }
+        return c;
+    }
     [branch] if (_CloudCover > 0.0 && d.y > 0.0)
     {
         float4 cl = cwCloudDome(d);
@@ -398,7 +475,7 @@ float3 cwSkyOutdoor(float3 d, float3 sun, float fwE)
         c = lerp(hor, zen, pow(saturate(e), 0.42));
         c += float3(1.0, 0.86, 0.66) * (0.22 * pow(max(mu, 0.), 6.) + 0.30 * pow(max(mu, 0.), 64.) + 1.6 * pow(max(mu, 0.), 2400.));
     }
-    c = cwCloudsOver(c, d);
+    c = cwCloudsOver(c, d, sun, mu, hor, fwE);
     // distant headland: pine canopy, some 2 km off
     float a = atan2(d.z, d.x);
     float landHere, r = cwHeadlandRidge(d, landHere);
