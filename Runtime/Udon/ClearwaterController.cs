@@ -101,7 +101,6 @@ public class ClearwaterController : UdonSharpBehaviour
     [Range(0f, 1f)] public float indoorLevel = 0.3f;
     float _submerged;
     float _indoors; // 0 outside .. 1 in a building (eased)
-    bool[] _shoreUnder; // the shore points under a building (in plan)
     Vector3 _shorePos;
     // the shore waves as the world was built: the breaker height (m; the surf is as loud as built at it) and whether the
     // coast has shore waves at all (the materials' _ShoreWaves)
@@ -140,7 +139,7 @@ public class ClearwaterController : UdonSharpBehaviour
         RefreshPlayers();
         if (!shoreWaves && shoreAudio != null) shoreAudio.Stop(); // still water: no surf
         RememberBuilt();
-        MarkShoreUnderBuildings();
+        if (shorePoints != null && shorePoints.Length > 0) _shorePos = shorePoints[0];
         // where the swell starts to show, as set on the water (the others work out the surface's height too: the
         // waterline across a camera's view)
         if (waterMaterial != null)
@@ -441,21 +440,18 @@ public class ClearwaterController : UdonSharpBehaviour
     float _shoreLoud = 1f;
     float _shoreDelayNow, _clockShift; // the swell's delay where the surf sounds from, and the shift eased toward it
     bool _clockShiftSet;
-    // which shore points lie under a building (in plan: a house stands over the beach, its floor above the waterline)
-    void MarkShoreUnderBuildings()
+    // whether p lies under a building, in plan (a house stands over the beach, its floor above the waterline)
+    bool UnderBuilding(Vector3 p)
     {
-        int n = shorePoints != null ? shorePoints.Length : 0;
-        _shoreUnder = new bool[n];
-        if (n > 0) _shorePos = shorePoints[0];
-        if (buildings == null) return;
-        for (int i = 0; i < n; i++)
-            for (int k = 0; k < buildings.Length; k++)
-            {
-                Transform b = buildings[k];
-                if (b == null) continue;
-                Vector3 l = b.InverseTransformPoint(new Vector3(shorePoints[i].x, b.position.y, shorePoints[i].z));
-                if (Mathf.Abs(l.x) <= 0.5f && Mathf.Abs(l.z) <= 0.5f) { _shoreUnder[i] = true; break; }
-            }
+        if (buildings == null) return false;
+        for (int k = 0; k < buildings.Length; k++)
+        {
+            Transform b = buildings[k];
+            if (b == null) continue;
+            Vector3 l = b.InverseTransformPoint(new Vector3(p.x, b.position.y, p.z));
+            if (Mathf.Abs(l.x) <= 0.5f && Mathf.Abs(l.z) <= 0.5f) return true;
+        }
+        return false;
     }
 
     bool InBuilding(Vector3 p)
@@ -480,16 +476,30 @@ public class ClearwaterController : UdonSharpBehaviour
         Vector3 bestP = shorePoints[0];
         bool weighted = shoreExposure != null && shoreExposure.Length == n;
         bool timed = shoreDelay != null && shoreDelay.Length == n;
-        bool under = _shoreUnder != null && _shoreUnder.Length == n;
+        bool houses = buildings != null && buildings.Length > 0;
         for (int k = from; k <= to; k++)
         {
             int s = shoreClosed ? (k % segs + segs) % segs : Mathf.Clamp(k, 0, segs - 1);
             Vector3 a = shorePoints[s], b = shorePoints[(s + 1) % n];
             if (a.y < BreakY || b.y < BreakY) continue; // between two pieces of the line
-            if (under && (_shoreUnder[s] || _shoreUnder[(s + 1) % n])) continue; // (under a building's floor)
             Vector3 ab = b - a;
             float t = Mathf.Clamp01(((p.x - a.x) * ab.x + (p.z - a.z) * ab.z) / Mathf.Max(ab.x * ab.x + ab.z * ab.z, 1e-6f));
             Vector3 q = a + ab * t;
+            // not from under a floor: the nearest point of the line out from under the building, toward the nearer end
+            // that is out (the points lie some metres apart, more than a room is wide)
+            if (houses && UnderBuilding(q))
+            {
+                bool outA = !UnderBuilding(a), outB = !UnderBuilding(b);
+                if (!outA && !outB) continue;
+                float tOut = outA && (!outB || t < 0.5f) ? 0f : 1f, tIn = t;
+                for (int i = 0; i < 8; i++)
+                {
+                    float tm = (tOut + tIn) * 0.5f;
+                    if (UnderBuilding(a + ab * tm)) tIn = tm; else tOut = tm;
+                }
+                t = tOut;
+                q = a + ab * t;
+            }
             float d = (p.x - q.x) * (p.x - q.x) + (p.z - q.z) * (p.z - q.z);
             float e = weighted ? Mathf.Lerp(shoreExposure[s], shoreExposure[(s + 1) % n], t) : 1f;
             d /= Mathf.Max(e * e, 0.0025f);
