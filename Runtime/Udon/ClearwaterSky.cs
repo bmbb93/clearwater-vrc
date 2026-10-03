@@ -52,8 +52,9 @@ public class ClearwaterSky : UdonSharpBehaviour
     [Tooltip("A realtime reflection probe of the sky alone (culling mask Nothing), rendered again as the sky changes: the " +
              "reflections of everything else (avatars, the world) then show the sky of the moment")]
     public ReflectionProbe reflectionProbe;
-    [Tooltip("Seconds between updates while the day goes by")]
-    public float updateInterval = 0.1f;
+    [Tooltip("Seconds between updates of the sky's light while the day goes by (0: every frame. Between them, the sun, " +
+             "the moon and the stars still move every frame)")]
+    public float updateInterval = 0f; // (every frame, about 0.11 ms: every 0.1 s, the sky's brightness changed in steps at dusk)
     [Tooltip("Seconds between renders of the reflection probe while the day goes by")]
     public float probeInterval = 10f;
 

@@ -291,7 +291,7 @@ Changing values in the Inspector shows up immediately in the Scene view and Game
 | `Night brightness` | Brightness of a moonlit night (relative to day; default 0.05) |
 | `Stars` | Brightness of the stars and the Milky Way |
 | `Underwater Glow` | On nights with neither sun nor moon lighting, a faint blue-green brightness left in the water when seen from underwater (default 1; 0 is pitch dark, 3 is quite bright) |
-| `Update interval` / `Probe interval` | When the time passes, how often the sky's light is updated (default 0.1 s; the sun and the moon move every frame) / how often the reflections are redrawn (10 s) |
+| `Update interval` / `Probe interval` | When the time passes, how often the sky's light is updated (default 0: every frame; with an interval, the sun and the moon still move every frame) / how often the reflections are redrawn (10 s) |
 
 The night brightness includes the eye's adaptation to the dark. The amount of light drops to about one millionth from day to a moonlit night, but the screen does not go pitch dark: a moonlit night is about 5% as bright as day, with faded, bluish colors. Before sunrise and after sunset, the afterglow on the horizon looks bright against the darkened scenery.
 
