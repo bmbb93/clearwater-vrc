@@ -244,7 +244,7 @@ footer a, .text a { color: var(--accent); }
   <header class="top">
     <div class="eyebrow">Clearwater VRC 1.0.0</div>
     <h1>Clearwater VRC の仕組み</h1>
-    <p class="lead">VRChat ワールドの透明な浅瀬を、エディターで焼き込んだ少しのデータと、毎フレームの GPU の計算で描いています。水面の揺れ、水越しの水底、光の模様、打ち寄せる波、水中からの眺め、空の色、最後の色の整え方を、動く図で順に見ていきます。</p>
+    <p class="lead">VRChat ワールドの透明な浅瀬を、エディターでベイクした少しのデータと、毎フレームの GPU の計算で描いています。水面の揺れ、水越しの水底、光の模様、打ち寄せる波、水中からの眺め、空の色、最後の色の整え方を、動く図で順に見ていきます。</p>
     <p class="lead">屈折率、水の吸収、臨界角、トーンカーブなどの数値は、パッケージの実装と同じ値です。寸法と一部の色は、見やすさのために誇張したり簡略化したりしています。詳しくは <a href="https://github.com/bmbb93/clearwater-vrc/blob/main/docs/technical.md">docs/technical.md</a> にあります。</p>
     <div class="toolbar">
       <nav class="toc" aria-label="目次">
@@ -301,7 +301,7 @@ footer a, .text a { color: var(--accent); }
     <div class="text">
       <div class="chap">technical.md 5・7 章</div>
       <h2>水越しの水底は、画面から拾わずに計算で求める</h2>
-      <p>水面から見える水底は、画面に描かれた水底のメッシュではありません。水面のシェーダーが、屈折した視線を、焼き込んだ水底の深さの式に当てて求めています。まず水面の真下の深さで交点を仮に置き（1）、その位置の深さで置き直し（2）、もう一度置き直します（3）。3 回で、起伏のある水底にもほぼ正確に当たります。</p>
+      <p>水面から見える水底は、画面に描かれた水底のメッシュではありません。水面のシェーダーが、屈折した視線を、ベイクした水底の深さの式に当てて求めています。まず水面の真下の深さで交点を仮に置き（1）、その位置の深さで置き直し（2）、もう一度置き直します（3）。3 回で、起伏のある水底にもほぼ正確に当たります。</p>
       <p>交わった所の砂の色に、水の中を進んだ距離だけ吸収を掛けます。赤が一番早く消えるので、深い所ほど青緑になります。この方式なら、画面の外や手前の物に隠れた水底でも絵が崩れません。水の中にあるアバターや杭だけは、深度テクスチャで見つけて画面から拾います。</p>
       <dl class="facts">
         <dt>水面の屈折率</dt><dd>1.3335</dd>
@@ -348,7 +348,7 @@ footer a, .text a { color: var(--accent); }
         <dt>波音のループ</dt><dd>90 s、崩れる瞬間 27 か所</dd>
         <dt>崩れる高さ</dt><dd>0.14 m <span class="jp">（Breaker height）</span></dd>
         <dt>打ち上げ</dt><dd><span class="jp">崩れる高さの 2.6 倍（Run-up）</span></dd>
-        <dt>場所ごとの遅れ</dt><dd>√(g·h) <span class="jp">で焼き込み</span></dd>
+        <dt>場所ごとの遅れ</dt><dd>√(g·h) <span class="jp">でベイク</span></dd>
       </dl>
     </div>
     <figure>
