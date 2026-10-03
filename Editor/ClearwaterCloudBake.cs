@@ -207,12 +207,14 @@ public static class ClearwaterCloudBake
 
     // Where the clouds are, 12 cloud sizes across: r how strongly (spread evenly over 0..1, so a cover of c lets clouds
     // over about a share c of the sky), g how tall they grow, b a slow field (spread evenly too) that raises and lowers
-    // the cover where it is read five times as large (ClearwaterCommon: cwCloudWeather)
+    // the cover where it is read five times as large, a another that chooses between two readings of the map (so its
+    // tiles never come round alike: ClearwaterCommon: cwCloudWeather)
     static Texture2D BakeWeather()
     {
         int n = WeatherN;
         var r = new float[n * n];
         var slow = new float[n * n];
+        var slow2 = new float[n * n];
         var px = new Color[n * n];
         for (int y = 0; y < n; y++)
         for (int x = 0; x < n; x++)
@@ -223,7 +225,7 @@ public static class ClearwaterCloudBake
                                          + 0.15f * (0.5f + 0.5f * Perlin3(u * 16, v * 16, 0.7f, 16, 93)));
             px[y * n + x].g = 0.5f + 0.5f * Perlin3(u * 3, v * 3, 0.2f, 3, 94);
             slow[y * n + x] = 0.6f * Perlin3(u * 2, v * 2, 0.4f, 2, 95) + 0.3f * Perlin3(u * 4, v * 4, 0.6f, 4, 96) + 0.1f * Perlin3(u * 8, v * 8, 0.8f, 8, 97);
-            px[y * n + x].a = 1f;
+            slow2[y * n + x] = 0.6f * Perlin3(u * 2, v * 2, 0.45f, 2, 98) + 0.3f * Perlin3(u * 4, v * 4, 0.65f, 4, 99) + 0.1f * Perlin3(u * 8, v * 8, 0.85f, 8, 100);
         }
         var order = new int[n * n];
         for (int i = 0; i < order.Length; i++) order[i] = i;
@@ -232,6 +234,9 @@ public static class ClearwaterCloudBake
         for (int i = 0; i < order.Length; i++) order[i] = i;
         System.Array.Sort(order, (a, b) => slow[a].CompareTo(slow[b]));
         for (int k = 0; k < order.Length; k++) px[order[k]].b = (float)k / (order.Length - 1);
+        for (int i = 0; i < order.Length; i++) order[i] = i;
+        System.Array.Sort(order, (a, b) => slow2[a].CompareTo(slow2[b]));
+        for (int k = 0; k < order.Length; k++) px[order[k]].a = (float)k / (order.Length - 1);
         var t = new Texture2D(n, n, TextureFormat.RGBA32, true, true)
         {
             wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear

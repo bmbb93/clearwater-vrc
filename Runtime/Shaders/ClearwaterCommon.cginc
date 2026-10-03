@@ -202,17 +202,36 @@ SamplerState cw_trilinear_repeat_sampler; // (shared with the bed look: the shad
 
 // The weather at xz (m across the ground, JS space, before the drift): x how strongly it puts a cloud there (0: none), y
 // how tall it lets it grow. Clouds over a share of the sky as large as the cover, the cover itself raised and lowered
-// over some 25 km by the weather's slow field (b): fuller skies here, clear gaps there (alike everywhere, the clouds
-// lay evenly spaced on to the horizon)
-float2 cwCloudWeather(float2 xz, float lod)
+// over some 25 km by the weather's slow field (b): fuller skies here, clear gaps there. The map tiles every 10.8 km (at
+// the size of 900 m) and its slow field every 54 km: far off, many tiles away, the clouds came round alike in a pattern
+// to the horizon. So the slow fields are read at two scales that never meet, and the map twice, the second time turned
+// by 37 degrees and 0.77 times as large, the second slow field (a) choosing between them from place to place: their
+// clouds whole (a warp of the reading stretched them into streaks), and smaller here and there.
+// the slow fields at xz: x the cover's, y the share of the second reading (they change over tens of km: a march reads
+// them once a step, for the step and its light toward the sun)
+float2 cwCloudSlow(float2 xz, float lod)
 {
     float s = 1.0 / (max(_CloudSize, 50.0) * 12.0);
-    float4 w = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, xz * s, lod);
-    float m = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, xz * (s * 0.2) + 0.37, lod + 2.0).b;
-    float c = saturate(_CloudCover);
-    float cover = saturate(c + (m - 0.5) * 2.4 * min(c, 1.0 - c));
-    return float2(saturate((w.r - (1.0 - cover)) * 4.0), w.g);
+    float2 m1 = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, xz * (s * 0.2) + 0.37, lod + 2.0).ba;
+    float2 m2 = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, xz * (s * 0.1317) + float2(0.71, 0.13), lod + 2.0).ba;
+    float2 m = saturate(0.5 + ((m1 + m2) * 0.5 - 0.5) * 1.6); // (the mean of two spread wider)
+    return float2(m.x, smoothstep(0.35, 0.65, m.y));
 }
+float2 cwCloudWeather(float2 xz, float lod, float2 slow)
+{
+    float s = 1.0 / (max(_CloudSize, 50.0) * 12.0);
+    float2 w = 0.0;
+    [branch] if (slow.y < 1.0) w = _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, xz * s, lod).rg * (1.0 - slow.y);
+    [branch] if (slow.y > 0.0)
+    {
+        float2 turned = float2(0.799 * xz.x - 0.602 * xz.y, 0.602 * xz.x + 0.799 * xz.y) * (s / 0.77) + float2(0.5, 0.25);
+        w += _CloudWeather.SampleLevel(cw_trilinear_repeat_sampler, turned, lod).rg * slow.y;
+    }
+    float c = saturate(_CloudCover);
+    float cover = saturate(c + (slow.x - 0.5) * 2.4 * min(c, 1.0 - c));
+    return float2(saturate((w.x - (1.0 - cover)) * 4.0), w.y);
+}
+float2 cwCloudWeather(float2 xz, float lod) { return cwCloudWeather(xz, lod, cwCloudSlow(xz, lod)); }
 
 // how far the layer has drifted at time (s; m across the ground, JS space): the clouds at p are the weather's at p - this
 inline float2 cwCloudDriftDir() { float a = radians(_CloudDir); return float2(sin(a), -cos(a)); }

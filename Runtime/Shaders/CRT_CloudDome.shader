@@ -46,13 +46,14 @@ Shader "Clearwater/CRT/CloudDome"
 
             float heightFrac(float y) { return saturate((y - CW_CLOUD_H) / (CLOUD_TOP - CW_CLOUD_H)); }
 
-            // the density at p (m, JS space, from the eye's foot); cheap: the big shape only (for the light toward the sun)
-            float density(float3 p, float2 wind, float time, bool cheap)
+            // the density at p (m, JS space, from the eye's foot); cheap: the big shape only (for the light toward the sun);
+            // slow: the weather's slow fields there (cwCloudSlow)
+            float density(float3 p, float2 wind, float time, bool cheap, float2 slow)
             {
                 float h = heightFrac(p.y);
                 float size = max(_CloudSize, 50.0);
                 // where the weather lets a cloud be, and how strongly (x) and how tall it may grow (y)
-                float2 w = cwCloudWeather(p.xz - wind, 0.0);
+                float2 w = cwCloudWeather(p.xz - wind, 0.0, slow);
                 float cl = w.x;
                 if (cl <= 0.0) return 0.0;
                 // cumulus: a flat, sharp base; the stronger ones heaped higher; rounded toward the top
@@ -99,27 +100,34 @@ Shader "Clearwater/CRT/CloudDome"
                 float size = max(_CloudSize, 50.0);
                 float sigma = 0.02 * 900.0 / size; // extinction per m at density 1 (scaled with the cloud size)
                 float2 wind = cwCloudWindAt(time);
-                float jitter = frac(sin(dot(d.xz, float2(12.9898, 78.233))) * 43758.5453);
+                // a low sun's light crosses the layer side on, through the clouds' tops and their neighbours: shaded as
+                // deep as overhead, the frayed tops at sunset went grey, dirty smudges on the lit clouds. So the lower the
+                // sun, the less the clouds shade themselves and the more of the light scattered many times gets through
+                float hi = smoothstep(0.05, 0.3, L.y);
+                float tauK = sigma * lerp(2.0, 4.0, hi), msK = lerp(1.0, 0.6, hi), msT = lerp(0.15, 0.25, hi);
+                // (no jitter of the steps: a texel's own random start speckled the clouds with a fine grain, a sponge
+                // that showed most on the low sun's lit faces. The 64 steps leave no visible slices)
                 float T = 1.0;
                 float2 C = 0.0;
                 [loop] for (int i = 0; i < n; i++)
                 {
                     if (T < 0.01) break;
-                    float3 p = ro + d * (t0 + (i + jitter) * dt);
-                    float den = density(p, wind, time, false);
+                    float3 p = ro + d * (t0 + (i + 0.5) * dt);
+                    float2 slow = cwCloudSlow(p.xz - wind, 0.0);
+                    float den = density(p, wind, time, false, slow);
                     [branch] if (den > 0.001)
                     {
                         // the cloud toward the sun, by its big shape (shaded by the lobes, never marbled by the detail)
                         float tau = 0.0, ls = 60.0;
                         [loop] for (int j = 0; j < 6; j++)
                         {
-                            tau += density(p + L * ls * (j + 0.5), wind, time, true) * ls;
+                            tau += density(p + L * ls * (j + 0.5), wind, time, true, slow) * ls;
                             ls *= 1.6;
                         }
-                        tau *= sigma * 4.0; // (deeper than the cloud seen through: a see-through cloud still shades itself)
+                        tau *= tauK; // (deeper than the cloud seen through, x4 overhead: a see-through cloud still shades itself)
                         float powder = 1.0 - exp(-den * sigma * 200.0);
                         float h = heightFrac(p.y);
-                        float2 S = float2((exp(-tau) * ph1 + 0.6 * exp(-tau * 0.25) * ph2) * lerp(1.0, powder, 0.6) * 10.0,
+                        float2 S = float2((exp(-tau) * ph1 + msK * exp(-tau * msT) * ph2) * lerp(1.0, powder, 0.6) * 10.0,
                                           lerp(0.65, 1.0, h));
                         float at = exp(-den * sigma * dt);
                         C += T * S * (1.0 - at);
