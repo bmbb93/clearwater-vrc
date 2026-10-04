@@ -15,8 +15,8 @@ using Object = UnityEngine.Object;
 /// Build Scene's), a cove modelled as a mesh (user terrain), a harbour (a quay, a stepped revetment, a ramp, a pier on
 /// piles), a swimming pool (a user terrain with still water), a resort (the sea and two pools at other heights) and a
 /// beach made with a Unity Terrain; with VRC Light Volumes in the project, also the beach at night lit by point light
-/// volumes, one of them moving. Each has the sky's panel, called up anywhere (over the hand in VR, in front of
-/// the view on a desktop); the Beach, the sample of a whole scene, also has the pebble by the spawn that shows it.
+/// volumes, one of them moving. Each has the sky's panel, called up anywhere (over the hand in VR, in the middle of
+/// the view while Tab is held on a desktop), and no pebble to show it.
 /// All tone map in post-processing, as a new scene does. Tools > Clearwater > Demo Scenes > Build Demo
 /// Scenes makes them in Assets/Clearwater/Demo (the scenes, and their meshes, textures and materials, all made here);
 /// each is a new Clearwater scene with its own ground, its bakes in a folder of its own in Generated like any scene's
@@ -81,11 +81,11 @@ public static class ClearwaterDemoScenes
     // ------------------------------------------------------------------ scenes
 
     // the beach as Build Scene makes it: Clearwater's own generated ground (a straight coast, its cross-section and
-    // relief), nothing added but the sky's panel and the pebble that shows it
+    // relief), nothing added but the sky's panel
     static void BuildBeach()
     {
         NewScene("Demo_Beach");
-        SkyPanel(pebble: true);
+        SkyPanel();
         EditorSceneManager.SaveOpenScenes();
     }
 
@@ -553,11 +553,11 @@ public static class ClearwaterDemoScenes
         }
     }
 
-    // the sky's panel, called up anywhere; with the pebble by the spawn that shows it (the Beach's alone)
-    static void SkyPanel(bool pebble = false)
+    // the sky's panel, called up anywhere (by a caller with no pebble: the hand and the key call it up well enough)
+    static void SkyPanel()
     {
         var sky = Object.FindObjectOfType<ClearwaterSky>(true);
-        if (sky != null) ClearwaterSkySetup.AddPanel(sky, pebble);
+        if (sky != null) ClearwaterSkySetup.AddPanel(sky, pebble: false);
     }
 
     // the line drawn to meet the ground's shore (z = shore(x)) at the walkable area's edges, on out straight past them

@@ -589,7 +589,7 @@ sequenceDiagram
 | パネルの見た目 | Face | 5 UI | 入れ子のCanvas。左に空（Sky：スライダー4本とトグル）、右に波（Waves：スライダー3本と右下にReset allボタン）の2ペイン。見出しは空を暖色、波を寒色にし、間に仕切り線。106 × 57cm。文字はTextMesh Pro（既定のフォント。Essential Resourcesがなければ取り込む）、図形はVRChatの超解像UIシェーダーのマテリアル（`Generated/SkyPanelUI.mat`）。SDKのビルダーの警告（UnityのUIシェーダー、TextMesh Proでない文字）に先に応えたもの |
 | 小石 | Sky Stone (Clearwater) | 17 Walkthrough | 当たり判定（凸のメッシュ）とClearwaterSkyPanelOpenerのUdon。Interactの表示は「Sky & Waves」 |
 | 小石の見た目 | Look | 5 UI | 小石のメッシュ（約30cm） |
-| 呼び出し役（小石の代わり） | Sky Panel Caller (Clearwater) | 17 Walkthrough | ClearwaterSkyPanelOpenerのUdonだけ。見た目も当たり判定もなく、手元に呼び出す入力だけを受ける。Beach以外のデモが小石の代わりに持つ |
+| 呼び出し役（小石の代わり） | Sky Panel Caller (Clearwater) | 17 Walkthrough | ClearwaterSkyPanelOpenerのUdonだけ。見た目も当たり判定もなく、手元に呼び出す入力だけを受ける。デモが小石の代わりに持つ |
 
 **見た目をUIレイヤーに置く理由**。VRChatのカメラ（写真・配信用）は、UIレイヤーを写しません（カメラの設定でUIを表示したときは写ります）。一方で、操作を受ける部分までUIレイヤーにすると、VRChatのメニューを開いている間しか触れなくなります。そこで、見た目だけを子にしてUIレイヤーに置き、操作を受ける親はWalkthroughに残しています。Walkthroughはアバターとぶつからないので、パネルや小石を通り抜けられます。
 

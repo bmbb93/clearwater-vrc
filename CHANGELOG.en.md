@@ -11,6 +11,7 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
 ### Changed
 
 - On desktop the sky panel shows only while the Tab key is held, in the middle of the screen, and follows the view. VRChat frees the cursor while Tab is held, so you click it as it is. It used to be left 1.2 m in front of you, and once Tab was released the cursor went back to the center and aiming at it turned the view. The pebble's `Desktop Distance` is gone, replaced by `Desktop Fill` (how much of the view it fills; 64% by default)
+- Build Demo Scenes no longer places the pebble that shows the panel, not even in Beach. Every demo has only the caller with no visuals (Sky Panel Caller), and the panel comes with two pulls of the trigger in VR or Tab on desktop
 
 ### Added
 
