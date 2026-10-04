@@ -6,6 +6,18 @@ The changes in each version of Clearwater VRC (`com.vbamboo.clearwater`). The fo
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 Each version's section, with the Japanese one in `CHANGELOG.md`, makes its release notes on GitHub.
 
+## [1.3.1] - Unreleased
+
+### Changed
+
+- The sky panel is brought up a new way. In VR it rides on the left wrist (facing as VizVid's Overlay Control does) and shows while you look at it (the double pull of the left trigger is gone). On desktop it shows only while the Tab key is held, in the middle of the screen, and follows the view. VRChat frees the cursor while Tab is held, so you click it as it is (it used to be left in front of you, and once Tab was released the cursor went back to the center and aiming at it turned the view). The panel shown by the pebble works as before, and while it is out the wrist and Tab leave it there. The pebble's `Double Tap Time`, `Hand Size`, `Hand Reach`, `Hand Close Distance` and `Desktop Distance` are gone, replaced by `Wrist Size`, `Wrist Offset`, `Wrist Shift`, `Look Angle` and `Desktop Fill`
+
+### Added
+
+- The panel fades in (0.18 s), growing a little, and out (0.15 s) (a CanvasGroup on the panel; `Show Time`, `Hide Time`)
+- In third person view (F5), Tab shows "the panel works in first person (F5)" instead of the panel (in third person Tab turns the camera and frees no cursor)
+- In an existing scene, run Add Sky Control Panel again to get the fade and the hint (without it, the new way of bringing it up still works)
+
 ## [1.3.0] - 2026-10-03
 
 ### Changed

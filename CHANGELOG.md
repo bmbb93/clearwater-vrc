@@ -4,6 +4,18 @@
 
 Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き方は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に、版の番号は[セマンティック バージョニング](https://semver.org/lang/ja/)に従います。各版の節は、英語の `CHANGELOG.en.md` の節と合わせて、GitHub のリリースノートになります。
 
+## [1.3.1] - Unreleased
+
+### 変更
+
+- 空のパネルの呼び出し方を変えました。VR では左手首に付き（VizVid の Overlay Control と同じ向き）、手首を見ている間だけ出ます（左手のトリガー 2 回はなくなりました）。デスクトップでは Tab キーを押している間だけ、画面の真ん中に出て、視点を動かしてもついてきます。Tab を押している間は VRChat がカーソルを自由にするので、そのままクリックで操作できます（これまでは目の前に置いたままで、Tab を離すとカーソルが戻り、照準を合わせようとすると視点が動きました）。小石で出したパネルは今までどおりで、出ている間は手首と Tab では動かしません。小石の `Double Tap Time`・`Hand Size`・`Hand Reach`・`Hand Close Distance`・`Desktop Distance` はなくなり、`Wrist Size`・`Wrist Offset`・`Wrist Shift`・`Look Angle`・`Desktop Fill` になりました
+
+### 追加
+
+- パネルが出るとき（0.18 秒）と消えるとき（0.15 秒）にフェードし、少し大きくなりながら出ます（パネルの CanvasGroup。`Show Time`・`Hide Time`）
+- 三人称視点（F5）で Tab を押すと、パネルの代わりに「パネルは一人称視点で使えます（F5 で切り替え）」と案内を出します（三人称では Tab がカメラの回転になり、カーソルが自由になりません）
+- すでにあるシーンは、Add Sky Control Panel で作り直すとフェードと案内が付きます（作り直さなくても、新しい呼び出し方では動きます）
+
 ## [1.3.0] - 2026-10-03
 
 ### 変更

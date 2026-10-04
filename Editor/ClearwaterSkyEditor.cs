@@ -110,6 +110,7 @@ public static class ClearwaterSkySetup
     const int UILayer = 5;
     const int WalkthroughLayer = 17; // (players go through it and can still use it)
     const string StoneName = "Sky Stone (Clearwater)";
+    const string HintName = "Sky Panel Hint (Clearwater)";
     const string CallerName = "Sky Panel Caller (Clearwater)";
 
     /// <summary>A panel in the world for the sky (ClearwaterSkyPanel): the hour, the clouds and the length of the day on
@@ -164,6 +165,7 @@ public static class ClearwaterSkySetup
         rt.sizeDelta = new Vector2(760f, 410f);
         rt.localScale = Vector3.one * 0.0014f; // (106 x 57 cm)
         root.AddComponent<VRC.SDK3.Components.VRCUiShape>();
+        root.AddComponent<CanvasGroup>(); // (the opener fades the panel in and out with it)
         // what shows sits in a canvas of its own on the UI layer, which VRChat's camera leaves out (unless its UI is
         // on); the shape stays on the root's layer, as VRChat's pointer passes by UI-layer shapes while its menu is shut
         var face = new GameObject("Face", typeof(RectTransform));
@@ -298,6 +300,12 @@ public static class ClearwaterSkySetup
         seaWaves.value = settings.ripples;
         rippleSpeed.value = settings.rippleSpeed;
         var stone = AddStone(root, spawn, spawnFacing, pebble);
+        var opener = stone.GetComponent<ClearwaterSkyPanelOpener>();
+        opener.fade = root.GetComponent<CanvasGroup>();
+        var hint = AddHint(parent, font);
+        opener.hint = hint;
+        opener.hintFade = hint.GetComponent<CanvasGroup>();
+        UdonSharpEditorUtility.CopyProxyToUdon(opener);
         // above the pebble, facing away from the spawn (the pebble puts it there again, facing whoever uses it)
         Vector3 away = stone.transform.position - spawn;
         away.y = 0f;
@@ -306,6 +314,37 @@ public static class ClearwaterSkySetup
         root.SetActive(false); // (the stone shows it)
         EditorSceneManager.MarkSceneDirty(root.scene);
         return stone;
+    }
+
+    /// <summary>The line shown in VRChat's third person view instead of the panel while the desktop key is held (the
+    /// key turns the camera there and frees no cursor): the panel works in first person. A small canvas the opener
+    /// keeps in front of the view, on the UI layer (out of VRChat's camera); one made before is replaced. The Japanese
+    /// line shows in VRChat, which gives TextMesh Pro fallback fonts (in the editor it shows as boxes).</summary>
+    static GameObject AddHint(Transform parent, TMP_FontAsset font)
+    {
+        foreach (var t in Object.FindObjectsOfType<Transform>(true))
+            if (t != null && t.name == HintName && t.parent == parent) Undo.DestroyObjectImmediate(t.gameObject);
+        var hint = new GameObject(HintName, typeof(RectTransform));
+        Undo.RegisterCreatedObjectUndo(hint, "Clearwater sky panel");
+        hint.layer = UILayer;
+        hint.transform.SetParent(parent, false);
+        hint.AddComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+        var rt = (RectTransform)hint.transform;
+        rt.sizeDelta = new Vector2(760f, 110f);
+        rt.localScale = Vector3.one * 0.0003f; // (23 cm across, 45 cm in front of the view)
+        hint.AddComponent<CanvasGroup>();
+        var back = hint.AddComponent<Image>();
+        back.color = new Color(0f, 0f, 0f, 0.6f);
+        back.raycastTarget = false;
+        var textGo = new GameObject("Text", typeof(RectTransform));
+        textGo.layer = UILayer;
+        textGo.transform.SetParent(hint.transform, false);
+        var tr = (RectTransform)textGo.transform;
+        tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one; tr.sizeDelta = Vector2.zero;
+        var text = Text(textGo, font, "パネルは一人称視点で使えます（F5 で切り替え）\n<size=75%>The panel works in first person (F5)</size>", 28, TextAlignmentOptions.Center);
+        text.raycastTarget = false;
+        hint.SetActive(false);
+        return hint;
     }
 
     /// <summary>A TextMesh Pro text on go (a Unity text there, as the default controls make, replaced by it).</summary>
