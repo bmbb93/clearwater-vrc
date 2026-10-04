@@ -8,7 +8,7 @@ Clearwater VRC（`com.vbamboo.clearwater`）の版ごとの変更です。書き
 
 ### 変更
 
-- 空のパネルの呼び出し方を変えました。VR では左手首に付き（VizVid の Overlay Control と同じ向き）、手首を見ている間だけ出ます（左手のトリガー 2 回はなくなりました）。デスクトップでは Tab キーを押している間だけ、画面の真ん中に出て、視点を動かしてもついてきます。Tab を押している間は VRChat がカーソルを自由にするので、そのままクリックで操作できます（これまでは目の前に置いたままで、Tab を離すとカーソルが戻り、照準を合わせようとすると視点が動きました）。小石で出したパネルは今までどおりで、出ている間は手首と Tab では動かしません。小石の `Double Tap Time`・`Hand Size`・`Hand Reach`・`Hand Close Distance`・`Desktop Distance` はなくなり、`Wrist Size`・`Wrist Offset`・`Wrist Shift`・`Look Angle`・`Desktop Fill` になりました
+- デスクトップで空のパネルを、Tab キーを押している間だけ、画面の真ん中に出すようにしました。視点を動かしてもついてきて、Tab を押している間は VRChat がカーソルを自由にするので、そのままクリックで操作できます。これまでは目の前 1.2 m に置いたままで、Tab を離すとカーソルが戻り、照準を合わせようとすると視点が動きました。小石の `Desktop Distance` はなくなり、画面を埋める割合の `Desktop Fill`（初期値 64%）になりました
 
 ### 追加
 

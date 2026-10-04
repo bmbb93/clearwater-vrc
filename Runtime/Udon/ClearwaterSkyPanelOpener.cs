@@ -2,17 +2,19 @@ using UdonSharp;
 using UnityEngine;
 using VRC.SDK3.Rendering;
 using VRC.SDKBase;
+using VRC.Udon.Common;
 
 /// <summary>
 /// Something to use (a pebble on the beach, say) that shows the sky panel above it, facing the viewer, a little below
 /// their eyes, or puts it away; the panel goes away by itself when the viewer walks off. It can also be called up
-/// anywhere. In VR it rides on the left wrist (as VizVid's Overlay Control does: the same hand rotation and offset) and
-/// shows while the viewer looks at it; the other hand's pointer works it. On a desktop it shows while a key (Tab) is
-/// held, in the middle of the view, as far off as fills desktopFill of it: VRChat frees the cursor while Tab is held,
-/// which is how it is clicked. In VRChat's third person view Tab turns the camera instead and frees no cursor, so there
-/// the key shows a hint (use first person, F5) in the middle of the view while it is held. Either way it fades in and
-/// out, growing a little as it comes. While the pebble's panel shows in the world, the wrist and the key leave it
-/// there. For the viewer alone: the others' panels stay as they are. Tools > Clearwater > Add Sky Control Panel puts
+/// anywhere. In VR two quick pulls of the left trigger show it over and beyond the left hand, where it then stays (it
+/// went with the hand, which made it hard to touch) until the viewer's eyes move off from it; two pulls again put it
+/// away. On a desktop it shows while a key (Tab) is held, in the middle of the view, as far off as fills desktopFill of
+/// it: VRChat frees the cursor while Tab is held, which is how it is clicked. In VRChat's third person view Tab turns
+/// the camera instead and frees no cursor, so there the key shows a hint (use first person, F5) in the middle of the
+/// view while it is held. Either way it fades in and out, growing a little as it comes. While the pebble's panel
+/// shows in the world, the key leaves it there (two pulls bring it to the hand). For the viewer alone: the others'
+/// panels stay as they are. Tools > Clearwater > Add Sky Control Panel puts
 /// one on the beach by the panel.
 /// </summary>
 [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -31,16 +33,16 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
     public float smallScale = 0.92f;
 
     [Header("Called up anywhere")]
-    [Tooltip("The panel on the left wrist (VR) and while the key below is held (desktop), wherever the viewer is")]
+    [Tooltip("Two quick pulls of the left trigger (VR) or the key below held (desktop) show the panel by the viewer, wherever they are")]
     public bool callAnywhere = true;
-    [Tooltip("The panel's size on the wrist, as a share of its size in the world")]
-    [Range(0.1f, 1f)] public float wristSize = 0.3f;
-    [Tooltip("How far from the hand along the panel's offset direction (metres)")]
-    public float wristOffset = 0.06f;
-    [Tooltip("Where the panel sits in the hand's frame, after the wrist rotation (metres)")]
-    public Vector3 wristShift = Vector3.zero;
-    [Tooltip("On the wrist it shows while it is this near the gaze (degrees)")]
-    public float lookAngle = 35f;
+    [Tooltip("The two pulls of the left trigger come within this (seconds)")]
+    public float doubleTapTime = 0.4f;
+    [Tooltip("The panel's size over the hand, as a share of its size in the world")]
+    [Range(0.2f, 1f)] public float handSize = 0.55f;
+    [Tooltip("How far beyond the hand, away from the eyes, it shows (metres): at the hand, it is too close to work")]
+    public float handReach = 0.25f;
+    [Tooltip("The panel called up by the hand goes away when the viewer's eyes are this far from it (metres); 0: it stays until called again")]
+    public float handCloseDistance = 1.5f;
     [Tooltip("The desktop key: the panel shows while it is held (VRChat frees the cursor while Tab is held, to click it)")]
     public KeyCode desktopKey = KeyCode.Tab;
     [Tooltip("How much of the desktop view the panel fills, across or up (whichever it meets first)")]
@@ -53,7 +55,7 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
     [Tooltip("How far in front of the view the hint shows (metres)")]
     public float hintDistance = 0.45f;
 
-    const int InWorld = 0, OnWrist = 1, InView = 2;
+    const int InWorld = 0, OnHand = 1, InView = 2;
     int _mode;
     bool _shown; // (where it is going; _t: how far it has come)
     float _t, _hintT;
@@ -61,10 +63,7 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
     Vector3 _worldScale;
     VRCPlayerApi _me;
     bool _vr;
-
-    // VizVid's Overlay Control: the canvas's rotation on the left hand, and the way it is pushed off the hand
-    Quaternion leftHandRotation = Quaternion.Euler(-90f, -45f, 0f);
-    Vector3 offsetDirection = new Vector3(0f, 1f, -1f);
+    float _lastTap = -10f;
 
     void Start()
     {
@@ -94,6 +93,42 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
         _shown = true;
     }
 
+    public override void InputUse(bool value, UdonInputEventArgs args)
+    {
+        if (!value || !callAnywhere || !_vr || args.handType != HandType.LEFT) return;
+        if (Time.time - _lastTap <= doubleTapTime)
+        {
+            _lastTap = -10f;
+            ToggleOnHand();
+        }
+        else _lastTap = Time.time;
+    }
+
+    /// <summary>Shows the panel over and beyond the viewer's left hand, where it stays (or puts it away if it is
+    /// there).</summary>
+    public void ToggleOnHand()
+    {
+        if (panel == null || !Utilities.IsValid(_me)) return;
+        if (_shown && _mode == OnHand) { _shown = false; return; }
+        _mode = OnHand;
+        PlaceByHand();
+        _shown = true;
+    }
+
+    // over the left hand, a hand's width above it and a little beyond it (away from the eyes), turned to the eyes; it stays
+    // there (it used to go with the hand every frame: the panel moved away under the other hand's pointer)
+    void PlaceByHand()
+    {
+        Vector3 hand = _me.GetTrackingData(VRCPlayerApi.TrackingDataType.LeftHand).position;
+        Vector3 eye = _me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position;
+        Vector3 out_ = hand - eye;
+        out_.y = 0f;
+        Vector3 at = hand + Vector3.up * 0.16f + (out_.sqrMagnitude > 1e-4f ? out_.normalized * handReach : Vector3.zero);
+        Vector3 away = at - eye;
+        if (away.sqrMagnitude > 1e-4f) panel.transform.SetPositionAndRotation(at, Quaternion.LookRotation(away, Vector3.up));
+        else panel.transform.position = at;
+    }
+
     // the panel in the world, shown by the pebble (and not gone yet)
     bool InWorldNow() { return _mode == InWorld && (_shown || _t > 0f); }
 
@@ -109,6 +144,9 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
         if (panel == null || !Utilities.IsValid(_me)) return;
         if (_shown && _mode == InWorld && closeDistance > 0f
             && Vector3.Distance(_me.GetPosition(), panel.transform.position) > closeDistance) _shown = false;
+        // (from the eyes: the feet are already a metre and a half from a panel just called up by the hand)
+        if (_shown && _mode == OnHand && handCloseDistance > 0f
+            && Vector3.Distance(_me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head).position, panel.transform.position) > handCloseDistance) _shown = false;
         if (_vr || !callAnywhere) return;
         if (Input.GetKeyDown(desktopKey) && !InWorldNow() && InThirdPerson()) _waitForRelease = true;
         if (_waitForRelease) // (the key held in third person turns the camera: no panel till it is let go)
@@ -125,28 +163,9 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
     public override void PostLateUpdate()
     {
         if (panel == null || !Utilities.IsValid(_me)) return;
-        if (callAnywhere && !InWorldNow())
-        {
-            if (_vr)
-            {
-                _mode = OnWrist;
-                PlaceOnWrist();
-            }
-            else if (_mode == InView && (_shown || _t > 0f)) PlaceInView(); // (after the view has moved this frame)
-        }
+        if (callAnywhere && !_vr && _mode == InView && (_shown || _t > 0f)) PlaceInView(); // (after the view has moved this frame)
         if (!_vr) ShowHint();
         Animate();
-    }
-
-    // on the left wrist, shown while looked at
-    void PlaceOnWrist()
-    {
-        var head = _me.GetTrackingData(VRCPlayerApi.TrackingDataType.Head);
-        var hand = _me.GetTrackingData(VRCPlayerApi.TrackingDataType.LeftHand);
-        Quaternion rotation = hand.rotation * leftHandRotation;
-        Vector3 position = hand.position + rotation * (offsetDirection.normalized * wristOffset + wristShift);
-        panel.transform.SetPositionAndRotation(position, rotation);
-        _shown = Vector3.Angle(head.rotation * Vector3.forward, position - head.position) < lookAngle;
     }
 
     // in the middle of the view, as far off as fills desktopFill of it (the panel at its size in the world)
@@ -195,7 +214,7 @@ public class ClearwaterSkyPanelOpener : UdonSharpBehaviour
             fade.interactable = _shown;
             fade.blocksRaycasts = _shown;
         }
-        Vector3 scale = _mode == OnWrist ? _worldScale * wristSize : _worldScale;
+        Vector3 scale = _mode == OnHand ? _worldScale * handSize : _worldScale;
         panel.transform.localScale = scale * (fade == null ? 1f : Mathf.Lerp(smallScale, 1f, e));
     }
 }

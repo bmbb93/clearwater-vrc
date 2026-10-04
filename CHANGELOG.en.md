@@ -10,7 +10,7 @@ Each version's section, with the Japanese one in `CHANGELOG.md`, makes its relea
 
 ### Changed
 
-- The sky panel is brought up a new way. In VR it rides on the left wrist (facing as VizVid's Overlay Control does) and shows while you look at it (the double pull of the left trigger is gone). On desktop it shows only while the Tab key is held, in the middle of the screen, and follows the view. VRChat frees the cursor while Tab is held, so you click it as it is (it used to be left in front of you, and once Tab was released the cursor went back to the center and aiming at it turned the view). The panel shown by the pebble works as before, and while it is out the wrist and Tab leave it there. The pebble's `Double Tap Time`, `Hand Size`, `Hand Reach`, `Hand Close Distance` and `Desktop Distance` are gone, replaced by `Wrist Size`, `Wrist Offset`, `Wrist Shift`, `Look Angle` and `Desktop Fill`
+- On desktop the sky panel shows only while the Tab key is held, in the middle of the screen, and follows the view. VRChat frees the cursor while Tab is held, so you click it as it is. It used to be left 1.2 m in front of you, and once Tab was released the cursor went back to the center and aiming at it turned the view. The pebble's `Desktop Distance` is gone, replaced by `Desktop Fill` (how much of the view it fills; 64% by default)
 
 ### Added
 
